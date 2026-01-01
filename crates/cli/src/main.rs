@@ -30,6 +30,12 @@ struct Cli {
 enum Commands {
     /// Start a chat session
     Chat,
+    /// Start the server
+    Serve {
+        /// Port to listen on
+        #[arg(short, long, default_value = "3000")]
+        port: u16,
+    },
 }
 
 #[tokio::main]
@@ -56,8 +62,58 @@ async fn main() -> anyhow::Result<()> {
         Commands::Chat => {
             run_chat(config).await?;
         }
+        Commands::Serve { port } => {
+            run_serve(config, port).await?;
+        }
     }
 
+    Ok(())
+}
+
+async fn run_serve(config: Config, port: u16) -> anyhow::Result<()> {
+    println!("{}", t!("starting_server", port = port));
+
+    let bus = Arc::new(EventBus::new(100));
+    
+    // Subscribe to bus for logging
+    logging::start_event_logger(&bus).await;
+
+    let provider: Box<dyn LLMProvider> = match config.llm.provider.as_str() {
+        "mock" => Box::new(MockProvider::new()),
+        _ => {
+            println!("Initializing provider: {} (model: {})", config.llm.provider, config.llm.model);
+            if let Some(ref url) = config.llm.base_url {
+                println!("Base URL: {}", url);
+            } else if config.llm.provider != "openai" {
+                println!("Warning: No base_url specified for custom provider. Defaulting to OpenAI.");
+            }
+
+            let api_key = config.llm.api_key.clone().or_else(|| std::env::var("OPENAI_API_KEY").ok())
+                .expect("API Key must be set");
+            Box::new(OpenAIProvider::new(
+                api_key, 
+                config.llm.base_url.clone(), 
+                config.llm.model.clone()
+            ))
+        }
+    };
+
+    let mut agent = Agent::new(provider, bus.clone());
+
+    // Register tools
+    agent.register_tool(Box::new(CommandTool));
+    
+    let cwd = std::env::current_dir()?;
+    let sandbox = Arc::new(SandboxedPath::new(cwd)?);
+    
+    agent.register_tool(Box::new(ReadFileTool::new(sandbox.clone())));
+    agent.register_tool(Box::new(WriteFileTool::new(sandbox)));
+
+    let session_manager = Arc::new(tokio::sync::Mutex::new(SessionManager::new()));
+    let agent = Arc::new(agent);
+    
+    server::Server::new(port, agent, session_manager, bus).run().await?;
+    
     Ok(())
 }
 

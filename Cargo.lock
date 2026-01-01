@@ -1885,6 +1885,7 @@ dependencies = [
  "dotenv",
  "provider",
  "rust-i18n",
+ "server",
  "tokio",
  "tools",
  "tracing",
