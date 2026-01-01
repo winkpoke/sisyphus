@@ -65,18 +65,27 @@ The scope includes the migration and generalization of the core business logic, 
 ## 4. Technical Architecture
 
 ### 4.1 Technology Stack
-- **Runtime**: Bun / Node.js (TypeScript)
-- **Language**: TypeScript
-- **Architecture**: Monorepo
+- **Language**: Rust
+- **Architecture**: Cargo Workspace (Monorepo)
 
-### 4.2 Key Components (Mapped from OpenCode)
-- `src/agent`: Core agent definitions and prompt templates (generalized).
-- `src/session`: Orchestrates the interaction between user, agent, and LLM.
-- `src/tool`: Implementations of fundamental tools.
-- `src/provider`: Adapters for different AI model providers.
-- `src/mcp`: Implementation of the Model Context Protocol.
-- `src/server`: API server handling client requests.
-- `src/bus`: Event emitter for decoupling components.
+### 4.2 Key Components (Rust Crates)
+- `crates/core`: Core agent logic, session, and memory.
+- `crates/common`: Shared utilities, traits, and event bus.
+- `crates/tools`: Standard tool implementations (fs, shell).
+- `crates/provider`: LLM provider adapters.
+- `crates/server`: HTTP/WebSocket API server.
+- `crates/cli`: Command-line interface.
+
+### 4.3 Headless Architecture
+The system follows a **Headless Agent** design, decoupling the "Brain" (Rust Core) from the "Presentation" (UI).
+- **Rust Native World**:
+  - `crates/core`: Contains the Agent, Memory, and Logic. Pure Rust, no UI dependencies.
+  - `crates/server`: Exposes the core via HTTP/WebSocket and broadcasts `SystemEvents` (JSON).
+- **UI Clients**:
+  - **VS Code Plugin**: TypeScript extension communicating via WebSocket.
+  - **Dioxus TUI/Web**: Rust-based frontends (WASM or Native) connecting to the server.
+  - **CLI**: A lightweight client consuming the core directly or via server.
+
 
 ## 5. User Stories
 - **General Automation**: As a system admin, I want the agent to check server logs and generate a health report.
