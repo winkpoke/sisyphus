@@ -4,3 +4,4 @@
 4. alwasy consult AGENTS.md and files under ".opencode\command" for handling openspec 
 5. do not change any code in opencode
 6. do not change any code unless i ask for it
+7. project sisyphus shall be implemented in Rust
