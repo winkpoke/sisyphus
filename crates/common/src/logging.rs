@@ -1,4 +1,6 @@
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use crate::bus::{EventBus, SystemEvent};
+use tracing::{info, debug, error};
 
 pub fn init() {
     let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
@@ -15,4 +17,27 @@ pub fn init() {
         .with(filter)
         .with(fmt_layer)
         .init();
+}
+
+pub async fn start_event_logger(bus: &EventBus) {
+    let mut rx = bus.subscribe();
+
+    tokio::spawn(async move {
+        while let Ok(event) = rx.recv().await {
+            match event {
+                SystemEvent::MessageReceived { role, content } => {
+                    info!(target: "bus", event = "message_received", role = %role, content = %content);
+                }
+                SystemEvent::ToolExecuted { tool, result } => {
+                    info!(target: "bus", event = "tool_executed", tool = %tool, result_preview = %&result[..std::cmp::min(result.len(), 50)]);
+                }
+                SystemEvent::Error { message } => {
+                    error!(target: "bus", event = "error", message = %message);
+                }
+                SystemEvent::AgentStateChanged { session_id, state } => {
+                    debug!(target: "bus", event = "state_change", session_id = %session_id, state = %state);
+                }
+            }
+        }
+    });
 }

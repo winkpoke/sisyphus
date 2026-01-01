@@ -1,4 +1,4 @@
-use common::llm::{LLMProvider, CompletionRequest};
+use common::llm::{LLMProvider, CompletionRequest, Message, Role};
 use async_trait::async_trait;
 use anyhow::Result;
 use futures::Stream;
@@ -14,9 +14,14 @@ impl MockProvider {
 
 #[async_trait]
 impl LLMProvider for MockProvider {
-    async fn complete(&self, request: CompletionRequest) -> Result<String> {
-        let last_msg = request.messages.last().map(|m| m.content.as_str()).unwrap_or("");
-        Ok(format!("Mock response to: {}", last_msg))
+    async fn complete(&self, request: CompletionRequest) -> Result<Message> {
+        let last_msg = request.messages.last().and_then(|m| m.content.clone()).unwrap_or_default();
+        Ok(Message {
+            role: Role::Assistant,
+            content: Some(format!("Mock response to: {}", last_msg)),
+            tool_calls: None,
+            tool_call_id: None,
+        })
     }
 
     async fn stream(&self, _request: CompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<String>> + Send>>> {

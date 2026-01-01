@@ -22,37 +22,32 @@ impl OpenAIProvider {
             model,
         }
     }
-
-    fn map_messages(messages: &[Message]) -> Vec<Value> {
-        messages.iter().map(|m| {
-            json!({
-                "role": match m.role {
-                    Role::System => "system",
-                    Role::User => "user",
-                    Role::Assistant => "assistant",
-                    Role::Tool => "tool", 
-                },
-                "content": m.content
-            })
-        }).collect()
-    }
 }
 
 #[async_trait]
 impl LLMProvider for OpenAIProvider {
-    async fn complete(&self, request: CompletionRequest) -> Result<String> {
+    async fn complete(&self, request: CompletionRequest) -> Result<Message> {
         let url = format!("{}/chat/completions", self.base_url);
-        let body = json!({
+        
+        let mut payload = json!({
             "model": self.model,
-            "messages": Self::map_messages(&request.messages),
+            "messages": request.messages,
             "temperature": request.temperature.unwrap_or(0.7),
-            "max_tokens": request.max_tokens,
             "stream": false
         });
 
+        if let Some(obj) = payload.as_object_mut() {
+            if let Some(max_tokens) = request.max_tokens {
+                obj.insert("max_tokens".to_string(), json!(max_tokens));
+            }
+            if let Some(tools) = request.tools {
+                obj.insert("tools".to_string(), json!(tools));
+            }
+        }
+
         let res = self.client.post(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
-            .json(&body)
+            .json(&payload)
             .send()
             .await?;
             
@@ -62,12 +57,22 @@ impl LLMProvider for OpenAIProvider {
         }
 
         let json: Value = res.json().await?;
-        let content = json["choices"][0]["message"]["content"]
-            .as_str()
-            .ok_or_else(|| anyhow!("No content in response"))?
-            .to_string();
+        let choice = &json["choices"][0]["message"];
+        
+        let content = choice["content"].as_str().map(|s| s.to_string());
+        
+        let tool_calls = if let Some(calls) = choice["tool_calls"].as_array() {
+            Some(serde_json::from_value(json!(calls))?)
+        } else {
+            None
+        };
 
-        Ok(content)
+        Ok(Message {
+            role: Role::Assistant,
+            content,
+            tool_calls,
+            tool_call_id: None,
+        })
     }
 
     async fn stream(&self, _request: CompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<String>> + Send>>> {

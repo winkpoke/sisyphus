@@ -1,7 +1,8 @@
 use clap::{Parser, Subcommand};
-use common::{config::Config, logging, bus::EventBus, llm::LLMProvider};
+use common::{config::Config, logging, bus::EventBus, llm::LLMProvider, path::SandboxedPath};
 use provider::{openai::OpenAIProvider, mock::MockProvider};
 use core::agent::Agent;
+use tools::{cmd::CommandTool, fs::{ReadFileTool, WriteFileTool}};
 use std::sync::Arc;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 
@@ -52,21 +53,7 @@ async fn run_chat(config: Config) -> anyhow::Result<()> {
     let bus = Arc::new(EventBus::new(100));
     
     // Subscribe to bus for logging
-    let mut rx = bus.subscribe();
-    tokio::spawn(async move {
-        while let Ok(event) = rx.recv().await {
-            match event {
-                 common::bus::SystemEvent::MessageReceived { role: _, content: _ } => {
-                     // We print here to show the event bus is working
-                     // In production, this might be handled differently
-                     // println!("[BUS] {}: {}", role, content);
-                 }
-                 _ => {
-                     println!("[BUS] {:?}", event);
-                 }
-            }
-        }
-    });
+    logging::start_event_logger(&bus).await;
 
     let provider: Box<dyn LLMProvider> = match config.llm.provider.as_str() {
         "mock" => Box::new(MockProvider::new()),
@@ -89,6 +76,15 @@ async fn run_chat(config: Config) -> anyhow::Result<()> {
     };
 
     let mut agent = Agent::new(provider, bus);
+
+    // Register tools
+    agent.register_tool(Box::new(CommandTool));
+    
+    let cwd = std::env::current_dir()?;
+    let sandbox = Arc::new(SandboxedPath::new(cwd)?);
+    
+    agent.register_tool(Box::new(ReadFileTool::new(sandbox.clone())));
+    agent.register_tool(Box::new(WriteFileTool::new(sandbox)));
 
     // 5. Chat Loop
     let stdin = io::stdin();
