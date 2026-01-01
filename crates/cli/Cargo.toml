@@ -1,5 +1,5 @@
 [package]
-name = "cli"
+name = "sisyphus"
 version = "0.1.0"
 edition = "2021"
 
@@ -14,3 +14,4 @@ tracing-subscriber = { workspace = true }
 anyhow = { workspace = true }
 clap = { workspace = true }
 dotenv = "0.15"
+rust-i18n = "3"

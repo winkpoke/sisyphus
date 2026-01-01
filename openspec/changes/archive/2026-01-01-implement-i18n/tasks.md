@@ -1,0 +1,8 @@
+- [x] Add `rust-i18n` dependency to `crates/common/Cargo.toml` <!-- id: 0 -->
+- [x] Create `crates/common/locales` directory and initial `en.yml`, `zh-CN.yml` <!-- id: 1 -->
+- [x] Initialize i18n in `crates/common/src/lib.rs` and export `t!` macro <!-- id: 2 -->
+- [x] Update `Config` in `crates/common/src/config.rs` to include `language` field <!-- id: 3 -->
+- [x] Update `crates/cli/src/main.rs` to set locale on startup <!-- id: 4 -->
+- [x] Refactor `crates/cli/src/main.rs` to use `t!` for output strings <!-- id: 5 -->
+- [x] Refactor `crates/core/src/agent.rs` to use `t!` for output strings <!-- id: 6 -->
+- [x] Verify i18n works by running with different configs <!-- id: 7 -->

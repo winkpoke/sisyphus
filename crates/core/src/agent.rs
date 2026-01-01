@@ -5,6 +5,7 @@ use common::tool::Tool;
 use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
+use rust_i18n::t;
 
 const MAX_TURNS: u32 = 1000;
 
@@ -50,13 +51,13 @@ impl Agent {
                 Ok(args) => {
                     match tool.execute(args).await {
                         Ok(output) => output,
-                        Err(e) => format!("Error executing tool: {}", e),
+                        Err(e) => t!("tool_exec_error", err = e).to_string(),
                     }
                 },
-                Err(e) => format!("Error parsing arguments: {}", e),
+                Err(e) => t!("tool_args_error", err = e).to_string(),
             }
         } else {
-            format!("Tool not found: {}", tool_name)
+            t!("tool_not_found", name = tool_name).to_string()
         }
     }
 
@@ -78,7 +79,7 @@ impl Agent {
 
         loop {
             if current_turn >= MAX_TURNS {
-                return Err(anyhow!("Max turns reached"));
+                return Err(anyhow!(t!("max_turns_reached")));
             }
             current_turn += 1;
 

@@ -1,6 +1,7 @@
-## ADDED Slash Command Support
+## ADDED Requirements
 
-The system shall support executing commands triggered by a forward slash `/` at the start of a message.
+### Requirement: Slash Command Support
+The system SHALL support executing commands triggered by a forward slash `/` at the start of a message.
 
 #### Scenario: Built-in Command Execution
 Given the agent is running

@@ -6,6 +6,12 @@ use tools::{cmd::CommandTool, fs::{ReadFileTool, WriteFileTool}};
 use std::path::Path;
 use std::sync::Arc;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
+use rust_i18n::t;
+
+#[macro_use]
+extern crate rust_i18n;
+
+i18n!("../common/locales");
 
 #[derive(Parser)]
 #[command(name = "sisyphus")]
@@ -42,6 +48,9 @@ async fn main() -> anyhow::Result<()> {
     // 3. Init Logging
     logging::init();
 
+    // 4. Init Locale
+    rust_i18n::set_locale(&config.language);
+
     match cli.command.unwrap_or(Commands::Chat) {
         Commands::Chat => {
             run_chat(config).await?;
@@ -52,7 +61,7 @@ async fn main() -> anyhow::Result<()> {
 }
 
 async fn run_chat(config: Config) -> anyhow::Result<()> {
-    println!("Starting Sisyphus Agent...");
+    println!("{}", t!("starting_agent"));
     
     // 4. Init Components
     let bus = Arc::new(EventBus::new(100));
@@ -96,7 +105,7 @@ async fn run_chat(config: Config) -> anyhow::Result<()> {
     let mut reader = BufReader::new(stdin);
     let mut line = String::new();
 
-    println!("Type 'exit' to quit.");
+    println!("{}", t!("type_exit"));
     loop {
         print!("> ");
         use std::io::Write;
@@ -119,10 +128,10 @@ async fn run_chat(config: Config) -> anyhow::Result<()> {
 
         match agent.chat(input.to_string()).await {
             Ok(response) => {
-                println!("Assistant: {}", response);
+                println!("{}", t!("assistant_prefix", msg = response));
             }
             Err(e) => {
-                eprintln!("Error: {}", e);
+                eprintln!("{}", t!("error_prefix", err = e));
             }
         }
     }

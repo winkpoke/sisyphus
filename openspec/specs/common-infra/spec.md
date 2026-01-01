@@ -37,3 +37,16 @@ Given the system is running
 When a `SystemEvent` is published to the `EventBus`
 Then it is logged with the appropriate log level (Info, Debug, Error) and structured fields.
 
+### Requirement: Internationalization Support
+The system MUST support multiple languages for user-facing output.
+
+#### Scenario: Default Language
+Given the configuration does not specify a language
+When the application starts
+Then the language should default to English
+
+#### Scenario: Chinese Language Support
+Given the configuration specifies "zh-CN"
+When the application starts
+Then the output messages should be in Chinese
+

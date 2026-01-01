@@ -8,6 +8,7 @@ pub struct Config {
     pub server: ServerConfig,
     pub llm: LLMConfig,
     pub workspace: WorkspaceConfig,
+    pub language: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -42,7 +43,8 @@ impl Config {
             .set_default("llm.provider", "openai")?
             .set_default("llm.model", "gpt-3.5-turbo")?
             .set_default("llm.temperature", 0.7)?
-            .set_default("workspace.root", "./workspace")?;
+            .set_default("workspace.root", "./workspace")?
+            .set_default("language", "en")?;
 
         // Manual variable substitution
         // If a path is provided, use it. Otherwise check sisyphus.toml
