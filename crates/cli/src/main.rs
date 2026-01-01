@@ -3,6 +3,7 @@ use common::{config::Config, logging, bus::EventBus, llm::LLMProvider, path::San
 use provider::{openai::OpenAIProvider, mock::MockProvider};
 use core::agent::Agent;
 use tools::{cmd::CommandTool, fs::{ReadFileTool, WriteFileTool}};
+use std::path::Path;
 use std::sync::Arc;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 
@@ -10,6 +11,10 @@ use tokio::io::{self, AsyncBufReadExt, BufReader};
 #[command(name = "sisyphus")]
 #[command(about = "AI Agent CLI", long_about = None)]
 struct Cli {
+    /// Path to configuration file
+    #[arg(short, long, global = true)]
+    config: Option<String>,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -25,17 +30,17 @@ async fn main() -> anyhow::Result<()> {
     // Load .env file
     dotenv::dotenv().ok();
 
-    // 1. Load Config
-    let config = Config::new().unwrap_or_else(|e| {
+    // 1. Parse Args
+    let cli = Cli::parse();
+
+    // 2. Load Config
+    let config = Config::load(cli.config.as_deref().map(Path::new)).unwrap_or_else(|e| {
         eprintln!("Failed to load config: {}", e);
         std::process::exit(1);
     });
 
-    // 2. Init Logging
+    // 3. Init Logging
     logging::init();
-
-    // 3. Parse Args
-    let cli = Cli::parse();
 
     match cli.command.unwrap_or(Commands::Chat) {
         Commands::Chat => {
