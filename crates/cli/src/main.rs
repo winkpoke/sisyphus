@@ -2,6 +2,7 @@ use clap::{Parser, Subcommand};
 use common::{config::Config, logging, bus::EventBus, llm::LLMProvider, path::SandboxedPath};
 use provider::{openai::OpenAIProvider, mock::MockProvider};
 use core::agent::Agent;
+use core::session::manager::SessionManager;
 use tools::{cmd::CommandTool, fs::{ReadFileTool, WriteFileTool}};
 use std::path::Path;
 use std::sync::Arc;
@@ -100,6 +101,11 @@ async fn run_chat(config: Config) -> anyhow::Result<()> {
     agent.register_tool(Box::new(ReadFileTool::new(sandbox.clone())));
     agent.register_tool(Box::new(WriteFileTool::new(sandbox)));
 
+    // 6. Init Session
+    let mut session_manager = SessionManager::new();
+    let session = session_manager.create_session();
+    println!("Session ID: {}", session.id);
+
     // 5. Chat Loop
     let stdin = io::stdin();
     let mut reader = BufReader::new(stdin);
@@ -126,7 +132,7 @@ async fn run_chat(config: Config) -> anyhow::Result<()> {
             continue;
         }
 
-        match agent.chat(input.to_string()).await {
+        match agent.chat(session, input.to_string()).await {
             Ok(response) => {
                 println!("{}", t!("assistant_prefix", msg = response));
             }

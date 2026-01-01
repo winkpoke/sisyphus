@@ -1,4 +1,4 @@
-use crate::session::Session;
+use crate::session::{Session, SessionStatus};
 use common::llm::{LLMProvider, CompletionRequest, Message, Role, ToolDefinition, ToolFunctionDefinition};
 use common::bus::{EventBus, SystemEvent};
 use common::tool::Tool;
@@ -11,7 +11,6 @@ const MAX_TURNS: u32 = 1000;
 
 pub struct Agent {
     provider: Box<dyn LLMProvider>,
-    session: Session,
     bus: Arc<EventBus>,
     tools: HashMap<String, Box<dyn Tool>>,
 }
@@ -20,7 +19,6 @@ impl Agent {
     pub fn new(provider: Box<dyn LLMProvider>, bus: Arc<EventBus>) -> Self {
         Self {
             provider,
-            session: Session::new(),
             bus,
             tools: HashMap::new(),
         }
@@ -61,14 +59,26 @@ impl Agent {
         }
     }
 
-    pub async fn chat(&mut self, input: String) -> Result<String> {
+    pub async fn chat(&self, session: &mut Session, input: String) -> Result<String> {
+        if session.status == SessionStatus::Busy {
+            return Err(anyhow!("Session is busy"));
+        }
+        session.status = SessionStatus::Busy;
+
+        let result = self.process_turn(session, input).await;
+
+        session.status = SessionStatus::Idle;
+        result
+    }
+
+    async fn process_turn(&self, session: &mut Session, input: String) -> Result<String> {
         let user_msg = Message {
             role: Role::User,
             content: Some(input.clone()),
             tool_calls: None,
             tool_call_id: None,
         };
-        self.session.add_message(user_msg);
+        session.add_message(user_msg);
         
         self.bus.publish(SystemEvent::MessageReceived { 
             content: input, 
@@ -84,14 +94,14 @@ impl Agent {
             current_turn += 1;
 
             let req = CompletionRequest {
-                messages: self.session.history.clone(),
+                messages: session.history.clone(),
                 temperature: None,
                 max_tokens: None,
                 tools: self.get_tool_definitions(),
             };
 
             let response_msg = self.provider.complete(req).await?;
-            self.session.add_message(response_msg.clone());
+            session.add_message(response_msg.clone());
             
             if let Some(content) = &response_msg.content {
                 self.bus.publish(SystemEvent::MessageReceived { 
@@ -122,7 +132,7 @@ impl Agent {
                         tool_calls: None,
                         tool_call_id: Some(call.id.clone()),
                     };
-                    self.session.add_message(tool_msg);
+                    session.add_message(tool_msg);
                 }
             } else {
                 return Ok(response_msg.content.unwrap_or_default());

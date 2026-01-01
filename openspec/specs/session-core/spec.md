@@ -1,7 +1,8 @@
-# Spec: Session Core
+# session-core Specification
 
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change refactor-session-architecture. Update Purpose after archive.
+## Requirements
 ### Requirement: Session State Management
 The system SHALL maintain the state of a conversation independently of the agent execution logic.
 
@@ -29,8 +30,6 @@ The system SHALL store the linear history of messages (User, Assistant, System, 
 - **THEN** it is appended to the history list
 - **AND** available for the next context window generation
 
-## MODIFIED Requirements
-
 ### Requirement: Stateless Agent Execution
 The Agent SHALL NOT maintain internal session state.
 
@@ -39,3 +38,4 @@ The Agent SHALL NOT maintain internal session state.
 - **THEN** it accepts a `Session` reference as an input
 - **AND** reads history from that Session
 - **AND** writes new messages to that Session
+
