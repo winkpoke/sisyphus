@@ -1,0 +1,101 @@
+use anyhow::Result;
+use reqwest::{Client as ReqwestClient, Url};
+use reqwest_eventsource::EventSource;
+use serde::{Deserialize, Serialize};
+use sisyphus_core::session::Session;
+
+#[derive(Debug, Serialize)]
+struct ChatRequest {
+    message: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ChatResponse {
+    response: String,
+}
+
+#[derive(Clone)]
+pub struct Client {
+    base_url: Url,
+    http: ReqwestClient,
+}
+
+impl Client {
+    pub fn new(base_url: Url) -> Self {
+        Self {
+            base_url,
+            http: ReqwestClient::new(),
+        }
+    }
+
+    pub async fn health_check(&self) -> Result<()> {
+        let url = self.base_url.join("/health")?;
+        let resp = self.http.get(url).send().await?;
+        
+        if resp.status().is_success() {
+            Ok(())
+        } else {
+            Err(anyhow::anyhow!("Health check failed: {}", resp.status()))
+        }
+    }
+
+    pub async fn create_session(&self) -> Result<Session> {
+        let url = self.base_url.join("/api/v1/sessions")?;
+        let resp = self.http.post(url).send().await?;
+        
+        if !resp.status().is_success() {
+            let error_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Failed to create session: {}", error_text));
+        }
+
+        let session = resp.json::<Session>().await?;
+        Ok(session)
+    }
+
+    pub async fn chat(&self, session_id: &str, message: String) -> Result<String> {
+        let url = self.base_url.join(&format!("/api/v1/sessions/{}/chat", session_id))?;
+        let req = ChatRequest { message };
+        
+        let resp = self.http.post(url).json(&req).send().await?;
+        
+        if !resp.status().is_success() {
+            let error_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Failed to send message: {}", error_text));
+        }
+
+        let chat_resp = resp.json::<ChatResponse>().await?;
+        Ok(chat_resp.response)
+    }
+
+    pub fn subscribe_events(&self) -> Result<EventSource> {
+        let url = self.base_url.join("/api/v1/events")?;
+        let es = EventSource::get(url);
+        Ok(es)
+    }
+    
+    pub async fn list_sessions(&self) -> Result<Vec<Session>> {
+        let url = self.base_url.join("/api/v1/sessions")?;
+        let resp = self.http.get(url).send().await?;
+
+        if !resp.status().is_success() {
+            let error_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Failed to list sessions: {}", error_text));
+        }
+
+        let sessions = resp.json::<Vec<Session>>().await?;
+        Ok(sessions)
+    }
+    
+    pub async fn get_session(&self, session_id: &str) -> Result<Session> {
+        let url = self.base_url.join(&format!("/api/v1/sessions/{}", session_id))?;
+        let resp = self.http.get(url).send().await?;
+        
+        if !resp.status().is_success() {
+            let error_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Failed to get session: {}", error_text));
+        }
+        
+        let session = resp.json::<Session>().await?;
+        Ok(session)
+    }
+}

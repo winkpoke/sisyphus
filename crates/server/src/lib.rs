@@ -53,9 +53,20 @@ impl Server {
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
-        let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", self.port)).await?;
+        // Use 127.0.0.1 explicitly to avoid issues with some environments preferring IPv6
+        let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", self.port)).await?;
         tracing::info!("Server listening on {}", listener.local_addr()?);
-        axum::serve(listener, self.router).await?;
+        
+        // Graceful shutdown
+        let shutdown_signal = async {
+            tokio::signal::ctrl_c()
+                .await
+                .expect("failed to install CTRL+C signal handler");
+        };
+
+        axum::serve(listener, self.router)
+            .with_graceful_shutdown(shutdown_signal)
+            .await?;
         Ok(())
     }
 }
