@@ -62,6 +62,9 @@ The scope includes the migration and generalization of the core business logic, 
 - **Event Bus**: Internal event system for inter-component communication.
 - **Security**: Basic authentication and permission management for tool execution.
 
+### 3.6 Internationalization (i18n)
+- **Multi-language Support**: The system shall be designed to support Internationalization (i18n), enabling localization for system messages, logs, and user-facing interactions.
+
 ## 4. Technical Architecture
 
 ### 4.1 Technology Stack
@@ -85,6 +88,9 @@ The system follows a **Headless Agent** design, decoupling the "Brain" (Rust Cor
   - **VS Code Plugin**: TypeScript extension communicating via WebSocket.
   - **Dioxus TUI/Web**: Rust-based frontends (WASM or Native) connecting to the server.
   - **CLI**: A lightweight client consuming the core directly or via server.
+
+### 4.4 Platform Support
+- **Cross-Platform**: The system shall fully support **Linux**, **Windows**, and **macOS** environments for both the server runtime and client tools.
 
 
 ## 5. User Stories

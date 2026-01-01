@@ -6,7 +6,7 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 
-const MAX_TURNS: u32 = 10;
+const MAX_TURNS: u32 = 1000;
 
 pub struct Agent {
     provider: Box<dyn LLMProvider>,
