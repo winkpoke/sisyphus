@@ -13,8 +13,10 @@ Use `@/openspec/AGENTS.md` to learn:
 - Spec format and conventions
 - Project structure and guidelines
 
-For overall product requirements and system architecture, refer to the [PRD](PRD.md).
-
 Keep this managed block so 'openspec update' can refresh the instructions.
 
 <!-- OPENSPEC:END -->
+
+
+For overall product requirements and system architecture, refer to the [PRD](PRD.md).
+For testing standards and strategies, refer to [TEST_STRATEGY.md](TEST_STRATEGY.md).
