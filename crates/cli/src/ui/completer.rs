@@ -14,6 +14,8 @@ impl CommandCompleter {
         }
     }
 
+    // Update commands dynamically
+    #[allow(dead_code)]
     pub fn update_commands(&self, commands: Vec<CommandInfo>) {
         let mut guard = self.commands.lock().unwrap();
         *guard = commands;

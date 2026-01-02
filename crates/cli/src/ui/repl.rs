@@ -1,8 +1,8 @@
 use anyhow::Result;
 use client::Client;
 use reedline::{
-    ColumnarMenu, DefaultPrompt, DefaultPromptSegment, EditCommand, Emacs, KeyCode, KeyModifiers,
-    Reedline, ReedlineEvent, ReedlineMenu, Signal, default_emacs_keybindings,
+    Color, ColumnarMenu, DefaultPrompt, DefaultPromptSegment, EditCommand, Emacs, KeyCode,
+    KeyModifiers, Reedline, ReedlineEvent, ReedlineMenu, Signal, default_emacs_keybindings,
 };
 use rust_i18n::t;
 use tokio::sync::mpsc::Receiver;
@@ -49,7 +49,7 @@ impl Repl {
             .with_edit_mode(Box::new(Emacs::new(keybindings)));
 
         let prompt = DefaultPrompt::new(
-            DefaultPromptSegment::Basic("> ".to_string()),
+            DefaultPromptSegment::Basic("›".to_string()),
             DefaultPromptSegment::Empty,
         );
 
