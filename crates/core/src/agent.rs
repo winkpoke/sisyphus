@@ -192,8 +192,19 @@ impl Agent {
             };
 
             let rendered = session
-                .render_context(&[system_msg], None, &DefaultTokenEstimator)
+                .render_context(
+                    &[system_msg],
+                    self.config.context_limits,
+                    &DefaultTokenEstimator,
+                )
                 .map_err(|e| anyhow!(e))?;
+
+            if rendered.dropped_turns > 0 {
+                tracing::warn!(
+                    "Context compaction triggered: dropped {} turns to stay within limits",
+                    rendered.dropped_turns
+                );
+            }
 
             let req = CompletionRequest {
                 messages: rendered.messages,

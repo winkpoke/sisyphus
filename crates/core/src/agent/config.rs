@@ -1,3 +1,4 @@
+use crate::session::context::ContextLimits;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -45,6 +46,7 @@ pub struct AgentConfig {
     pub mode: AgentMode,
     pub permissions: AgentPermissions,
     pub command_path: Option<String>,
+    pub context_limits: Option<ContextLimits>,
 }
 
 impl AgentConfig {
@@ -68,6 +70,7 @@ mod tests {
             mode: AgentMode::Primary,
             permissions: AgentPermissions::default(),
             command_path: None,
+            context_limits: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();

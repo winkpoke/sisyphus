@@ -43,7 +43,8 @@ impl TokenEstimator for DefaultTokenEstimator {
         }
 
         let approx = ((chars as u32).saturating_add(3)) / 4;
-        approx.max(1)
+        // Add minimal overhead for message framing (role, etc)
+        approx.saturating_add(4).max(1)
     }
 }
 

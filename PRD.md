@@ -34,8 +34,10 @@ The scope includes the migration and generalization of the core business logic, 
 - **Prompt Engineering**: Dynamic prompt generation adaptable to the task domain (coding, writing, analysis).
 
 ### 3.2 Session & Context Management
-- **Conversation History**: Store and retrieve message history.
-- **Context Compaction**: Algorithms to summarize or truncate history to fit context windows.
+- **Conversation History**: Store message history structured as **turns** to maintain logical consistency (e.g., keeping tool calls and results together).
+- **Context Compaction**:
+  - Token-aware compaction strategies to respect model limits.
+  - Support for **Pinned Messages** that persist regardless of context window pressure.
 - **Persistence**: Save and load sessions from disk/storage.
 - **Context Awareness**:
   - Generic resource tracking (files, URLs, database connections).
