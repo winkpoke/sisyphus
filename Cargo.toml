@@ -31,3 +31,5 @@ common = { path = "crates/common" }
 tools = { path = "crates/tools" }
 provider = { path = "crates/provider" }
 core = { path = "crates/core" }
+sisyphus_core = { path = "crates/core", package = "core" }
+client = { path = "crates/client", package = "sisyphus_client" }

@@ -8,6 +8,11 @@ use std::path::Path;
 use std::sync::Arc;
 use tokio::io::{self, AsyncBufReadExt, BufReader};
 use rust_i18n::t;
+use futures::StreamExt;
+use reqwest_eventsource::Event;
+
+mod server_manager;
+use server_manager::ServerManager;
 
 #[macro_use]
 extern crate rust_i18n;
@@ -30,6 +35,17 @@ struct Cli {
 enum Commands {
     /// Start a chat session
     Chat,
+    /// Start the server
+    Serve {
+        /// Port to listen on
+        #[arg(short, long, default_value = "3000")]
+        port: u16,
+    },
+    /// Attach to a running server
+    Attach {
+        /// URL of the server
+        url: String,
+    }
 }
 
 #[tokio::main]
@@ -52,19 +68,25 @@ async fn main() -> anyhow::Result<()> {
     // 4. Init Locale
     rust_i18n::set_locale(&config.language);
 
+    let config_path = cli.config.clone();
     match cli.command.unwrap_or(Commands::Chat) {
         Commands::Chat => {
-            run_chat(config).await?;
+            run_chat(config, config_path).await?;
+        }
+        Commands::Serve { port } => {
+            run_serve(config, port).await?;
+        }
+        Commands::Attach { url } => {
+            run_attach(url).await?;
         }
     }
 
     Ok(())
 }
 
-async fn run_chat(config: Config) -> anyhow::Result<()> {
-    println!("{}", t!("starting_agent"));
-    
-    // 4. Init Components
+async fn run_serve(config: Config, port: u16) -> anyhow::Result<()> {
+    println!("{}", t!("starting_server", port = port));
+
     let bus = Arc::new(EventBus::new(100));
     
     // Subscribe to bus for logging
@@ -90,7 +112,7 @@ async fn run_chat(config: Config) -> anyhow::Result<()> {
         }
     };
 
-    let mut agent = Agent::new(provider, bus);
+    let mut agent = Agent::new(provider, bus.clone());
 
     // Register tools
     agent.register_tool(Box::new(CommandTool));
@@ -101,12 +123,40 @@ async fn run_chat(config: Config) -> anyhow::Result<()> {
     agent.register_tool(Box::new(ReadFileTool::new(sandbox.clone())));
     agent.register_tool(Box::new(WriteFileTool::new(sandbox)));
 
-    // 6. Init Session
-    let mut session_manager = SessionManager::new();
-    let session = session_manager.create_session();
+    let session_manager = Arc::new(tokio::sync::Mutex::new(SessionManager::new()));
+    let agent = Arc::new(agent);
+    
+    server::Server::new(port, agent, session_manager, bus).run().await?;
+    
+    Ok(())
+}
+
+async fn run_chat(_config: Config, config_path: Option<String>) -> anyhow::Result<()> {
+    println!("{}", t!("starting_agent"));
+
+    // 1. Start Server
+    let port = std::net::TcpListener::bind("127.0.0.1:0")?.local_addr()?.port();
+    let mut server_manager = ServerManager::start(port, config_path).await?;
+    let client = server_manager.client();
+
+    // 2. Create Session
+    let session = client.create_session().await?;
     println!("Session ID: {}", session.id);
 
-    // 5. Chat Loop
+    // 3. Subscribe to Events
+    let mut events = client.subscribe_events()?;
+    tokio::spawn(async move {
+        while let Some(event) = events.next().await {
+            match event {
+                Ok(Event::Message(msg)) => {
+                     tracing::debug!("Event: {:?}", msg);
+                }
+                _ => {}
+            }
+        }
+    });
+
+    // 4. Chat Loop
     let stdin = io::stdin();
     let mut reader = BufReader::new(stdin);
     let mut line = String::new();
@@ -118,7 +168,17 @@ async fn run_chat(config: Config) -> anyhow::Result<()> {
         std::io::stdout().flush()?;
         
         line.clear();
-        let bytes = reader.read_line(&mut line).await?;
+        
+        let bytes = tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                println!("\nShutting down...");
+                break;
+            }
+            res = reader.read_line(&mut line) => {
+                res?
+            }
+        };
+
         if bytes == 0 {
             break;
         }
@@ -132,7 +192,78 @@ async fn run_chat(config: Config) -> anyhow::Result<()> {
             continue;
         }
 
-        match agent.chat(session, input.to_string()).await {
+        match client.chat(&session.id, input.to_string()).await {
+            Ok(response) => {
+                println!("{}", t!("assistant_prefix", msg = response));
+            }
+            Err(e) => {
+                eprintln!("{}", t!("error_prefix", err = e));
+            }
+        }
+    }
+
+    server_manager.stop().await?;
+    Ok(())
+}
+
+async fn run_attach(url: String) -> anyhow::Result<()> {
+    let url = url::Url::parse(&url)?;
+    let server_manager = ServerManager::connect(url).await?;
+    let client = server_manager.client();
+
+    let session = client.create_session().await?;
+    println!("Session ID: {}", session.id);
+
+    // Similar chat loop as run_chat, but without server management (cleanup)
+    
+    let mut events = client.subscribe_events()?;
+    tokio::spawn(async move {
+        while let Some(event) = events.next().await {
+            match event {
+                Ok(Event::Message(msg)) => {
+                     tracing::debug!("Event: {:?}", msg);
+                }
+                _ => {}
+            }
+        }
+    });
+
+    let stdin = io::stdin();
+    let mut reader = BufReader::new(stdin);
+    let mut line = String::new();
+
+    println!("{}", t!("type_exit"));
+    loop {
+        print!("> ");
+        use std::io::Write;
+        std::io::stdout().flush()?;
+        
+        line.clear();
+        
+        let bytes = tokio::select! {
+            _ = tokio::signal::ctrl_c() => {
+                println!("\nExiting...");
+                break;
+            }
+            res = reader.read_line(&mut line) => {
+                res?
+            }
+        };
+
+        if bytes == 0 {
+            break;
+        }
+
+        let input = line.trim();
+        if input == "exit" {
+            break;
+        }
+
+        if input.is_empty() {
+            continue;
+        }
+
+        match client.chat(&session.id, input.to_string()).await {
             Ok(response) => {
                 println!("{}", t!("assistant_prefix", msg = response));
             }
