@@ -6,10 +6,13 @@ We are porting the core Agent architecture from OpenCode (TypeScript) to Sisyphu
 - **Security**: Implement granular permission controls (Edit, Bash, Skill) mirroring OpenCode's `Permission` schema.
 - **Context Awareness**: Enable dynamic system prompts that inject current environment context (CWD, OS, Date) and custom user instructions (`AGENTS.md`).
 - **Maintainability**: Use strong typing for configurations and permissions.
+- **Future Compatibility**: Design structures to support sub-agents and multi-agent orchestration (e.g., via `AgentMode`) to align with OpenCode.
 
 ## Decisions
 - **Decision**: Use a dedicated `AgentConfig` struct for deserialization and configuration.
   - **Rationale**: Keeps `Agent` struct clean and focused on runtime behavior. Matches OpenCode's `Agent.Info`.
+- **Decision**: Include `AgentMode` enum (Primary, SubAgent, All) in `AgentConfig`.
+  - **Rationale**: Essential for distinguishing agent roles and supporting future sub-agent delegation, ensuring compatibility with OpenCode's architecture.
 - **Decision**: Implement `SystemPromptBuilder` as a stateless utility.
   - **Rationale**: Allows easy testing of prompt generation and separation from the `Agent` logic.
 - **Decision**: Embed `AgentPermissions` within `AgentConfig`.
