@@ -13,7 +13,8 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 uuid = { workspace = true }
 rust-i18n = "3"
-chrono = "0.4.42"
+chrono = { version = "0.4.42", features = ["serde"] }
+dashmap = "5.5"
 gray_matter = { version = "0.3.2", features = ["yaml"] }
 
 [dev-dependencies]

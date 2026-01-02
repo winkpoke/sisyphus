@@ -147,6 +147,28 @@ impl Context {
         self.entries.clear();
     }
 
+    pub fn message_count(&self) -> usize {
+        let mut count = 0;
+        for entry in &self.entries {
+            match entry {
+                Entry::Pinned { .. } => count += 1,
+                Entry::UserTurn { steps, .. } => {
+                    count += 1;
+                    for step in steps {
+                        match step {
+                            Step::Assistant { .. } => count += 1,
+                            Step::ToolExchange { tool_results, .. } => {
+                                count += 1;
+                                count += tool_results.len();
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        count
+    }
+
     pub fn push_pinned(&mut self, message: Message) {
         self.entries.push(Entry::Pinned { message });
     }

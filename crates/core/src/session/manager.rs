@@ -1,34 +1,33 @@
 use super::Session;
-use std::collections::HashMap;
+use dashmap::DashMap;
+use std::sync::Arc;
+use tokio::sync::RwLock;
 
 #[derive(Default)]
 pub struct SessionManager {
-    sessions: HashMap<String, Session>,
+    sessions: DashMap<String, Arc<RwLock<Session>>>,
 }
 
 impl SessionManager {
     pub fn new() -> Self {
         Self {
-            sessions: HashMap::new(),
+            sessions: DashMap::new(),
         }
     }
 
-    pub fn create_session(&mut self) -> &mut Session {
+    pub fn create_session(&self) -> Arc<RwLock<Session>> {
         let session = Session::new();
         let id = session.id.clone();
-        self.sessions.insert(id.clone(), session);
-        self.sessions.get_mut(&id).unwrap()
+        let session = Arc::new(RwLock::new(session));
+        self.sessions.insert(id.clone(), session.clone());
+        session
     }
 
-    pub fn get_session(&self, id: &str) -> Option<&Session> {
-        self.sessions.get(id)
+    pub fn get_session(&self, id: &str) -> Option<Arc<RwLock<Session>>> {
+        self.sessions.get(id).map(|entry| entry.value().clone())
     }
 
-    pub fn get_session_mut(&mut self, id: &str) -> Option<&mut Session> {
-        self.sessions.get_mut(id)
-    }
-
-    pub fn list_sessions(&self) -> Vec<&Session> {
-        self.sessions.values().collect()
+    pub fn list_sessions(&self) -> Vec<Arc<RwLock<Session>>> {
+        self.sessions.iter().map(|entry| entry.value().clone()).collect()
     }
 }

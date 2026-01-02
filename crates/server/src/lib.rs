@@ -10,16 +10,15 @@ use serde::{Deserialize, Serialize};
 use sisyphus_core::agent::Agent;
 use sisyphus_core::command::{CommandEffect, CommandInfo};
 use sisyphus_core::session::manager::SessionManager;
-use sisyphus_core::session::Session;
+use sisyphus_core::session::{Session, SessionSummary};
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 
 #[derive(Clone)]
 pub struct AppState {
     pub agent: Arc<Agent>,
-    pub session_manager: Arc<Mutex<SessionManager>>,
+    pub session_manager: Arc<SessionManager>,
     pub bus: Arc<EventBus>,
 }
 
@@ -33,7 +32,7 @@ impl Server {
     pub fn new(
         port: u16,
         agent: Arc<Agent>,
-        session_manager: Arc<Mutex<SessionManager>>,
+        session_manager: Arc<SessionManager>,
         bus: Arc<EventBus>,
     ) -> Self {
         let state = AppState {
@@ -101,7 +100,7 @@ impl Server {
         tracing::info!("Server listening on {}", listener.local_addr()?);
 
         axum::serve(listener, self.router)
-            .with_graceful_shutdown(signal)
+        .with_graceful_shutdown(signal)
             .await?;
         Ok(())
     }
@@ -111,25 +110,28 @@ async fn health_check() -> &'static str {
     "OK"
 }
 
-async fn list_sessions(State(state): State<AppState>) -> Json<Vec<Session>> {
-    let manager = state.session_manager.lock().await;
-    let sessions: Vec<Session> = manager.list_sessions().into_iter().cloned().collect();
+async fn list_sessions(State(state): State<AppState>) -> Json<Vec<SessionSummary>> {
+    let session_locks = state.session_manager.list_sessions();
+    let mut sessions = Vec::with_capacity(session_locks.len());
+    for lock in session_locks {
+        sessions.push(lock.read().await.summary());
+    }
     Json(sessions)
 }
 
 async fn create_session(State(state): State<AppState>) -> Json<Session> {
-    let mut manager = state.session_manager.lock().await;
-    let session = manager.create_session();
-    Json(session.clone())
+    let session_lock = state.session_manager.create_session();
+    let session = session_lock.read().await.clone();
+    Json(session)
 }
 
 async fn get_session(
     State(state): State<AppState>,
     Path(id): Path<String>,
 ) -> Result<Json<Session>, (axum::http::StatusCode, String)> {
-    let manager = state.session_manager.lock().await;
-    if let Some(session) = manager.get_session(&id) {
-        Ok(Json(session.clone()))
+    if let Some(session_lock) = state.session_manager.get_session(&id) {
+        let session = session_lock.read().await.clone();
+        Ok(Json(session))
     } else {
         Err((
             axum::http::StatusCode::NOT_FOUND,
@@ -155,16 +157,16 @@ async fn chat(
     Path(id): Path<String>,
     Json(req): Json<ChatRequest>,
 ) -> Result<Json<ChatResponse>, (axum::http::StatusCode, String)> {
-    let mut manager = state.session_manager.lock().await;
-
-    let session = manager.get_session_mut(&id).ok_or((
+    let session_lock = state.session_manager.get_session(&id).ok_or((
         axum::http::StatusCode::NOT_FOUND,
         "Session not found".to_string(),
     ))?;
 
+    let mut session = session_lock.write().await;
+
     let outcome = state
         .agent
-        .chat(session, req.message)
+        .chat(&mut *session, req.message)
         .await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
@@ -172,7 +174,8 @@ async fn chat(
 
     match outcome.effect {
         CommandEffect::NewSession => {
-            let new_session = manager.create_session();
+            let new_session_lock = state.session_manager.create_session();
+            let new_session = new_session_lock.read().await;
             new_session_id = Some(new_session.id.clone());
         }
         CommandEffect::ClearHistory => {

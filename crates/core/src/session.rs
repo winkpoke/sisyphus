@@ -1,5 +1,6 @@
 use common::llm::Message;
 use serde::{Deserialize, Serialize};
+use chrono::{DateTime, Utc};
 
 pub mod context;
 
@@ -16,7 +17,16 @@ pub enum SessionStatus {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Session {
     pub id: String,
+    pub created_at: DateTime<Utc>,
     context: Context,
+    pub status: SessionStatus,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SessionSummary {
+    pub id: String,
+    pub created_at: DateTime<Utc>,
+    pub message_count: usize,
     pub status: SessionStatus,
 }
 
@@ -24,8 +34,18 @@ impl Session {
     pub fn new() -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
+            created_at: Utc::now(),
             context: Context::new(),
             status: SessionStatus::Idle,
+        }
+    }
+
+    pub fn summary(&self) -> SessionSummary {
+        SessionSummary {
+            id: self.id.clone(),
+            created_at: self.created_at,
+            message_count: self.context.message_count(),
+            status: self.status.clone(),
         }
     }
 

@@ -19,7 +19,7 @@ async fn test_server_health() {
     let bus = Arc::new(EventBus::new(100));
     let provider = Box::new(MockProvider::new());
     let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default()));
-    let session_manager = Arc::new(Mutex::new(SessionManager::new()));
+    let session_manager = Arc::new(SessionManager::new());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -59,7 +59,7 @@ async fn test_session_flow() {
     let bus = Arc::new(EventBus::new(100));
     let provider = Box::new(MockProvider::new());
     let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default()));
-    let session_manager = Arc::new(Mutex::new(SessionManager::new()));
+    let session_manager = Arc::new(SessionManager::new());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
@@ -142,7 +142,7 @@ async fn test_exit_command() {
     let bus = Arc::new(EventBus::new(100));
     let provider = Box::new(MockProvider::new());
     let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default()));
-    let session_manager = Arc::new(Mutex::new(SessionManager::new()));
+    let session_manager = Arc::new(SessionManager::new());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();

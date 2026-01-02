@@ -1,14 +1,12 @@
 pub mod builtins;
+pub mod loader;
 
 use anyhow::Result;
 use async_trait::async_trait;
 use common::bus::EventBus;
-use gray_matter::{engine::YAML, Matter, Pod};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::Arc;
-use tracing::{info, warn};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CommandEffect {
@@ -109,90 +107,5 @@ impl CommandRegistry {
             .collect::<Vec<_>>();
         list.sort_by(|a, b| a.name.cmp(&b.name));
         list
-    }
-
-    pub fn load_from_dir<P: AsRef<Path>>(&mut self, dir: P) -> Result<()> {
-        let dir = dir.as_ref();
-        if !dir.exists() {
-            // It's okay if the directory doesn't exist, just log it or return Ok
-            warn!("Command directory not found: {:?}", dir);
-            return Ok(());
-        }
-
-        for entry in std::fs::read_dir(dir)? {
-            let entry = match entry {
-                Ok(e) => e,
-                Err(e) => {
-                    warn!("Failed to read directory entry: {}", e);
-                    continue;
-                }
-            };
-            let path = entry.path();
-            if path.extension().and_then(|s| s.to_str()) == Some("md") {
-                let name = path
-                    .file_stem()
-                    .and_then(|s| s.to_str())
-                    .unwrap_or_default();
-                if name.is_empty() {
-                    continue;
-                }
-
-                // Validate command name (no whitespace)
-                if name.contains(char::is_whitespace) {
-                    warn!(
-                        "Skipping command file with invalid name (contains whitespace): {:?}",
-                        path
-                    );
-                    continue;
-                }
-
-                // Load file content
-                let content = match std::fs::read_to_string(&path) {
-                    Ok(c) => c,
-                    Err(e) => {
-                        warn!("Failed to read command file {:?}: {}", path, e);
-                        continue;
-                    }
-                };
-
-                // Parse frontmatter
-                let matter = Matter::<YAML>::new();
-                let parsed: gray_matter::ParsedEntity<Pod> = match matter.parse(&content) {
-                    Ok(p) => p,
-                    Err(e) => {
-                        warn!("Failed to parse markdown {:?}: {}", path, e);
-                        continue;
-                    }
-                };
-
-                if let Some(data) = parsed.data {
-                    #[derive(Deserialize)]
-                    struct FrontMatter {
-                        description: Option<String>,
-                    }
-
-                    // gray_matter deserializes Pod to T.
-                    let fm: FrontMatter = match data.deserialize() {
-                        Ok(fm) => fm,
-                        Err(e) => {
-                            warn!("Failed to deserialize frontmatter in {:?}: {}", path, e);
-                            continue;
-                        }
-                    };
-
-                    let config = CommandConfig {
-                        description: fm.description,
-                        template: parsed.content,
-                    };
-
-                    let command_name = format!("/{}", name);
-                    self.register_custom(&command_name, config);
-                    info!("Loaded custom command: {}", command_name);
-                } else {
-                    warn!("No frontmatter found in {:?}", path);
-                }
-            }
-        }
-        Ok(())
     }
 }

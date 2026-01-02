@@ -3,6 +3,7 @@ pub mod prompt;
 
 use self::config::AgentConfig;
 use self::prompt::SystemPromptBuilder;
+use crate::command::loader::CommandLoader;
 use crate::command::{builtins, CommandContext, CommandEffect, CommandOutcome, CommandRegistry, CommandType};
 use crate::session::context::DefaultTokenEstimator;
 use crate::session::{Session, SessionStatus};
@@ -38,7 +39,11 @@ impl Agent {
         agent.register_builtins();
         // Load custom commands from .sisyphus/command or config
         let cmd_path = agent.config.get_command_path();
-        let _ = agent.commands.load_from_dir(cmd_path);
+        if let Ok(commands) = CommandLoader::load_from_dir(cmd_path) {
+            for (name, config) in commands {
+                agent.commands.register_custom(&name, config);
+            }
+        }
         agent
     }
 

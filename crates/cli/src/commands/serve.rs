@@ -9,7 +9,7 @@ pub async fn run(config: Config, port: u16) -> anyhow::Result<()> {
 
     let components = bootstrap::build_agent(&config).await?;
 
-    let session_manager = Arc::new(tokio::sync::Mutex::new(SessionManager::new()));
+    let session_manager = Arc::new(SessionManager::new());
 
     server::Server::new(port, components.agent, session_manager, components.bus)
         .run()
