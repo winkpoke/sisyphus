@@ -3,6 +3,7 @@ use reqwest::{Client as ReqwestClient, Url};
 use reqwest_eventsource::EventSource;
 use serde::{Deserialize, Serialize};
 use sisyphus_core::session::Session;
+use sisyphus_core::command::CommandInfo;
 
 #[derive(Debug, Serialize)]
 struct ChatRequest {
@@ -97,5 +98,18 @@ impl Client {
         
         let session = resp.json::<Session>().await?;
         Ok(session)
+    }
+
+    pub async fn get_commands(&self) -> Result<Vec<CommandInfo>> {
+        let url = self.base_url.join("/api/v1/commands")?;
+        let resp = self.http.get(url).send().await?;
+        
+        if !resp.status().is_success() {
+            let error_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Failed to get commands: {}", error_text));
+        }
+        
+        let commands = resp.json::<Vec<CommandInfo>>().await?;
+        Ok(commands)
     }
 }

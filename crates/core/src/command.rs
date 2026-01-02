@@ -11,8 +11,19 @@ pub struct AgentContext<'a> {
 }
 
 pub enum CommandType {
-    Builtin(Box<dyn Fn(&mut AgentContext, &[String]) -> Result<String> + Send + Sync>),
+    Builtin {
+        handler: Box<dyn Fn(&mut AgentContext, &[String]) -> Result<String> + Send + Sync>,
+        description: String,
+    },
     Custom(CommandConfig),
+}
+
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct CommandInfo {
+    pub name: String,
+    pub description: String,
+    #[serde(rename = "type")]
+    pub command_type: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -38,11 +49,14 @@ impl CommandRegistry {
         }
     }
 
-    pub fn register_builtin<F>(&mut self, name: &str, f: F)
+    pub fn register_builtin<F>(&mut self, name: &str, description: &str, f: F)
     where
         F: Fn(&mut AgentContext, &[String]) -> Result<String> + Send + Sync + 'static,
     {
-        self.commands.insert(name.to_string(), CommandType::Builtin(Box::new(f)));
+        self.commands.insert(name.to_string(), CommandType::Builtin {
+            handler: Box::new(f),
+            description: description.to_string(),
+        });
     }
 
     pub fn register_custom(&mut self, name: &str, config: CommandConfig) {
@@ -51,6 +65,22 @@ impl CommandRegistry {
     
     pub fn get(&self, name: &str) -> Option<&CommandType> {
         self.commands.get(name)
+    }
+
+    pub fn list(&self) -> Vec<CommandInfo> {
+        let mut list = self.commands.iter().map(|(name, cmd)| {
+            let (desc, type_) = match cmd {
+                CommandType::Builtin { description, .. } => (description.clone(), "builtin"),
+                CommandType::Custom(config) => (config.description.clone().unwrap_or_default(), "custom"),
+            };
+            CommandInfo {
+                name: name.clone(),
+                description: desc,
+                command_type: type_.to_string(),
+            }
+        }).collect::<Vec<_>>();
+        list.sort_by(|a, b| a.name.cmp(&b.name));
+        list
     }
 
     pub fn load_from_dir<P: AsRef<Path>>(&mut self, dir: P) -> Result<()> {

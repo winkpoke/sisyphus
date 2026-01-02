@@ -40,26 +40,30 @@ impl Agent {
     }
 
     fn register_builtins(&mut self) {
-        self.commands.register_builtin("/help", |_, _| {
+        self.commands.register_builtin("/help", "Show this help", |_, _| {
              Ok("Available commands:\n/help - Show this help\n/exit, /quit - End the session\n/new - Start a new session".to_string())
         });
         
         let bus = self.bus.clone();
-        self.commands.register_builtin("/exit", move |_, _| {
+        self.commands.register_builtin("/exit", "End the session", move |_, _| {
              bus.publish(SystemEvent::Shutdown);
              Ok("".to_string())
         });
         
         let bus = self.bus.clone();
-        self.commands.register_builtin("/quit", move |_, _| {
+        self.commands.register_builtin("/quit", "End the session", move |_, _| {
              bus.publish(SystemEvent::Shutdown);
              Ok("".to_string())
         });
         
-        self.commands.register_builtin("/new", |ctx, _| {
+        self.commands.register_builtin("/new", "Start a new session", |ctx, _| {
              ctx.session.history.clear();
              Ok("New session started.".to_string())
         });
+    }
+
+    pub fn list_commands(&self) -> Vec<crate::command::CommandInfo> {
+        self.commands.list()
     }
 
     pub fn register_tool(&mut self, tool: Box<dyn Tool>) {
@@ -113,10 +117,10 @@ impl Agent {
             
             if let Some(command) = self.commands.get(cmd_name) {
                 match command {
-                    CommandType::Builtin(f) => {
+                    CommandType::Builtin { handler, .. } => {
                          let args: Vec<String> = parts.iter().skip(1).map(|s| s.to_string()).collect();
                          let mut ctx = AgentContext { session };
-                         let res = f(&mut ctx, &args);
+                         let res = handler(&mut ctx, &args);
                          ctx.session.status = SessionStatus::Idle;
                          return res;
                     },

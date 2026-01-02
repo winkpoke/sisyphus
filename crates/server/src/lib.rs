@@ -12,6 +12,7 @@ use tower_http::cors::CorsLayer;
 use sisyphus_core::agent::Agent;
 use sisyphus_core::session::manager::SessionManager;
 use sisyphus_core::session::Session;
+use sisyphus_core::command::CommandInfo;
 use common::bus::{EventBus, SystemEvent};
 use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};
@@ -42,6 +43,7 @@ impl Server {
             .route("/api/v1/sessions", get(list_sessions).post(create_session))
             .route("/api/v1/sessions/:id", get(get_session))
             .route("/api/v1/sessions/:id/chat", post(chat))
+            .route("/api/v1/commands", get(list_commands))
             .route("/api/v1/events", get(events))
             .layer(TraceLayer::new_for_http())
             .layer(CorsLayer::permissive())
@@ -149,6 +151,10 @@ async fn chat(
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(ChatResponse { response }))
+}
+
+async fn list_commands(State(state): State<AppState>) -> Json<Vec<CommandInfo>> {
+    Json(state.agent.list_commands())
 }
 
 async fn events(State(state): State<AppState>) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
