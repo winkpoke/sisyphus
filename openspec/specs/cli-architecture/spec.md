@@ -1,7 +1,8 @@
 # cli-architecture Specification
 
 ## Purpose
-TBD - created by archiving change refactor-cli-client-server. Update Purpose after archive.
+To provide a modular, maintainable, and extensible CLI client for Sisyphus that supports headless server management, remote connections, and event streaming.
+
 ## Requirements
 ### Requirement: CLI Headless Server Management
 The CLI SHALL manage a local server instance when no remote server is specified.
@@ -59,4 +60,14 @@ Given the banner is being rendered
 Then the logo must be colored orange (approx. #E35728)
 And the information box must use Unicode box-drawing characters
 And the model and directory paths must be clearly legible.
+
+### Requirement: Modular CLI Architecture
+The CLI codebase MUST be organized into modular components to ensure maintainability and testability.
+
+#### Scenario: Code Structure
+- **Given** the CLI source code
+- **Then** `main.rs` MUST only handle argument parsing and dispatching
+- **And** business logic MUST be encapsulated in `commands/` modules
+- **And** UI logic MUST be encapsulated in `ui/` modules
+- **And** agent initialization MUST be isolated in a bootstrap module
 

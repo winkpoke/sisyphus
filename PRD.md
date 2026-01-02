@@ -116,4 +116,5 @@ The system follows a **Headless Agent** design, decoupling the "Brain" (Rust Cor
 4.  **Session & Agent**: Port the session management and basic agent loop, ensuring prompts are not hardcoded for coding only.
 5.  **Tools**: Port the essential file and shell tools, and ensure MCP is a first-class citizen.
 6.  **Server**: Implement the API server to expose the functionality.
-7.  **Verification**: Unit and integration tests for each module.
+7.  **CLI Client**: Implement the headless CLI and slash command system.
+8.  **Verification**: Unit and integration tests for each module.
