@@ -3,7 +3,7 @@ pub mod prompt;
 
 use self::config::AgentConfig;
 use self::prompt::SystemPromptBuilder;
-use crate::command::{AgentContext, CommandRegistry, CommandType};
+use crate::command::{builtins, CommandContext, CommandEffect, CommandOutcome, CommandRegistry, CommandType};
 use crate::session::context::DefaultTokenEstimator;
 use crate::session::{Session, SessionStatus};
 use anyhow::{anyhow, Result};
@@ -43,29 +43,11 @@ impl Agent {
     }
 
     fn register_builtins(&mut self) {
-        self.commands.register_builtin("/help", "Show this help", |_, _| {
-             Ok("Available commands:\n/help - Show this help\n/exit, /quit - End the session\n/new - Start a new session".to_string())
-        });
-
-        let bus = self.bus.clone();
-        self.commands
-            .register_builtin("/exit", "End the session", move |_, _| {
-                bus.publish(SystemEvent::Shutdown);
-                Ok("".to_string())
-            });
-
-        let bus = self.bus.clone();
-        self.commands
-            .register_builtin("/quit", "End the session", move |_, _| {
-                bus.publish(SystemEvent::Shutdown);
-                Ok("".to_string())
-            });
-
-        self.commands
-            .register_builtin("/new", "Start a new session", |ctx, _| {
-                ctx.session.clear_context();
-                Ok("New session started.".to_string())
-            });
+        self.commands.register_builtin(Box::new(builtins::HelpCommand));
+        self.commands.register_builtin(Box::new(builtins::ExitCommand));
+        self.commands.register_builtin(Box::new(builtins::QuitCommand));
+        self.commands.register_builtin(Box::new(builtins::NewSessionCommand));
+        self.commands.register_builtin(Box::new(builtins::ClearHistoryCommand));
     }
 
     pub fn list_commands(&self) -> Vec<crate::command::CommandInfo> {
@@ -110,7 +92,7 @@ impl Agent {
         }
     }
 
-    pub async fn chat(&self, session: &mut Session, input: String) -> Result<String> {
+    pub async fn chat(&self, session: &mut Session, input: String) -> Result<CommandOutcome> {
         if session.status == SessionStatus::Busy {
             return Err(anyhow!("Session is busy"));
         }
@@ -126,12 +108,15 @@ impl Agent {
 
             if let Some(command) = self.commands.get(cmd_name) {
                 match command {
-                    CommandType::Builtin { handler, .. } => {
+                    CommandType::Builtin(cmd) => {
                         let args: Vec<String> =
                             parts.iter().skip(1).map(|s| s.to_string()).collect();
-                        let mut ctx = AgentContext { session };
-                        let res = handler(&mut ctx, &args);
-                        ctx.session.status = SessionStatus::Idle;
+                        let ctx = CommandContext {
+                            session_id: session.id.clone(),
+                            event_bus: self.bus.clone(),
+                        };
+                        let res = cmd.execute(&ctx, args).await;
+                        session.status = SessionStatus::Idle;
                         return res;
                     }
                     CommandType::Custom(config) => {
@@ -158,7 +143,13 @@ impl Agent {
         let result = self.process_turn(session, input).await;
 
         session.status = SessionStatus::Idle;
-        result
+        match result {
+            Ok(output) => Ok(CommandOutcome {
+                output: Some(output),
+                effect: CommandEffect::None,
+            }),
+            Err(e) => Err(e),
+        }
     }
 
     async fn process_turn(&self, session: &mut Session, input: String) -> Result<String> {

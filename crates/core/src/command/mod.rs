@@ -1,20 +1,44 @@
-use crate::session::Session;
+pub mod builtins;
+
 use anyhow::Result;
+use async_trait::async_trait;
+use common::bus::EventBus;
 use gray_matter::{engine::YAML, Matter, Pod};
 use serde::Deserialize;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use tracing::{info, warn};
 
-pub struct AgentContext<'a> {
-    pub session: &'a mut Session,
+#[derive(Debug, Clone, PartialEq)]
+pub enum CommandEffect {
+    None,
+    ClearHistory,
+    NewSession,
+    Exit,
+}
+
+pub struct CommandOutcome {
+    pub output: Option<String>,
+    pub effect: CommandEffect,
+}
+
+pub struct CommandContext {
+    pub session_id: String,
+    pub event_bus: Arc<EventBus>,
+}
+
+pub type CommandArgs = Vec<String>;
+
+#[async_trait]
+pub trait Command: Send + Sync {
+    fn name(&self) -> &str;
+    fn description(&self) -> &str;
+    async fn execute(&self, ctx: &CommandContext, args: CommandArgs) -> Result<CommandOutcome>;
 }
 
 pub enum CommandType {
-    Builtin {
-        handler: Box<dyn Fn(&mut AgentContext, &[String]) -> Result<String> + Send + Sync>,
-        description: String,
-    },
+    Builtin(Box<dyn Command>),
     Custom(CommandConfig),
 }
 
@@ -49,16 +73,10 @@ impl CommandRegistry {
         }
     }
 
-    pub fn register_builtin<F>(&mut self, name: &str, description: &str, f: F)
-    where
-        F: Fn(&mut AgentContext, &[String]) -> Result<String> + Send + Sync + 'static,
-    {
+    pub fn register_builtin(&mut self, command: Box<dyn Command>) {
         self.commands.insert(
-            name.to_string(),
-            CommandType::Builtin {
-                handler: Box::new(f),
-                description: description.to_string(),
-            },
+            command.name().to_string(),
+            CommandType::Builtin(command),
         );
     }
 
@@ -77,7 +95,7 @@ impl CommandRegistry {
             .iter()
             .map(|(name, cmd)| {
                 let (desc, type_) = match cmd {
-                    CommandType::Builtin { description, .. } => (description.clone(), "builtin"),
+                    CommandType::Builtin(c) => (c.description().to_string(), "builtin"),
                     CommandType::Custom(config) => {
                         (config.description.clone().unwrap_or_default(), "custom")
                     }

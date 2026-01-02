@@ -11,8 +11,9 @@ struct ChatRequest {
 }
 
 #[derive(Debug, Deserialize)]
-struct ChatResponse {
-    response: String,
+pub struct ChatResponse {
+    pub response: String,
+    pub session_id: Option<String>,
 }
 
 #[derive(Clone)]
@@ -53,7 +54,7 @@ impl Client {
         Ok(session)
     }
 
-    pub async fn chat(&self, session_id: &str, message: String) -> Result<String> {
+    pub async fn chat(&self, session_id: &str, message: String) -> Result<ChatResponse> {
         let url = self
             .base_url
             .join(&format!("/api/v1/sessions/{}/chat", session_id))?;
@@ -67,7 +68,7 @@ impl Client {
         }
 
         let chat_resp = resp.json::<ChatResponse>().await?;
-        Ok(chat_resp.response)
+        Ok(chat_resp)
     }
 
     pub fn subscribe_events(&self) -> Result<EventSource> {

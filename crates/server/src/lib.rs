@@ -8,7 +8,7 @@ use common::bus::{EventBus, SystemEvent};
 use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};
 use sisyphus_core::agent::Agent;
-use sisyphus_core::command::CommandInfo;
+use sisyphus_core::command::{CommandEffect, CommandInfo};
 use sisyphus_core::session::manager::SessionManager;
 use sisyphus_core::session::Session;
 use std::sync::Arc;
@@ -146,6 +146,8 @@ struct ChatRequest {
 #[derive(Serialize)]
 struct ChatResponse {
     response: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    session_id: Option<String>,
 }
 
 async fn chat(
@@ -160,13 +162,32 @@ async fn chat(
         "Session not found".to_string(),
     ))?;
 
-    let response = state
+    let outcome = state
         .agent
         .chat(session, req.message)
         .await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
-    Ok(Json(ChatResponse { response }))
+    let mut new_session_id = None;
+
+    match outcome.effect {
+        CommandEffect::NewSession => {
+            let new_session = manager.create_session();
+            new_session_id = Some(new_session.id.clone());
+        }
+        CommandEffect::ClearHistory => {
+            session.clear_context();
+        }
+        CommandEffect::Exit => {
+            state.bus.publish(SystemEvent::Shutdown);
+        }
+        CommandEffect::None => {}
+    }
+
+    Ok(Json(ChatResponse {
+        response: outcome.output.unwrap_or_default(),
+        session_id: new_session_id,
+    }))
 }
 
 async fn list_commands(State(state): State<AppState>) -> Json<Vec<CommandInfo>> {

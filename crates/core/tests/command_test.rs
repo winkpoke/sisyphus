@@ -4,6 +4,7 @@ use common::bus::EventBus;
 use common::llm::{CompletionRequest, LLMProvider, Message, Role};
 use futures::Stream;
 use sisyphus_core::agent::{config::AgentConfig, Agent};
+use sisyphus_core::command::CommandEffect;
 use sisyphus_core::session::Session;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -67,9 +68,9 @@ Hello {{args}}, how are you?"#;
     // Expect expansion to "Hello world, how are you?"
     // And LLM receives it.
 
-    let response = agent.chat(&mut session, "/greet world".to_string()).await?;
+    let outcome = agent.chat(&mut session, "/greet world".to_string()).await?;
 
-    assert_eq!(response, "Echo: Hello world, how are you?");
+    assert_eq!(outcome.output.unwrap(), "Echo: Hello world, how are you?");
 
     Ok(())
 }
@@ -92,10 +93,10 @@ async fn test_builtin_command_new() -> Result<()> {
 
     assert!(!session.history().is_empty());
 
-    let response = agent.chat(&mut session, "/new".to_string()).await?;
+    let outcome = agent.chat(&mut session, "/new".to_string()).await?;
 
-    assert_eq!(response, "New session started.");
-    assert!(session.history().is_empty());
+    assert_eq!(outcome.output.unwrap(), "New session started.");
+    assert_eq!(outcome.effect, CommandEffect::NewSession);
 
     Ok(())
 }
@@ -130,8 +131,6 @@ async fn test_resilient_loading() -> Result<()> {
 
 #[tokio::test]
 async fn test_builtin_command_quit() -> Result<()> {
-    use common::bus::SystemEvent;
-
     let bus = Arc::new(EventBus::new(10));
     let config = AgentConfig::default();
     rust_i18n::set_locale("en");
@@ -139,25 +138,15 @@ async fn test_builtin_command_quit() -> Result<()> {
     let agent = Agent::new(Box::new(MockProvider::new()), bus.clone(), config);
     let mut session = Session::new();
 
-    let mut rx = bus.subscribe();
+    let outcome = agent.chat(&mut session, "/quit".to_string()).await?;
 
-    let _ = agent.chat(&mut session, "/quit".to_string()).await?;
-
-    // Check if Shutdown event is published
-    let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await??;
-
-    match event {
-        SystemEvent::Shutdown => {}
-        _ => panic!("Expected Shutdown event, got {:?}", event),
-    }
+    assert_eq!(outcome.effect, CommandEffect::Exit);
 
     Ok(())
 }
 
 #[tokio::test]
 async fn test_builtin_command_exit() -> Result<()> {
-    use common::bus::SystemEvent;
-
     let bus = Arc::new(EventBus::new(10));
     let config = AgentConfig::default();
     rust_i18n::set_locale("en");
@@ -165,17 +154,9 @@ async fn test_builtin_command_exit() -> Result<()> {
     let agent = Agent::new(Box::new(MockProvider::new()), bus.clone(), config);
     let mut session = Session::new();
 
-    let mut rx = bus.subscribe();
+    let outcome = agent.chat(&mut session, "/exit".to_string()).await?;
 
-    let _ = agent.chat(&mut session, "/exit".to_string()).await?;
-
-    // Check if Shutdown event is published
-    let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await??;
-
-    match event {
-        SystemEvent::Shutdown => {}
-        _ => panic!("Expected Shutdown event, got {:?}", event),
-    }
+    assert_eq!(outcome.effect, CommandEffect::Exit);
 
     Ok(())
 }

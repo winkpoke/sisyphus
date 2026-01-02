@@ -107,9 +107,12 @@ impl Repl {
                     }
 
                     match self.client.chat(&self.session_id, input.to_string()).await {
-                        Ok(response) => {
-                            if !response.is_empty() {
-                                println!("{}", t!("assistant_prefix", msg = response));
+                        Ok(chat_resp) => {
+                            if let Some(new_id) = chat_resp.session_id {
+                                self.session_id = new_id;
+                            }
+                            if !chat_resp.response.is_empty() {
+                                println!("{}", t!("assistant_prefix", msg = chat_resp.response));
                             }
                         }
                         Err(e) => {
