@@ -29,7 +29,11 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     /// Start a chat session
-    Chat,
+    Chat {
+        /// Use the TUI frontend
+        #[arg(long)]
+        tui: bool,
+    },
     /// Start the server
     Serve {
         /// Port to listen on
@@ -67,9 +71,9 @@ async fn main() -> anyhow::Result<()> {
     banner::print_startup_info(&config);
 
     let config_path = cli.config.clone();
-    match cli.command.unwrap_or(Commands::Chat) {
-        Commands::Chat => {
-            commands::chat::run(config, config_path).await?;
+    match cli.command.unwrap_or(Commands::Chat { tui: false }) {
+        Commands::Chat { tui } => {
+            commands::chat::run(config, config_path, tui).await?;
         }
         Commands::Serve { port } => {
             commands::serve::run(config, port).await?;

@@ -89,7 +89,7 @@ impl Repl {
 
         println!("{}", t!("type_exit"));
         loop {
-            if let Ok(_) = self.shutdown_rx.try_recv() {
+            if self.shutdown_rx.try_recv().is_ok() {
                 break;
             }
 

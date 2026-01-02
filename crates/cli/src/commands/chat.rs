@@ -1,12 +1,13 @@
 use crate::server_manager::ServerManager;
 use crate::ui::repl::Repl;
+use crate::ui::tui::Tui;
 use anyhow::Result;
 use common::{bus::SystemEvent, config::Config};
 use futures::StreamExt;
 use reqwest_eventsource::Event;
 use rust_i18n::t;
 
-pub async fn run(_config: Config, config_path: Option<String>) -> Result<()> {
+pub async fn run(_config: Config, config_path: Option<String>, use_tui: bool) -> Result<()> {
     println!("{}", t!("starting_agent"));
 
     // 1. Start Server
@@ -27,24 +28,24 @@ pub async fn run(_config: Config, config_path: Option<String>) -> Result<()> {
 
     tokio::spawn(async move {
         while let Some(event) = events.next().await {
-            match event {
-                Ok(Event::Message(msg)) => {
-                    tracing::debug!("Event: {:?}", msg);
-                    if let Ok(event) = serde_json::from_str::<SystemEvent>(&msg.data) {
-                        if let SystemEvent::Shutdown = event {
-                            let _ = shutdown_tx.send(()).await;
-                            break;
-                        }
-                    }
+            if let Ok(Event::Message(msg)) = event {
+                tracing::debug!("Event: {:?}", msg);
+                if let Ok(SystemEvent::Shutdown) = serde_json::from_str::<SystemEvent>(&msg.data) {
+                    let _ = shutdown_tx.send(()).await;
+                    break;
                 }
-                _ => {}
             }
         }
     });
 
-    // 4. Start Repl
-    let mut repl = Repl::new(client, session.id, shutdown_rx);
-    repl.run().await?;
+    // 4. Start Repl or TUI
+    if use_tui {
+        let mut tui = Tui::new(client, session.id, shutdown_rx);
+        tui.run().await?;
+    } else {
+        let mut repl = Repl::new(client, session.id, shutdown_rx);
+        repl.run().await?;
+    }
 
     server_manager.stop().await?;
     Ok(())
@@ -64,11 +65,8 @@ pub async fn attach(url: String) -> Result<()> {
 
     tokio::spawn(async move {
         while let Some(event) = events.next().await {
-            match event {
-                Ok(Event::Message(msg)) => {
-                    tracing::debug!("Event: {:?}", msg);
-                }
-                _ => {}
+            if let Ok(Event::Message(msg)) = event {
+                tracing::debug!("Event: {:?}", msg);
             }
         }
     });
