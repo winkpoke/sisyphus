@@ -2,10 +2,10 @@ use clap::{Parser, Subcommand};
 use common::{config::Config, logging};
 use std::path::Path;
 
-mod server_manager;
-mod ui;
 mod bootstrap;
 mod commands;
+mod server_manager;
+mod ui;
 
 use ui::banner;
 
@@ -40,7 +40,7 @@ enum Commands {
     Attach {
         /// URL of the server
         url: String,
-    }
+    },
 }
 
 #[tokio::main]

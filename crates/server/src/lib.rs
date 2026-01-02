@@ -1,21 +1,20 @@
-use std::sync::Arc;
-use tokio::sync::Mutex;
 use axum::{
-    Router, 
+    extract::{Path, State},
+    response::sse::{Event, Sse},
     routing::{get, post},
-    extract::{State, Path},
-    response::sse::{Sse, Event},
-    Json,
+    Json, Router,
 };
-use tower_http::trace::TraceLayer;
-use tower_http::cors::CorsLayer;
-use sisyphus_core::agent::Agent;
-use sisyphus_core::session::manager::SessionManager;
-use sisyphus_core::session::Session;
-use sisyphus_core::command::CommandInfo;
 use common::bus::{EventBus, SystemEvent};
 use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};
+use sisyphus_core::agent::Agent;
+use sisyphus_core::command::CommandInfo;
+use sisyphus_core::session::manager::SessionManager;
+use sisyphus_core::session::Session;
+use std::sync::Arc;
+use tokio::sync::Mutex;
+use tower_http::cors::CorsLayer;
+use tower_http::trace::TraceLayer;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -31,7 +30,12 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn new(port: u16, agent: Arc<Agent>, session_manager: Arc<Mutex<SessionManager>>, bus: Arc<EventBus>) -> Self {
+    pub fn new(
+        port: u16,
+        agent: Arc<Agent>,
+        session_manager: Arc<Mutex<SessionManager>>,
+        bus: Arc<EventBus>,
+    ) -> Self {
         let state = AppState {
             agent,
             session_manager,
@@ -49,19 +53,15 @@ impl Server {
             .layer(CorsLayer::permissive())
             .with_state(state);
 
-        Self {
-            router,
-            port,
-            bus,
-        }
+        Self { router, port, bus }
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
         // Use 127.0.0.1 explicitly to avoid issues with some environments preferring IPv6
         let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", self.port)).await?;
-        
+
         let mut rx = self.bus.subscribe();
-        
+
         self.run_on_listener(listener, async move {
             tokio::select! {
                 _ = tokio::signal::ctrl_c() => {
@@ -78,10 +78,11 @@ impl Server {
                     tracing::info!("Received Shutdown event, shutting down");
                 } => {}
             }
-        }).await
+        })
+        .await
     }
 
-    pub async fn run_with_signal<S>(self, signal: S) -> anyhow::Result<()> 
+    pub async fn run_with_signal<S>(self, signal: S) -> anyhow::Result<()>
     where
         S: std::future::Future<Output = ()> + Send + 'static,
     {
@@ -89,12 +90,16 @@ impl Server {
         self.run_on_listener(listener, signal).await
     }
 
-    pub async fn run_on_listener<S>(self, listener: tokio::net::TcpListener, signal: S) -> anyhow::Result<()>
+    pub async fn run_on_listener<S>(
+        self,
+        listener: tokio::net::TcpListener,
+        signal: S,
+    ) -> anyhow::Result<()>
     where
         S: std::future::Future<Output = ()> + Send + 'static,
     {
         tracing::info!("Server listening on {}", listener.local_addr()?);
-        
+
         axum::serve(listener, self.router)
             .with_graceful_shutdown(signal)
             .await?;
@@ -118,12 +123,18 @@ async fn create_session(State(state): State<AppState>) -> Json<Session> {
     Json(session.clone())
 }
 
-async fn get_session(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<Session>, (axum::http::StatusCode, String)> {
+async fn get_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Session>, (axum::http::StatusCode, String)> {
     let manager = state.session_manager.lock().await;
     if let Some(session) = manager.get_session(&id) {
         Ok(Json(session.clone()))
     } else {
-        Err((axum::http::StatusCode::NOT_FOUND, "Session not found".to_string()))
+        Err((
+            axum::http::StatusCode::NOT_FOUND,
+            "Session not found".to_string(),
+        ))
     }
 }
 
@@ -138,16 +149,21 @@ struct ChatResponse {
 }
 
 async fn chat(
-    State(state): State<AppState>, 
-    Path(id): Path<String>, 
-    Json(req): Json<ChatRequest>
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<ChatRequest>,
 ) -> Result<Json<ChatResponse>, (axum::http::StatusCode, String)> {
     let mut manager = state.session_manager.lock().await;
-    
-    let session = manager.get_session_mut(&id)
-        .ok_or((axum::http::StatusCode::NOT_FOUND, "Session not found".to_string()))?;
 
-    let response = state.agent.chat(session, req.message).await
+    let session = manager.get_session_mut(&id).ok_or((
+        axum::http::StatusCode::NOT_FOUND,
+        "Session not found".to_string(),
+    ))?;
+
+    let response = state
+        .agent
+        .chat(session, req.message)
+        .await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(ChatResponse { response }))
@@ -157,9 +173,11 @@ async fn list_commands(State(state): State<AppState>) -> Json<Vec<CommandInfo>> 
     Json(state.agent.list_commands())
 }
 
-async fn events(State(state): State<AppState>) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
+async fn events(
+    State(state): State<AppState>,
+) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
     let rx = state.bus.subscribe();
-    
+
     let stream = stream::unfold(rx, |mut rx| async move {
         loop {
             match rx.recv().await {

@@ -1,10 +1,10 @@
-use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 use anyhow::Result;
+use async_trait::async_trait;
 use futures::Stream;
+use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     System,
@@ -63,8 +63,11 @@ pub struct CompletionRequest {
 #[async_trait]
 pub trait LLMProvider: Send + Sync {
     async fn complete(&self, request: CompletionRequest) -> Result<Message>;
-    
+
     // For object safety with streaming, we return a pinned box stream.
     // The stream yields chunks of content (Strings).
-    async fn stream(&self, request: CompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<String>> + Send>>>;
+    async fn stream(
+        &self,
+        request: CompletionRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<String>> + Send>>>;
 }

@@ -1,6 +1,6 @@
-use common::llm::{LLMProvider, CompletionRequest, Message, Role};
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
+use common::llm::{CompletionRequest, LLMProvider, Message, Role};
 use futures::Stream;
 use std::pin::Pin;
 
@@ -15,7 +15,11 @@ impl MockProvider {
 #[async_trait]
 impl LLMProvider for MockProvider {
     async fn complete(&self, request: CompletionRequest) -> Result<Message> {
-        let last_msg = request.messages.last().and_then(|m| m.content.clone()).unwrap_or_default();
+        let last_msg = request
+            .messages
+            .last()
+            .and_then(|m| m.content.clone())
+            .unwrap_or_default();
         Ok(Message {
             role: Role::Assistant,
             content: Some(format!("Mock response to: {}", last_msg)),
@@ -24,7 +28,10 @@ impl LLMProvider for MockProvider {
         })
     }
 
-    async fn stream(&self, _request: CompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<String>> + Send>>> {
+    async fn stream(
+        &self,
+        _request: CompletionRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<String>> + Send>>> {
         Ok(Box::pin(futures::stream::iter(vec![
             Ok("Mock ".to_string()),
             Ok("streaming ".to_string()),

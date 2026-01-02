@@ -1,4 +1,4 @@
-use reedline::{Completer, Suggestion, Span};
+use reedline::{Completer, Span, Suggestion};
 use sisyphus_core::command::CommandInfo;
 use std::sync::{Arc, Mutex};
 
@@ -29,7 +29,8 @@ impl Completer for CommandCompleter {
         }
 
         let guard = self.commands.lock().unwrap();
-        guard.iter()
+        guard
+            .iter()
             .filter(|cmd| cmd.name.starts_with(line))
             .map(|cmd| Suggestion {
                 value: cmd.name.clone(),

@@ -49,7 +49,9 @@ pub struct AgentConfig {
 
 impl AgentConfig {
     pub fn get_command_path(&self) -> String {
-        self.command_path.clone().unwrap_or_else(|| ".sisyphus/command".to_string())
+        self.command_path
+            .clone()
+            .unwrap_or_else(|| ".sisyphus/command".to_string())
     }
 }
 

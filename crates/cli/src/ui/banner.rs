@@ -18,14 +18,14 @@ pub fn print_startup_info(config: &Config) {
     let current_dir = env::current_dir()
         .map(|p| p.to_string_lossy().into_owned())
         .unwrap_or_else(|_| "Unknown".to_string());
-    
+
     let model = &config.llm.model;
 
     // Box drawing
     let box_width = 60;
     let header = format!(" >_ Sisyphus (v{}) ", version);
     let border_color = Color::White;
-    
+
     // Top border with header
     // ╭─ HEADER ─...─╮
     let header_len = header.len();
@@ -38,7 +38,12 @@ pub fn print_startup_info(config: &Config) {
     println!("{}", top_border.color(border_color));
 
     // Empty line
-    println!("{}{}{}", "│".color(border_color), " ".repeat(box_width - 2), "│".color(border_color));
+    println!(
+        "{}{}{}",
+        "│".color(border_color),
+        " ".repeat(box_width - 2),
+        "│".color(border_color)
+    );
 
     // Model line
     // │  model:     gpt-4-turbo         ... │
@@ -49,10 +54,10 @@ pub fn print_startup_info(config: &Config) {
     let model_visible_len = model_label.len() + model_value.len();
     let model_padding = box_width - 2 - 2 - model_visible_len; // 2 borders, 2 margin
     println!(
-        "{}  {}{}{}", 
-        "│".color(border_color), 
-        model_line_content, 
-        " ".repeat(model_padding), 
+        "{}  {}{}{}",
+        "│".color(border_color),
+        model_line_content,
+        " ".repeat(model_padding),
         "│".color(border_color)
     );
 
@@ -61,30 +66,53 @@ pub fn print_startup_info(config: &Config) {
     // Truncate directory if too long
     let max_dir_len = box_width - 2 - 2 - dir_label.len();
     let dir_value = if current_dir.len() > max_dir_len {
-        format!("...{}", &current_dir[current_dir.len() - (max_dir_len - 3)..])
+        format!(
+            "...{}",
+            &current_dir[current_dir.len() - (max_dir_len - 3)..]
+        )
     } else {
         current_dir.clone()
     };
-    
+
     let dir_line_content = format!("{}{}", dir_label.dimmed(), dir_value.bright_white());
     let dir_visible_len = dir_label.len() + dir_value.len();
     let dir_padding = box_width - 2 - 2 - dir_visible_len;
     println!(
-        "{}  {}{}{}", 
-        "│".color(border_color), 
-        dir_line_content, 
-        " ".repeat(dir_padding), 
+        "{}  {}{}{}",
+        "│".color(border_color),
+        dir_line_content,
+        " ".repeat(dir_padding),
         "│".color(border_color)
     );
 
     // Empty line
-    println!("{}{}{}", "│".color(border_color), " ".repeat(box_width - 2), "│".color(border_color));
+    println!(
+        "{}{}{}",
+        "│".color(border_color),
+        " ".repeat(box_width - 2),
+        "│".color(border_color)
+    );
 
     // Bottom border
-    println!("{}{}{}", "╰".color(border_color), "─".repeat(box_width - 2), "╯".color(border_color));
+    println!(
+        "{}{}{}",
+        "╰".color(border_color),
+        "─".repeat(box_width - 2),
+        "╯".color(border_color)
+    );
 
     println!();
-    println!("{}", "  The struggle itself toward the heights is enough to fill\n  a man's heart.".truecolor(150, 150, 150).italic());
-    println!("{}", "                                           -- Albert Camus".truecolor(150, 150, 150).italic());
+    println!(
+        "{}",
+        "  The struggle itself toward the heights is enough to fill\n  a man's heart."
+            .truecolor(150, 150, 150)
+            .italic()
+    );
+    println!(
+        "{}",
+        "                                           -- Albert Camus"
+            .truecolor(150, 150, 150)
+            .italic()
+    );
     println!();
 }

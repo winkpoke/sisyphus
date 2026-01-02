@@ -1,9 +1,9 @@
+use anyhow::{Context, Result};
+use client::Client;
 use std::process::Stdio;
 use tokio::process::{Child, Command};
 use tokio::time::{sleep, Duration};
-use anyhow::{Context, Result};
 use url::Url;
-use client::Client;
 
 pub struct ServerManager {
     process: Option<Child>,
@@ -14,16 +14,14 @@ pub struct ServerManager {
 impl ServerManager {
     pub async fn start(port: u16, config_path: Option<String>) -> Result<Self> {
         let exe = std::env::current_exe()?;
-        
+
         let mut cmd = Command::new(exe);
-        cmd.arg("serve")
-           .arg("--port")
-           .arg(port.to_string());
-           
+        cmd.arg("serve").arg("--port").arg(port.to_string());
+
         if let Some(path) = config_path {
             cmd.arg("--config").arg(path);
         }
-        
+
         let child = cmd
             .stdout(Stdio::null()) // Or pipe if we want to log
             .stderr(Stdio::inherit())
@@ -42,7 +40,7 @@ impl ServerManager {
 
         Ok(manager)
     }
-    
+
     // Connect to existing server
     pub async fn connect(url: Url) -> Result<Self> {
         let manager = Self {
@@ -61,12 +59,13 @@ impl ServerManager {
             if client.health_check().await.is_ok() {
                 return Ok(());
             }
-            
+
             attempts += 1;
-            if attempts > 20 { // 10 seconds
+            if attempts > 20 {
+                // 10 seconds
                 anyhow::bail!("Server failed to start");
             }
-            
+
             sleep(Duration::from_millis(500)).await;
         }
     }
@@ -74,7 +73,7 @@ impl ServerManager {
     pub fn client(&self) -> Client {
         Client::new(self.base_url.clone())
     }
-    
+
     pub async fn stop(&mut self) -> Result<()> {
         if let Some(child) = &mut self.process {
             child.kill().await?;
@@ -89,7 +88,7 @@ impl Drop for ServerManager {
         if let Some(child) = &mut self.process {
             // We can't await in drop, so we try to kill it.
             // If it's already awaited, this might fail, but that's fine.
-            let _ = child.start_kill(); 
+            let _ = child.start_kill();
         }
     }
 }

@@ -5,9 +5,9 @@ i18n!("locales");
 
 pub mod config;
 
-pub mod logging;
 pub mod bus;
 pub mod llm;
-pub mod tool;
+pub mod logging;
 pub mod path;
+pub mod tool;
 pub mod types;

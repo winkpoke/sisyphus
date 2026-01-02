@@ -1,6 +1,6 @@
 use crate::agent::config::AgentConfig;
-use std::env;
 use chrono::Local;
+use std::env;
 
 pub struct SystemPromptBuilder;
 
@@ -30,11 +30,8 @@ impl SystemPromptBuilder {
     pub fn build(config: &AgentConfig) -> String {
         let env_info = Self::environment();
         let rules = Self::custom_rules();
-        
-        let mut parts = vec![
-            config.instructions.clone(),
-            env_info,
-        ];
+
+        let mut parts = vec![config.instructions.clone(), env_info];
 
         if !rules.is_empty() {
             parts.push(rules);

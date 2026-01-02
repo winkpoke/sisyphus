@@ -1,2 +1,2 @@
-pub mod openai;
 pub mod mock;
+pub mod openai;

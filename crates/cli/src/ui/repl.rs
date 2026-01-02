@@ -3,8 +3,8 @@ use client::Client;
 use std::borrow::Cow;
 
 use reedline::{
-    Color, ColumnarMenu, EditCommand, Emacs, KeyCode, KeyModifiers, Prompt, PromptEditMode,
-    PromptHistorySearch, Reedline, ReedlineEvent, ReedlineMenu, Signal, default_emacs_keybindings,
+    default_emacs_keybindings, Color, ColumnarMenu, EditCommand, Emacs, KeyCode, KeyModifiers,
+    Prompt, PromptEditMode, PromptHistorySearch, Reedline, ReedlineEvent, ReedlineMenu, Signal,
 };
 use rust_i18n::t;
 use tokio::sync::mpsc::Receiver;

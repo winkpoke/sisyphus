@@ -1,9 +1,9 @@
-use common::llm::{LLMProvider, CompletionRequest, Message, Role};
+use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use anyhow::{Result, anyhow};
+use common::llm::{CompletionRequest, LLMProvider, Message, Role};
+use futures::Stream;
 use reqwest::Client;
 use serde_json::{json, Value};
-use futures::Stream;
 use std::pin::Pin;
 
 pub struct OpenAIProvider {
@@ -28,7 +28,7 @@ impl OpenAIProvider {
 impl LLMProvider for OpenAIProvider {
     async fn complete(&self, request: CompletionRequest) -> Result<Message> {
         let url = format!("{}/chat/completions", self.base_url);
-        
+
         let mut payload = json!({
             "model": self.model,
             "messages": request.messages,
@@ -45,12 +45,14 @@ impl LLMProvider for OpenAIProvider {
             }
         }
 
-        let res = self.client.post(&url)
+        let res = self
+            .client
+            .post(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&payload)
             .send()
             .await?;
-            
+
         if !res.status().is_success() {
             let error = res.text().await?;
             return Err(anyhow!("OpenAI API error: {}", error));
@@ -58,9 +60,9 @@ impl LLMProvider for OpenAIProvider {
 
         let json: Value = res.json().await?;
         let choice = &json["choices"][0]["message"];
-        
+
         let content = choice["content"].as_str().map(|s| s.to_string());
-        
+
         let tool_calls = if let Some(calls) = choice["tool_calls"].as_array() {
             Some(serde_json::from_value(json!(calls))?)
         } else {
@@ -75,7 +77,10 @@ impl LLMProvider for OpenAIProvider {
         })
     }
 
-    async fn stream(&self, _request: CompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<String>> + Send>>> {
+    async fn stream(
+        &self,
+        _request: CompletionRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<String>> + Send>>> {
         Err(anyhow!("Streaming not implemented yet"))
     }
 }

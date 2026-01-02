@@ -1,8 +1,8 @@
-use common::tool::Tool;
-use common::path::SandboxedPath;
-use async_trait::async_trait;
-use serde_json::{json, Value};
 use anyhow::Result;
+use async_trait::async_trait;
+use common::path::SandboxedPath;
+use common::tool::Tool;
+use serde_json::{json, Value};
 use std::sync::Arc;
 
 pub struct ReadFileTool {
@@ -17,8 +17,12 @@ impl ReadFileTool {
 
 #[async_trait]
 impl Tool for ReadFileTool {
-    fn name(&self) -> &str { "read_file" }
-    fn description(&self) -> &str { "Read a file from the workspace" }
+    fn name(&self) -> &str {
+        "read_file"
+    }
+    fn description(&self) -> &str {
+        "Read a file from the workspace"
+    }
     fn schema(&self) -> Value {
         json!({
             "type": "object",
@@ -29,7 +33,9 @@ impl Tool for ReadFileTool {
         })
     }
     async fn execute(&self, args: Value) -> Result<String> {
-        let path_str = args["path"].as_str().ok_or_else(|| anyhow::anyhow!("Missing path"))?;
+        let path_str = args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
         let path = self.sandbox.join(path_str)?;
         let content = tokio::fs::read_to_string(path).await?;
         Ok(content)
@@ -48,8 +54,12 @@ impl WriteFileTool {
 
 #[async_trait]
 impl Tool for WriteFileTool {
-    fn name(&self) -> &str { "write_file" }
-    fn description(&self) -> &str { "Write content to a file in the workspace" }
+    fn name(&self) -> &str {
+        "write_file"
+    }
+    fn description(&self) -> &str {
+        "Write content to a file in the workspace"
+    }
     fn schema(&self) -> Value {
         json!({
             "type": "object",
@@ -61,15 +71,19 @@ impl Tool for WriteFileTool {
         })
     }
     async fn execute(&self, args: Value) -> Result<String> {
-        let path_str = args["path"].as_str().ok_or_else(|| anyhow::anyhow!("Missing path"))?;
-        let content = args["content"].as_str().ok_or_else(|| anyhow::anyhow!("Missing content"))?;
+        let path_str = args["path"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing path"))?;
+        let content = args["content"]
+            .as_str()
+            .ok_or_else(|| anyhow::anyhow!("Missing content"))?;
         let path = self.sandbox.join(path_str)?;
-        
+
         // Ensure parent exists
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
-        
+
         tokio::fs::write(path, content).await?;
         Ok("Success".to_string())
     }

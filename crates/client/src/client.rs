@@ -2,8 +2,8 @@ use anyhow::Result;
 use reqwest::{Client as ReqwestClient, Url};
 use reqwest_eventsource::EventSource;
 use serde::{Deserialize, Serialize};
-use sisyphus_core::session::Session;
 use sisyphus_core::command::CommandInfo;
+use sisyphus_core::session::Session;
 
 #[derive(Debug, Serialize)]
 struct ChatRequest {
@@ -32,7 +32,7 @@ impl Client {
     pub async fn health_check(&self) -> Result<()> {
         let url = self.base_url.join("/health")?;
         let resp = self.http.get(url).send().await?;
-        
+
         if resp.status().is_success() {
             Ok(())
         } else {
@@ -43,7 +43,7 @@ impl Client {
     pub async fn create_session(&self) -> Result<Session> {
         let url = self.base_url.join("/api/v1/sessions")?;
         let resp = self.http.post(url).send().await?;
-        
+
         if !resp.status().is_success() {
             let error_text = resp.text().await.unwrap_or_default();
             return Err(anyhow::anyhow!("Failed to create session: {}", error_text));
@@ -54,11 +54,13 @@ impl Client {
     }
 
     pub async fn chat(&self, session_id: &str, message: String) -> Result<String> {
-        let url = self.base_url.join(&format!("/api/v1/sessions/{}/chat", session_id))?;
+        let url = self
+            .base_url
+            .join(&format!("/api/v1/sessions/{}/chat", session_id))?;
         let req = ChatRequest { message };
-        
+
         let resp = self.http.post(url).json(&req).send().await?;
-        
+
         if !resp.status().is_success() {
             let error_text = resp.text().await.unwrap_or_default();
             return Err(anyhow::anyhow!("Failed to send message: {}", error_text));
@@ -73,7 +75,7 @@ impl Client {
         let es = EventSource::get(url);
         Ok(es)
     }
-    
+
     pub async fn list_sessions(&self) -> Result<Vec<Session>> {
         let url = self.base_url.join("/api/v1/sessions")?;
         let resp = self.http.get(url).send().await?;
@@ -86,16 +88,18 @@ impl Client {
         let sessions = resp.json::<Vec<Session>>().await?;
         Ok(sessions)
     }
-    
+
     pub async fn get_session(&self, session_id: &str) -> Result<Session> {
-        let url = self.base_url.join(&format!("/api/v1/sessions/{}", session_id))?;
+        let url = self
+            .base_url
+            .join(&format!("/api/v1/sessions/{}", session_id))?;
         let resp = self.http.get(url).send().await?;
-        
+
         if !resp.status().is_success() {
             let error_text = resp.text().await.unwrap_or_default();
             return Err(anyhow::anyhow!("Failed to get session: {}", error_text));
         }
-        
+
         let session = resp.json::<Session>().await?;
         Ok(session)
     }
@@ -103,12 +107,12 @@ impl Client {
     pub async fn get_commands(&self) -> Result<Vec<CommandInfo>> {
         let url = self.base_url.join("/api/v1/commands")?;
         let resp = self.http.get(url).send().await?;
-        
+
         if !resp.status().is_success() {
             let error_text = resp.text().await.unwrap_or_default();
             return Err(anyhow::anyhow!("Failed to get commands: {}", error_text));
         }
-        
+
         let commands = resp.json::<Vec<CommandInfo>>().await?;
         Ok(commands)
     }

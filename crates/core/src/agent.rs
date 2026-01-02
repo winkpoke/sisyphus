@@ -1,17 +1,20 @@
 pub mod config;
 pub mod prompt;
 
-use crate::session::{Session, SessionStatus};
-use common::llm::{LLMProvider, CompletionRequest, Message, Role, ToolDefinition, ToolFunctionDefinition};
-use common::bus::{EventBus, SystemEvent};
-use common::tool::Tool;
-use std::sync::Arc;
-use anyhow::{Result, anyhow};
-use std::collections::HashMap;
-use rust_i18n::t;
 use self::config::AgentConfig;
 use self::prompt::SystemPromptBuilder;
-use crate::command::{CommandRegistry, CommandType, AgentContext};
+use crate::command::{AgentContext, CommandRegistry, CommandType};
+use crate::session::context::DefaultTokenEstimator;
+use crate::session::{Session, SessionStatus};
+use anyhow::{anyhow, Result};
+use common::bus::{EventBus, SystemEvent};
+use common::llm::{
+    CompletionRequest, LLMProvider, Message, Role, ToolDefinition, ToolFunctionDefinition,
+};
+use common::tool::Tool;
+use rust_i18n::t;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 const MAX_TURNS: u32 = 1000;
 
@@ -43,23 +46,26 @@ impl Agent {
         self.commands.register_builtin("/help", "Show this help", |_, _| {
              Ok("Available commands:\n/help - Show this help\n/exit, /quit - End the session\n/new - Start a new session".to_string())
         });
-        
+
         let bus = self.bus.clone();
-        self.commands.register_builtin("/exit", "End the session", move |_, _| {
-             bus.publish(SystemEvent::Shutdown);
-             Ok("".to_string())
-        });
-        
+        self.commands
+            .register_builtin("/exit", "End the session", move |_, _| {
+                bus.publish(SystemEvent::Shutdown);
+                Ok("".to_string())
+            });
+
         let bus = self.bus.clone();
-        self.commands.register_builtin("/quit", "End the session", move |_, _| {
-             bus.publish(SystemEvent::Shutdown);
-             Ok("".to_string())
-        });
-        
-        self.commands.register_builtin("/new", "Start a new session", |ctx, _| {
-             ctx.session.history.clear();
-             Ok("New session started.".to_string())
-        });
+        self.commands
+            .register_builtin("/quit", "End the session", move |_, _| {
+                bus.publish(SystemEvent::Shutdown);
+                Ok("".to_string())
+            });
+
+        self.commands
+            .register_builtin("/new", "Start a new session", |ctx, _| {
+                ctx.session.clear_context();
+                Ok("New session started.".to_string())
+            });
     }
 
     pub fn list_commands(&self) -> Vec<crate::command::CommandInfo> {
@@ -74,25 +80,28 @@ impl Agent {
         if self.tools.is_empty() {
             None
         } else {
-            Some(self.tools.values().map(|t| ToolDefinition {
-                kind: "function".to_string(),
-                function: ToolFunctionDefinition {
-                    name: t.name().to_string(),
-                    description: t.description().to_string(),
-                    parameters: t.schema(),
-                }
-            }).collect())
+            Some(
+                self.tools
+                    .values()
+                    .map(|t| ToolDefinition {
+                        kind: "function".to_string(),
+                        function: ToolFunctionDefinition {
+                            name: t.name().to_string(),
+                            description: t.description().to_string(),
+                            parameters: t.schema(),
+                        },
+                    })
+                    .collect(),
+            )
         }
     }
 
     async fn execute_tool(&self, tool_name: &str, args_str: &str) -> String {
         if let Some(tool) = self.tools.get(tool_name) {
             match serde_json::from_str::<serde_json::Value>(args_str) {
-                Ok(args) => {
-                    match tool.execute(args).await {
-                        Ok(output) => output,
-                        Err(e) => t!("tool_exec_error", err = e).to_string(),
-                    }
+                Ok(args) => match tool.execute(args).await {
+                    Ok(output) => output,
+                    Err(e) => t!("tool_exec_error", err = e).to_string(),
                 },
                 Err(e) => t!("tool_args_error", err = e).to_string(),
             }
@@ -114,29 +123,30 @@ impl Agent {
         while input.starts_with('/') {
             let parts: Vec<&str> = input.trim().split_whitespace().collect();
             let cmd_name = parts[0];
-            
+
             if let Some(command) = self.commands.get(cmd_name) {
                 match command {
                     CommandType::Builtin { handler, .. } => {
-                         let args: Vec<String> = parts.iter().skip(1).map(|s| s.to_string()).collect();
-                         let mut ctx = AgentContext { session };
-                         let res = handler(&mut ctx, &args);
-                         ctx.session.status = SessionStatus::Idle;
-                         return res;
-                    },
+                        let args: Vec<String> =
+                            parts.iter().skip(1).map(|s| s.to_string()).collect();
+                        let mut ctx = AgentContext { session };
+                        let res = handler(&mut ctx, &args);
+                        ctx.session.status = SessionStatus::Idle;
+                        return res;
+                    }
                     CommandType::Custom(config) => {
-                         depth += 1;
-                         if depth > MAX_DEPTH {
-                             session.status = SessionStatus::Idle;
-                             return Err(anyhow!(t!("command_recursion_limit")));
-                         }
-                         let args_str = input.trim_start_matches(cmd_name).trim();
-                         if config.template.contains("{{args}}") {
-                             input = config.template.replace("{{args}}", args_str);
-                         } else {
-                             input = config.template.clone();
-                         }
-                         continue;
+                        depth += 1;
+                        if depth > MAX_DEPTH {
+                            session.status = SessionStatus::Idle;
+                            return Err(anyhow!(t!("command_recursion_limit")));
+                        }
+                        let args_str = input.trim_start_matches(cmd_name).trim();
+                        if config.template.contains("{{args}}") {
+                            input = config.template.replace("{{args}}", args_str);
+                        } else {
+                            input = config.template.clone();
+                        }
+                        continue;
                     }
                 }
             } else {
@@ -158,11 +168,11 @@ impl Agent {
             tool_calls: None,
             tool_call_id: None,
         };
-        session.add_message(user_msg);
-        
-        self.bus.publish(SystemEvent::MessageReceived { 
-            content: input, 
-            role: "user".to_string() 
+        session.add_message(user_msg)?;
+
+        self.bus.publish(SystemEvent::MessageReceived {
+            content: input,
+            role: "user".to_string(),
         });
 
         let mut current_turn = 0;
@@ -181,23 +191,24 @@ impl Agent {
                 tool_call_id: None,
             };
 
-            let mut messages = vec![system_msg];
-            messages.extend(session.history.clone());
+            let rendered = session
+                .render_context(&[system_msg], None, &DefaultTokenEstimator)
+                .map_err(|e| anyhow!(e))?;
 
             let req = CompletionRequest {
-                messages,
+                messages: rendered.messages,
                 temperature: None,
                 max_tokens: None,
                 tools: self.get_tool_definitions(),
             };
 
             let response_msg = self.provider.complete(req).await?;
-            session.add_message(response_msg.clone());
-            
+            session.add_message(response_msg.clone())?;
+
             if let Some(content) = &response_msg.content {
-                self.bus.publish(SystemEvent::MessageReceived { 
-                    content: content.clone(), 
-                    role: "assistant".to_string() 
+                self.bus.publish(SystemEvent::MessageReceived {
+                    content: content.clone(),
+                    role: "assistant".to_string(),
                 });
             }
 
@@ -209,12 +220,12 @@ impl Agent {
                 for call in tool_calls {
                     let tool_name = &call.function.name;
                     let args_str = &call.function.arguments;
-                    
+
                     let result = self.execute_tool(tool_name, args_str).await;
 
                     self.bus.publish(SystemEvent::ToolExecuted {
                         tool: tool_name.clone(),
-                        result: result.clone()
+                        result: result.clone(),
                     });
 
                     let tool_msg = Message {
@@ -223,7 +234,7 @@ impl Agent {
                         tool_calls: None,
                         tool_call_id: Some(call.id.clone()),
                     };
-                    session.add_message(tool_msg);
+                    session.add_message(tool_msg)?;
                 }
             } else {
                 return Ok(response_msg.content.unwrap_or_default());

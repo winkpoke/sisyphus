@@ -1,7 +1,7 @@
 use config::{Config as ConfigLoader, ConfigError, Environment, File, FileFormat};
+use regex::Regex;
 use serde::Deserialize;
 use std::path::Path;
-use regex::Regex;
 
 #[derive(Debug, Deserialize, Clone)]
 pub struct Config {
@@ -65,9 +65,9 @@ impl Config {
         };
 
         if let Some(path) = target_path {
-             let content = std::fs::read_to_string(&path)
-                .map_err(|e| ConfigError::Foreign(Box::new(e)))?;
-            
+            let content =
+                std::fs::read_to_string(&path).map_err(|e| ConfigError::Foreign(Box::new(e)))?;
+
             let re = Regex::new(r"\{\{([A-Z0-9_]+)\}\}").unwrap();
             let processed_content = re.replace_all(&content, |caps: &regex::Captures| {
                 let var_name = &caps[1];
@@ -76,8 +76,8 @@ impl Config {
 
             builder = builder.add_source(File::from_str(&processed_content, FileFormat::Toml));
         } else if config_path.is_none() {
-             // Fallback to default search if no explicit path and no sisyphus.toml in cwd
-             builder = builder.add_source(File::with_name("sisyphus").required(false));
+            // Fallback to default search if no explicit path and no sisyphus.toml in cwd
+            builder = builder.add_source(File::with_name("sisyphus").required(false));
         }
 
         let s = builder
