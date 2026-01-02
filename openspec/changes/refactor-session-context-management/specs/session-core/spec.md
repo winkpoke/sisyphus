@@ -1,0 +1,55 @@
+# session-core Specification Deltas
+
+## MODIFIED Requirements
+
+### Requirement: Session State Management
+The system SHALL maintain the state of a conversation independently of the agent execution logic.
+
+#### Scenario: Create new session
+- **WHEN** a new session is requested via SessionManager
+- **THEN** a new Session object is created with a unique ID
+- **AND** the session status is initialized to "Idle"
+- **AND** the session context is empty
+
+#### Scenario: Session Locking
+- **WHEN** an agent begins processing a turn for a session
+- **THEN** the session status transitions to "Busy"
+- **WHEN** the agent finishes processing
+- **THEN** the session status transitions back to "Idle"
+
+#### Scenario: Prevent concurrent access
+- **WHEN** a request is made to process a session that is "Busy"
+- **THEN** the system throws/returns a `SessionBusy` error
+
+### Requirement: Session History
+The system SHALL store the linear history of messages (User, Assistant, System, Tool) within the Session object via a dedicated context component.
+
+#### Scenario: Append message
+- **WHEN** a message is added to the session
+- **THEN** it is appended to the session context
+- **AND** it is available for the next context window generation
+
+## ADDED Requirements
+
+### Requirement: Context Window Construction
+The system SHALL construct a provider-ready context window from the session context for each LLM completion request.
+
+#### Scenario: Render context window
+- **GIVEN** a session context containing prior messages
+- **WHEN** the system builds a completion request
+- **THEN** the system MUST produce an ordered list of messages suitable for the LLM provider
+
+### Requirement: Safe Context Compaction
+The system SHALL support compacting the session context to fit within a configurable prompt token budget.
+
+#### Scenario: Compact by dropping oldest blocks
+- **GIVEN** a session context that exceeds the prompt token budget
+- **WHEN** the system compacts the context
+- **THEN** the system MUST remove the oldest non-pinned context blocks until within budget
+- **AND** pinned context blocks MUST be preserved
+
+#### Scenario: Preserve tool exchange atomicity
+- **GIVEN** a session context containing an Assistant message with tool calls and the corresponding Tool result messages
+- **WHEN** the system compacts the context
+- **THEN** it MUST NOT remove only part of the tool exchange
+
