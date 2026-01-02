@@ -8,6 +8,7 @@ pub enum SystemEvent {
     MessageReceived { content: String, role: String },
     ToolExecuted { tool: String, result: String },
     Error { message: String },
+    Shutdown,
 }
 
 pub struct EventBus {

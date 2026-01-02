@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "sisyphus_core"
 version = "0.1.0"
 edition = "2021"
 
@@ -14,3 +14,8 @@ async-trait = { workspace = true }
 uuid = { workspace = true }
 rust-i18n = "3"
 chrono = "0.4.42"
+gray_matter = { version = "0.3.2", features = ["yaml"] }
+
+[dev-dependencies]
+futures.workspace = true
+tempfile = "3.10"

@@ -1,7 +1,0 @@
-- [ ] Add `command` module to `crates/core` with `CommandRegistry` and `CommandType` definitions <!-- id: 0 -->
-- [ ] Implement `load_from_dir` logic to scan `.opencode/command/*.md` files <!-- id: 1 -->
-- [ ] Add dependency for parsing YAML frontmatter (e.g., `serde_yaml` + manual split or dedicated crate) <!-- id: 2 -->
-- [ ] Integrate `CommandRegistry` into `Agent` struct in `crates/core/src/agent.rs` <!-- id: 3 -->
-- [ ] Implement slash command interception logic in `Agent::chat` <!-- id: 4 -->
-- [ ] Implement basic built-in commands (`/help`) <!-- id: 5 -->
-- [ ] Verify implementation with a test case simulating a custom command load and execution <!-- id: 6 -->

@@ -21,12 +21,13 @@ async fn test_server_health() {
     let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default()));
     let session_manager = Arc::new(Mutex::new(SessionManager::new()));
     
-    let port = 5000;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
     
     let server = Server::new(port, agent, session_manager, bus);
     
     tokio::spawn(async move {
-        if let Err(e) = server.run().await {
+        if let Err(e) = server.run_on_listener(listener, std::future::pending::<()>()).await {
             eprintln!("Server error: {:?}", e);
         }
     });
@@ -34,7 +35,10 @@ async fn test_server_health() {
     // Give it a moment to start
     tokio::time::sleep(Duration::from_millis(500)).await;
     
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .pool_max_idle_per_host(0)
+        .build()
+        .unwrap();
     let resp = client.get(format!("http://localhost:{}/health", port))
         .send()
         .await
@@ -53,17 +57,22 @@ async fn test_session_flow() {
     let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default()));
     let session_manager = Arc::new(Mutex::new(SessionManager::new()));
     
-    let port = 5001;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
     let server = Server::new(port, agent, session_manager, bus);
     
     tokio::spawn(async move {
-        if let Err(e) = server.run().await {
+        if let Err(e) = server.run_on_listener(listener, std::future::pending::<()>()).await {
             eprintln!("Server error: {:?}", e);
         }
     });
     
     tokio::time::sleep(Duration::from_millis(500)).await;
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .pool_max_idle_per_host(0)
+        .build()
+        .unwrap();
     let base_url = format!("http://localhost:{}", port);
     
     // 1. List sessions (should be empty)
@@ -101,4 +110,57 @@ async fn test_session_flow() {
     let session: serde_json::Value = resp.json().await.unwrap();
     let history = session["history"].as_array().unwrap();
     assert!(history.len() >= 2); // User message + Assistant message
+}
+
+#[tokio::test]
+async fn test_exit_command() {
+    init_tracing();
+    let bus = Arc::new(EventBus::new(100));
+    let provider = Box::new(MockProvider::new());
+    let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default()));
+    let session_manager = Arc::new(Mutex::new(SessionManager::new()));
+    
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let port = listener.local_addr().unwrap().port();
+
+    let server = Server::new(port, agent, session_manager, bus);
+    
+    tokio::spawn(async move {
+        if let Err(e) = server.run_on_listener(listener, std::future::pending::<()>()).await {
+            eprintln!("Server error: {:?}", e);
+        }
+    });
+    
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    let client = reqwest::Client::builder()
+        .pool_max_idle_per_host(0)
+        .build()
+        .unwrap();
+    let base_url = format!("http://localhost:{}", port);
+    
+    // Create session
+    let resp = client.post(format!("{}/api/v1/sessions", base_url)).send().await.expect("Failed to create session");
+    let session: serde_json::Value = resp.json().await.unwrap();
+    let session_id = session["id"].as_str().unwrap();
+    
+    // Send /exit command
+    let chat_body = serde_json::json!({
+        "message": "/exit"
+    });
+    let resp = client.post(format!("{}/api/v1/sessions/{}/chat", base_url, session_id))
+        .json(&chat_body)
+        .send()
+        .await
+        .expect("Failed to send /exit");
+        
+    assert!(resp.status().is_success());
+    let chat_resp: serde_json::Value = resp.json().await.unwrap();
+    assert_eq!(chat_resp["response"], "Session ended.");
+    
+    // Verify server is still running by making another request
+    let resp = client.get(format!("{}/health", base_url))
+        .send()
+        .await
+        .expect("Failed to check health after /exit");
+    assert!(resp.status().is_success());
 }

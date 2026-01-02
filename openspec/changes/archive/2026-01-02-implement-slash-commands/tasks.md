@@ -1,0 +1,11 @@
+- [x] Add `command` module to `crates/core` with `CommandRegistry` and `CommandType` definitions <!-- id: 0 -->
+- [x] Add dependency for parsing YAML frontmatter (e.g., `serde_yaml` + manual split or dedicated crate) <!-- id: 2 -->
+- [x] Implement `load_from_dir` logic to scan `.sisyphus/command/*.md` files <!-- id: 1 -->
+- [x] Integrate `CommandRegistry` into `Agent` struct in `crates/core/src/agent.rs` <!-- id: 3 -->
+- [x] Implement slash command interception logic in `Agent::chat` <!-- id: 4 -->
+- [x] Implement built-in commands: `/help` (info), `/new` (session reset), and `/exit`/`/quit` (program termination) <!-- id: 5 -->
+- [x] Verify implementation with a test case simulating a custom command load and execution <!-- id: 6 -->
+- [x] Refactor `load_from_dir` to be resilient against individual file errors (continue on error) <!-- id: 7 -->
+- [x] Add validation for command filenames (skip/warn if name contains whitespace) <!-- id: 8 -->
+- [x] Move default command path to `AgentConfig` <!-- id: 9 -->
+- [x] Ensure CLI respects `SystemEvent::Shutdown` for graceful exit via `/exit` command <!-- id: 10 -->

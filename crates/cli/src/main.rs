@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 use common::{config::Config, logging, bus::EventBus, llm::LLMProvider, path::SandboxedPath};
 use provider::{openai::OpenAIProvider, mock::MockProvider};
-use core::agent::{Agent, config::AgentConfig};
-use core::session::manager::SessionManager;
+use sisyphus_core::agent::{Agent, config::AgentConfig};
+use sisyphus_core::session::manager::SessionManager;
 use tools::{cmd::CommandTool, fs::{ReadFileTool, WriteFileTool}};
 use std::path::Path;
 use std::sync::Arc;
@@ -149,11 +149,19 @@ async fn run_chat(_config: Config, config_path: Option<String>) -> anyhow::Resul
 
     // 3. Subscribe to Events
     let mut events = client.subscribe_events()?;
+    let (shutdown_tx, mut shutdown_rx) = tokio::sync::mpsc::channel(1);
+    
     tokio::spawn(async move {
         while let Some(event) = events.next().await {
             match event {
                 Ok(Event::Message(msg)) => {
                      tracing::debug!("Event: {:?}", msg);
+                     if let Ok(event) = serde_json::from_str::<common::bus::SystemEvent>(&msg.data) {
+                         if let common::bus::SystemEvent::Shutdown = event {
+                             let _ = shutdown_tx.send(()).await;
+                             break;
+                         }
+                     }
                 }
                 _ => {}
             }
@@ -174,6 +182,10 @@ async fn run_chat(_config: Config, config_path: Option<String>) -> anyhow::Resul
         line.clear();
         
         let bytes = tokio::select! {
+            _ = shutdown_rx.recv() => {
+                println!("\nSession ended by server.");
+                break;
+            }
             _ = tokio::signal::ctrl_c() => {
                 println!("\nShutting down...");
                 break;
@@ -188,6 +200,7 @@ async fn run_chat(_config: Config, config_path: Option<String>) -> anyhow::Resul
         }
 
         let input = line.trim();
+        // Allow manual exit if user types "exit" without slash, but /exit and /quit go to server
         if input == "exit" {
             break;
         }
@@ -259,7 +272,7 @@ async fn run_attach(url: String) -> anyhow::Result<()> {
         }
 
         let input = line.trim();
-        if input == "exit" {
+        if input == "exit" || input == "/exit" || input == "/quit" {
             break;
         }
 

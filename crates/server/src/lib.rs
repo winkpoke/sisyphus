@@ -12,7 +12,7 @@ use tower_http::cors::CorsLayer;
 use sisyphus_core::agent::Agent;
 use sisyphus_core::session::manager::SessionManager;
 use sisyphus_core::session::Session;
-use common::bus::EventBus;
+use common::bus::{EventBus, SystemEvent};
 use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};
 
@@ -26,6 +26,7 @@ pub struct AppState {
 pub struct Server {
     router: Router,
     port: u16,
+    bus: Arc<EventBus>,
 }
 
 impl Server {
@@ -33,7 +34,7 @@ impl Server {
         let state = AppState {
             agent,
             session_manager,
-            bus,
+            bus: bus.clone(),
         };
 
         let router = Router::new()
@@ -49,23 +50,51 @@ impl Server {
         Self {
             router,
             port,
+            bus,
         }
     }
 
     pub async fn run(self) -> anyhow::Result<()> {
         // Use 127.0.0.1 explicitly to avoid issues with some environments preferring IPv6
         let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", self.port)).await?;
+        
+        let mut rx = self.bus.subscribe();
+        
+        self.run_on_listener(listener, async move {
+            tokio::select! {
+                _ = tokio::signal::ctrl_c() => {
+                    tracing::info!("Received Ctrl+C, shutting down");
+                }
+                _ = async {
+                    loop {
+                        match rx.recv().await {
+                            Ok(SystemEvent::Shutdown) => break,
+                            Ok(_) => continue,
+                            Err(_) => break,
+                        }
+                    }
+                    tracing::info!("Received Shutdown event, shutting down");
+                } => {}
+            }
+        }).await
+    }
+
+    pub async fn run_with_signal<S>(self, signal: S) -> anyhow::Result<()> 
+    where
+        S: std::future::Future<Output = ()> + Send + 'static,
+    {
+        let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", self.port)).await?;
+        self.run_on_listener(listener, signal).await
+    }
+
+    pub async fn run_on_listener<S>(self, listener: tokio::net::TcpListener, signal: S) -> anyhow::Result<()>
+    where
+        S: std::future::Future<Output = ()> + Send + 'static,
+    {
         tracing::info!("Server listening on {}", listener.local_addr()?);
         
-        // Graceful shutdown
-        let shutdown_signal = async {
-            tokio::signal::ctrl_c()
-                .await
-                .expect("failed to install CTRL+C signal handler");
-        };
-
         axum::serve(listener, self.router)
-            .with_graceful_shutdown(shutdown_signal)
+            .with_graceful_shutdown(signal)
             .await?;
         Ok(())
     }

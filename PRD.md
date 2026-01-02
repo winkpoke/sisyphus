@@ -67,7 +67,13 @@ The scope includes the migration and generalization of the core business logic, 
 
 ### 3.7 CLI Experience
 - **Startup Banner**: Display a branded ASCII banner with version and configuration info on startup.
-- **Slash Commands**: Support for slash commands (e.g., `/undo`, `/help`) in the CLI chat interface.
+- **Slash Commands**: Support for slash commands (e.g., `/exit`, `/new`) in the CLI chat interface.
+
+### 3.8 Slash Command System
+- **Interception Layer**: Parses user input starting with `/` before reaching the LLM.
+- **Registry**: Supports both built-in Rust functions and custom template-based commands.
+- **Extensibility**: Automatically loads custom commands from `.sisyphus/command/*.md`.
+- **Templating**: Expands custom command arguments into prompt templates.
 
 ## 4. Technical Architecture
 

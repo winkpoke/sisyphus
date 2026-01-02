@@ -11,6 +11,7 @@ use std::collections::HashMap;
 use rust_i18n::t;
 use self::config::AgentConfig;
 use self::prompt::SystemPromptBuilder;
+use crate::command::{CommandRegistry, CommandType, AgentContext};
 
 const MAX_TURNS: u32 = 1000;
 
@@ -19,16 +20,46 @@ pub struct Agent {
     bus: Arc<EventBus>,
     tools: HashMap<String, Box<dyn Tool>>,
     config: AgentConfig,
+    commands: CommandRegistry,
 }
 
 impl Agent {
     pub fn new(provider: Box<dyn LLMProvider>, bus: Arc<EventBus>, config: AgentConfig) -> Self {
-        Self {
+        let mut agent = Self {
             provider,
             bus,
             tools: HashMap::new(),
             config,
-        }
+            commands: CommandRegistry::new(),
+        };
+        agent.register_builtins();
+        // Load custom commands from .sisyphus/command or config
+        let cmd_path = agent.config.get_command_path();
+        let _ = agent.commands.load_from_dir(cmd_path);
+        agent
+    }
+
+    fn register_builtins(&mut self) {
+        self.commands.register_builtin("/help", |_, _| {
+             Ok("Available commands:\n/help - Show this help\n/exit, /quit - End the session\n/new - Start a new session".to_string())
+        });
+        
+        let bus = self.bus.clone();
+        self.commands.register_builtin("/exit", move |_, _| {
+             bus.publish(SystemEvent::Shutdown);
+             Ok("Session ended.".to_string())
+        });
+        
+        let bus = self.bus.clone();
+        self.commands.register_builtin("/quit", move |_, _| {
+             bus.publish(SystemEvent::Shutdown);
+             Ok("Session ended.".to_string())
+        });
+        
+        self.commands.register_builtin("/new", |ctx, _| {
+             ctx.session.history.clear();
+             Ok("New session started.".to_string())
+        });
     }
 
     pub fn register_tool(&mut self, tool: Box<dyn Tool>) {
@@ -71,6 +102,44 @@ impl Agent {
             return Err(anyhow!("Session is busy"));
         }
         session.status = SessionStatus::Busy;
+
+        let mut input = input;
+        let mut depth = 0;
+        const MAX_DEPTH: usize = 10;
+
+        while input.starts_with('/') {
+            let parts: Vec<&str> = input.trim().split_whitespace().collect();
+            let cmd_name = parts[0];
+            
+            if let Some(command) = self.commands.get(cmd_name) {
+                match command {
+                    CommandType::Builtin(f) => {
+                         let args: Vec<String> = parts.iter().skip(1).map(|s| s.to_string()).collect();
+                         let mut ctx = AgentContext { session };
+                         let res = f(&mut ctx, &args);
+                         ctx.session.status = SessionStatus::Idle;
+                         return res;
+                    },
+                    CommandType::Custom(config) => {
+                         depth += 1;
+                         if depth > MAX_DEPTH {
+                             session.status = SessionStatus::Idle;
+                             return Err(anyhow!(t!("command_recursion_limit")));
+                         }
+                         let args_str = input.trim_start_matches(cmd_name).trim();
+                         if config.template.contains("{{args}}") {
+                             input = config.template.replace("{{args}}", args_str);
+                         } else {
+                             input = config.template.clone();
+                         }
+                         continue;
+                    }
+                }
+            } else {
+                session.status = SessionStatus::Idle;
+                return Err(anyhow!(t!("command_not_found", name = cmd_name)));
+            }
+        }
 
         let result = self.process_turn(session, input).await;
 

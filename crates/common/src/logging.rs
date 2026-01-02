@@ -37,6 +37,9 @@ pub async fn start_event_logger(bus: &EventBus) {
                 SystemEvent::AgentStateChanged { session_id, state } => {
                     debug!(target: "bus", event = "state_change", session_id = %session_id, state = %state);
                 }
+                SystemEvent::Shutdown => {
+                    info!(target: "bus", event = "shutdown");
+                }
             }
         }
     });

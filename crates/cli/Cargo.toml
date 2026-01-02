@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 common = { workspace = true }
-core = { workspace = true }
+sisyphus_core = { workspace = true }
 provider = { workspace = true }
 tools = { workspace = true }
 server = { path = "../server" }
@@ -19,5 +19,6 @@ dotenv = "0.15"
 rust-i18n = "3"
 reqwest-eventsource = "0.5"
 futures = { workspace = true }
+serde_json = { workspace = true }
 url = { workspace = true }
 colored = "2.0"

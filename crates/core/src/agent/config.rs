@@ -44,6 +44,13 @@ pub struct AgentConfig {
     pub instructions: String,
     pub mode: AgentMode,
     pub permissions: AgentPermissions,
+    pub command_path: Option<String>,
+}
+
+impl AgentConfig {
+    pub fn get_command_path(&self) -> String {
+        self.command_path.clone().unwrap_or_else(|| ".sisyphus/command".to_string())
+    }
 }
 
 #[cfg(test)]
@@ -58,6 +65,7 @@ mod tests {
             instructions: "Be helpful".to_string(),
             mode: AgentMode::Primary,
             permissions: AgentPermissions::default(),
+            command_path: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();
