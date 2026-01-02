@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use common::{config::Config, logging, bus::EventBus, llm::LLMProvider, path::SandboxedPath};
 use provider::{openai::OpenAIProvider, mock::MockProvider};
-use core::agent::Agent;
+use core::agent::{Agent, config::AgentConfig};
 use core::session::manager::SessionManager;
 use tools::{cmd::CommandTool, fs::{ReadFileTool, WriteFileTool}};
 use std::path::Path;
@@ -112,7 +112,7 @@ async fn run_serve(config: Config, port: u16) -> anyhow::Result<()> {
         }
     };
 
-    let mut agent = Agent::new(provider, bus.clone());
+    let mut agent = Agent::new(provider, bus.clone(), AgentConfig::default());
 
     // Register tools
     agent.register_tool(Box::new(CommandTool));

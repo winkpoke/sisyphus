@@ -13,3 +13,4 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 uuid = { workspace = true }
 rust-i18n = "3"
+chrono = "0.4.42"

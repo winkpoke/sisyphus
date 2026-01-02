@@ -1,5 +1,5 @@
 use server::Server;
-use sisyphus_core::agent::Agent;
+use sisyphus_core::agent::{Agent, config::AgentConfig};
 use sisyphus_core::session::manager::SessionManager;
 use common::bus::EventBus;
 use provider::mock::MockProvider;
@@ -18,7 +18,7 @@ async fn test_server_health() {
     init_tracing();
     let bus = Arc::new(EventBus::new(100));
     let provider = Box::new(MockProvider::new());
-    let agent = Arc::new(Agent::new(provider, bus.clone()));
+    let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default()));
     let session_manager = Arc::new(Mutex::new(SessionManager::new()));
     
     let port = 5000;
@@ -50,7 +50,7 @@ async fn test_session_flow() {
     init_tracing();
     let bus = Arc::new(EventBus::new(100));
     let provider = Box::new(MockProvider::new());
-    let agent = Arc::new(Agent::new(provider, bus.clone()));
+    let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default()));
     let session_manager = Arc::new(Mutex::new(SessionManager::new()));
     
     let port = 5001;

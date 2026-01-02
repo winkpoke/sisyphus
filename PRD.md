@@ -92,7 +92,6 @@ The system follows a **Headless Agent** design, decoupling the "Brain" (Rust Cor
 ### 4.4 Platform Support
 - **Cross-Platform**: The system shall fully support **Linux**, **Windows**, and **macOS** environments for both the server runtime and client tools.
 
-
 ## 5. User Stories
 - **General Automation**: As a system admin, I want the agent to check server logs and generate a health report.
 - **Research**: As a researcher, I want the agent to search the web, read specific articles, and summarize the findings.

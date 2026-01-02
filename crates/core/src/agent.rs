@@ -1,3 +1,6 @@
+pub mod config;
+pub mod prompt;
+
 use crate::session::{Session, SessionStatus};
 use common::llm::{LLMProvider, CompletionRequest, Message, Role, ToolDefinition, ToolFunctionDefinition};
 use common::bus::{EventBus, SystemEvent};
@@ -6,6 +9,8 @@ use std::sync::Arc;
 use anyhow::{Result, anyhow};
 use std::collections::HashMap;
 use rust_i18n::t;
+use self::config::AgentConfig;
+use self::prompt::SystemPromptBuilder;
 
 const MAX_TURNS: u32 = 1000;
 
@@ -13,14 +18,16 @@ pub struct Agent {
     provider: Box<dyn LLMProvider>,
     bus: Arc<EventBus>,
     tools: HashMap<String, Box<dyn Tool>>,
+    config: AgentConfig,
 }
 
 impl Agent {
-    pub fn new(provider: Box<dyn LLMProvider>, bus: Arc<EventBus>) -> Self {
+    pub fn new(provider: Box<dyn LLMProvider>, bus: Arc<EventBus>, config: AgentConfig) -> Self {
         Self {
             provider,
             bus,
             tools: HashMap::new(),
+            config,
         }
     }
 
@@ -93,8 +100,19 @@ impl Agent {
             }
             current_turn += 1;
 
+            let system_prompt = SystemPromptBuilder::build(&self.config);
+            let system_msg = Message {
+                role: Role::System,
+                content: Some(system_prompt),
+                tool_calls: None,
+                tool_call_id: None,
+            };
+
+            let mut messages = vec![system_msg];
+            messages.extend(session.history.clone());
+
             let req = CompletionRequest {
-                messages: session.history.clone(),
+                messages,
                 temperature: None,
                 max_tokens: None,
                 tools: self.get_tool_definitions(),

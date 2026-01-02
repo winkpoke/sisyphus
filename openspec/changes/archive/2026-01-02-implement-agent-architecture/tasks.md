@@ -1,18 +1,18 @@
 ## 1. Implementation
-- [ ] 1.1 Create `crates/core/src/agent/config.rs`
+- [x] 1.1 Create `crates/core/src/agent/config.rs`
   - Define `AgentMode`, `PermissionLevel`, `AgentPermissions`, and `AgentConfig` structs.
   - Implement `Default` traits where appropriate.
-- [ ] 1.2 Create `crates/core/src/agent/prompt.rs`
+- [x] 1.2 Create `crates/core/src/agent/prompt.rs`
   - Implement `SystemPromptBuilder` struct.
   - Implement `environment()` method for OS/CWD/Date.
   - Implement `custom_rules()` stub (to be expanded).
   - Implement `build()` method to combine parts.
-- [ ] 1.3 Refactor `crates/core/src/agent.rs`
+- [x] 1.3 Refactor `crates/core/src/agent.rs`
   - Update `Agent` struct to hold `AgentConfig`.
   - Update `new()` to accept `AgentConfig`.
   - Update `chat()` to generate and prepend system prompt using `SystemPromptBuilder`.
-- [ ] 1.4 Update `crates/core/src/lib.rs`
+- [x] 1.4 Update `crates/core/src/lib.rs`
   - Expose new modules `config` and `prompt` (pub mod).
-- [ ] 1.5 Add Unit Tests
+- [x] 1.5 Add Unit Tests
   - Test config serialization/deserialization.
   - Test system prompt generation format.
