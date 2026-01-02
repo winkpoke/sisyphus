@@ -39,3 +39,17 @@
 ### Testing
 - [ ] **Unit Tests**: Add tests for `ChatService` using mock Repositories.
 - [ ] **Integration Tests**: Verify the `server` endpoints using the new architecture.
+
+## 4. Immediate Refinements (Post-Refactor)
+
+### Session Management
+- [ ] **Encapsulate Session Locking**: Refactor `SessionManager::list_sessions` to return `Vec<SessionSummary>` directly.
+  - *Current State*: Returns `Vec<Arc<RwLock<Session>>>`, exposing locks to the caller and risking "lock storms".
+  - *Goal*: Handle locking internally within `SessionManager` and return pure DTOs.
+
+### Command System
+- [ ] **Robust Command Loading**: Update `CommandLoader` to return a `LoadResult` with both successes and errors.
+  - *Current State*: Swallows errors (logs warning) for individual files during loading.
+  - *Goal*: Allow the application to report all loading failures to the user/admin.
+- [ ] **Strict Name Validation**: Enforce strict alphanumeric naming for commands in `CommandLoader`.
+  - *Goal*: Prevent security issues and ensure compatibility with future filesystem/API mappings.

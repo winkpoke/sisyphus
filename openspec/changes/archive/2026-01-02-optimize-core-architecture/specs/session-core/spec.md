@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Granular Session Locking
 The system SHALL support granular locking for sessions to prevent global blocking during long-running operations.

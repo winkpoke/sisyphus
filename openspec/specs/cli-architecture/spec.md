@@ -2,7 +2,6 @@
 
 ## Purpose
 To provide a modular, maintainable, and extensible CLI client for Sisyphus that supports headless server management, remote connections, and event streaming.
-
 ## Requirements
 ### Requirement: CLI Headless Server Management
 The CLI SHALL manage a local server instance when no remote server is specified.
@@ -70,4 +69,14 @@ The CLI codebase MUST be organized into modular components to ensure maintainabi
 - **And** business logic MUST be encapsulated in `commands/` modules
 - **And** UI logic MUST be encapsulated in `ui/` modules
 - **And** agent initialization MUST be isolated in a bootstrap module
+
+### Requirement: REPL Session Switching
+The CLI REPL SHALL adopt new session IDs returned by the server after lifecycle commands.
+
+#### Scenario: REPL Updates Session ID After /new
+Given the CLI is connected to a server using session id `S1`
+When the user sends "/new"
+And the server returns a chat response indicating a new session id `S2`
+Then the CLI SHALL store `S2` as the active session id
+And subsequent chat requests SHALL use `S2`
 

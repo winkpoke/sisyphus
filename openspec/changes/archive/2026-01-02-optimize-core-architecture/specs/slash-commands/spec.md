@@ -1,4 +1,4 @@
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Command Loading Separation
 The system SHALL separate command loading logic from the runtime registry to ensure clean architecture and testability.

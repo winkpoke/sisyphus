@@ -30,3 +30,41 @@ When a client connects to `/api/v1/events`
 And a `MessageReceived` event is published on the internal bus
 Then the client should receive this event via the stream.
 
+### Requirement: Chat Session Lifecycle Signaling
+The server SHALL return enough information from the chat endpoint for clients to handle command-driven session lifecycle changes.
+
+#### Scenario: Chat Response Includes Effective Session ID
+Given a running server
+And an existing session with id `S1`
+When a client sends a chat request to `/api/v1/sessions/S1/chat`
+Then the server SHALL return a successful response containing the assistant response
+And it SHALL include the effective session id for subsequent requests
+
+#### Scenario: New Session Command Returns New Session ID
+Given a running server
+And an existing session with id `S1`
+When a client sends "/new" to `/api/v1/sessions/S1/chat`
+Then the server SHALL create a new session with id `S2`
+And it SHALL return `S2` in the chat response
+And `S2` SHALL have an empty message history
+
+### Requirement: Efficient Session Listing
+The system SHALL provide a lightweight representation of sessions for listing endpoints to optimize performance.
+
+#### Scenario: Listing Sessions
+Given a server with multiple sessions containing long chat histories
+When a client requests `GET /api/v1/sessions`
+Then the server should return a list of `SessionSummary` objects
+And the response should not include the full message history
+And the response size should remain small regardless of chat length
+
+### Requirement: Session Summary Content
+The system SHALL define a `SessionSummary` DTO containing only essential metadata.
+
+#### Scenario: Session Summary Content
+Given a `SessionSummary` object
+It should contain the session ID
+And it should contain the session status
+And it should contain metadata (e.g., message count)
+But it should not contain the `messages` array
+
