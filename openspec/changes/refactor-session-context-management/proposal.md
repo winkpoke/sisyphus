@@ -1,36 +1,26 @@
-# Refactor Session Context Management
+# Change: Refactor Session Context Management
 
-## Summary
-Introduce a dedicated session context component that encapsulates message history storage, safe context-window construction, and prompt-size compaction without exposing raw mutable message vectors.
+## Why
+`Session` currently exposes raw message history as `Vec<Message>`. This makes it easy for call sites to:
+- Break tool-calling correctness by separating an assistant tool-call message from its tool results.
+- Duplicate prompt-building logic across the codebase.
+- Add ad-hoc pruning rules that become inconsistent over time.
 
-## Motivation
-The current `Session` model stores `history: Vec<Message>` directly and exposes it broadly. This makes it difficult to:
-- Enforce invariants required by tool-calling (tool call messages must not be separated from their tool results).
-- Add pruning/compaction logic in a single place.
-- Evolve token estimation and model-specific limits without threading ad-hoc rules across call sites.
-
-## Goals
-- Keep `Session` focused on session identity and lifecycle state.
-- Store messages inside a dedicated `Context` type owned by `Session`.
-- Prevent callers from mutating message history in ways that break invariants.
-- Provide a single method to build a provider-ready prompt message list.
-- Provide a minimal, safe compaction mechanism based on estimated token limits.
-
-## Non-Goals
-- LLM-based summarization.
-- Provider-specific exact tokenization.
-- Persisted session storage or pagination of history.
+This change introduces a dedicated `Context` component to own the message lifecycle and to construct a safe, provider-ready context window on demand.
 
 ## What Changes
 - Replace `Session.history: Vec<Message>` with `Session.context: Context`.
-- Introduce `ContextLimits` and a pluggable token estimation interface.
-- Introduce an initial compaction policy that drops oldest non-pinned context blocks to fit a prompt budget.
-- Treat tool-call exchanges as atomic blocks so compaction cannot break tool-call correctness.
+- Provide invariant-enforcing append APIs so tool exchanges are always recorded and compacted atomically.
+- Add a single render entrypoint that builds the provider-ready message list for a completion request.
+- Add minimal, deterministic compaction based on a prompt token budget and a pluggable token estimator.
+- **BREAKING**: Remove broad direct mutation of session history (internal API change). Call sites must use the context API.
 
 ## Impact
 - Affected specs: `session-core`
+- Related specs: `agent-core` (system prompt generation is injected at request time)
 - Affected code:
   - `crates/core/src/session.rs`
-  - `crates/core/src/session/` (new module for context management)
-  - Any code that reads/writes `Session.history`
+  - `crates/core/src/session/` (context module)
+  - `crates/core/src/agent.rs` (prompt construction and history access)
+  - Command handlers that mutate `Session.history` directly
 

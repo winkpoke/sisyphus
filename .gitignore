@@ -136,7 +136,7 @@ bun.lockb
 .sst/
 .open-next/
 opencode/
-
+codex/
 
 
 target/

@@ -21,13 +21,27 @@ The system SHALL maintain the state of a conversation independently of the agent
 - **WHEN** a request is made to process a session that is "Busy"
 - **THEN** the system throws/returns a `SessionBusy` error
 
+#### Scenario: Start a new session via command
+- **GIVEN** an existing session with prior context
+- **WHEN** a "new session" command is executed
+- **THEN** the session context is cleared
+- **AND** the session status remains consistent with the command execution lifecycle
+
 ### Requirement: Session History
-The system SHALL store the linear history of messages (User, Assistant, System, Tool) within the Session object via a dedicated context component.
+The system SHALL store the linear history of conversation messages (User, Assistant, Tool) within the Session object via a dedicated context component.
+
+The system prompt is generated dynamically by the Agent and injected at completion request time; it is not required to be stored in the session context.
 
 #### Scenario: Append message
 - **WHEN** a message is added to the session
 - **THEN** it is appended to the session context
 - **AND** it is available for the next context window generation
+
+#### Scenario: Preserve multi-step turn ordering
+- **GIVEN** a single user input that triggers multiple assistant/tool steps
+- **WHEN** those steps are appended to the session
+- **THEN** the session context preserves their order deterministically
+- **AND** the context window generation reflects the same order
 
 ## ADDED Requirements
 
@@ -38,6 +52,12 @@ The system SHALL construct a provider-ready context window from the session cont
 - **GIVEN** a session context containing prior messages
 - **WHEN** the system builds a completion request
 - **THEN** the system MUST produce an ordered list of messages suitable for the LLM provider
+
+#### Scenario: Inject system messages at request time
+- **GIVEN** a session context containing prior conversation messages
+- **WHEN** the system builds a completion request
+- **THEN** system messages (such as the dynamic system prompt) are prepended for that request
+- **AND** they do not need to be stored in the session context
 
 ### Requirement: Safe Context Compaction
 The system SHALL support compacting the session context to fit within a configurable prompt token budget.
@@ -53,3 +73,7 @@ The system SHALL support compacting the session context to fit within a configur
 - **WHEN** the system compacts the context
 - **THEN** it MUST NOT remove only part of the tool exchange
 
+#### Scenario: Fail deterministically when pinned content exceeds budget
+- **GIVEN** pinned content and injected system messages exceed the prompt token budget
+- **WHEN** the system attempts to build a completion request
+- **THEN** it MUST return a deterministic error describing the budget violation
