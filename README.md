@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="LICENSE">
-    <img alt="License" src="https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square">
+    <img alt="License" src="https://img.shields.io/badge/license-Apache_2.0-blue.svg?style=flat-square">
   </a>
   <a href="https://rust-lang.org">
     <img alt="Rust" src="https://img.shields.io/badge/rust-1.75+-orange.svg?style=flat-square">
@@ -165,7 +165,7 @@ cargo test
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the Apache License, Version 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ## 🙏 Acknowledgments
 
