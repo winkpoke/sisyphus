@@ -1,13 +1,46 @@
 use anyhow::Result;
 use client::Client;
+use std::borrow::Cow;
+
 use reedline::{
-    Color, ColumnarMenu, DefaultPrompt, DefaultPromptSegment, EditCommand, Emacs, KeyCode,
-    KeyModifiers, Reedline, ReedlineEvent, ReedlineMenu, Signal, default_emacs_keybindings,
+    Color, ColumnarMenu, EditCommand, Emacs, KeyCode, KeyModifiers, Prompt, PromptEditMode,
+    PromptHistorySearch, Reedline, ReedlineEvent, ReedlineMenu, Signal, default_emacs_keybindings,
 };
 use rust_i18n::t;
 use tokio::sync::mpsc::Receiver;
 
 use super::completer::CommandCompleter;
+
+pub struct SisyphusPrompt;
+
+impl Prompt for SisyphusPrompt {
+    fn render_prompt_left(&self) -> Cow<'_, str> {
+        Cow::Borrowed("› ")
+    }
+
+    fn render_prompt_right(&self) -> Cow<'_, str> {
+        Cow::Borrowed("")
+    }
+
+    fn render_prompt_indicator(&self, _prompt_mode: PromptEditMode) -> Cow<'_, str> {
+        Cow::Borrowed("")
+    }
+
+    fn render_prompt_multiline_indicator(&self) -> Cow<'_, str> {
+        Cow::Borrowed("::: ")
+    }
+
+    fn render_prompt_history_search_indicator(
+        &self,
+        _history_search: PromptHistorySearch,
+    ) -> Cow<'_, str> {
+        Cow::Borrowed("? ")
+    }
+
+    fn get_prompt_color(&self) -> Color {
+        Color::Cyan
+    }
+}
 
 pub struct Repl {
     client: Client,
@@ -30,7 +63,11 @@ impl Repl {
         let completer = Box::new(CommandCompleter::new(commands));
 
         // Configure Menu
-        let completion_menu = Box::new(ColumnarMenu::default().with_name("completion_menu"));
+        let completion_menu = Box::new(
+            ColumnarMenu::default()
+                .with_name("completion_menu")
+                .with_marker("".to_string()),
+        );
 
         // Configure Keybindings
         let mut keybindings = default_emacs_keybindings();
@@ -48,10 +85,7 @@ impl Repl {
             .with_menu(ReedlineMenu::EngineCompleter(completion_menu))
             .with_edit_mode(Box::new(Emacs::new(keybindings)));
 
-        let prompt = DefaultPrompt::new(
-            DefaultPromptSegment::Basic("›".to_string()),
-            DefaultPromptSegment::Empty,
-        );
+        let prompt = SisyphusPrompt;
 
         println!("{}", t!("type_exit"));
         loop {
