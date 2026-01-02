@@ -1,0 +1,4 @@
+- [x] Add `colored` dependency to `crates/cli/Cargo.toml` <!-- id: 0 -->
+- [x] Create `crates/cli/src/banner.rs` with ASCII logo and rendering logic <!-- id: 1 -->
+- [x] Integrate `banner::print_startup_info` into `crates/cli/src/main.rs` passing the loaded config <!-- id: 2 -->
+- [x] Verify banner rendering in terminal and ensure displayed model matches `sisyphus.toml` <!-- id: 3 -->

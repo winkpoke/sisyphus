@@ -1,6 +1,10 @@
 # Sisyphus
 
 <p align="center">
+  <img src="SISYPHUS_banner.png" alt="Sisyphus Banner" width="100%">
+</p>
+
+<p align="center">
   <strong>A robust, open-source general-purpose AI agent framework</strong>
 </p>
 
@@ -13,19 +17,40 @@
   </a>
 </p>
 
+<p align="center">
+  <em>"The struggle itself toward the heights is enough to fill a man's heart."</em><br>
+  — Albert Camus
+</p>
+
 ---
 
 ## 📖 About
 
 **Sisyphus** is a general-purpose AI agent framework ported from the core logic of [OpenCode](https://opencode.ai). It is designed to be a flexible, headless, and extensible system for building AI agents that can interact with the world through tools and APIs.
 
+Sisyphus focuses on providing a high-performance agent runtime that can power various clients (CLI, IDE extensions, Web) while maintaining a strict separation between the core logic and the user interface.
+
 > **Note**: This project is currently in early active development (Phase 1).
 
 ### Core Principles
 
-1.  **Provider Agnostic** - Support for multiple LLM providers (OpenAI implemented, others planned).
-2.  **Extensible** - Universal tooling system.
-3.  **Headless by Design** - Decoupled architecture allowing multiple client interfaces.
+1.  **Provider Agnostic** - Unified API for multiple LLM providers (OpenAI, Anthropic, Google, Local).
+2.  **Extensible** - Universal tooling system with MCP (Model Context Protocol) support.
+3.  **Headless by Design** - Decoupled architecture allowing multiple client interfaces (CLI, VS Code, Web).
+4.  **High Performance** - Built in Rust for speed, safety, and efficiency.
+
+## 🎯 Scope
+
+### In Scope
+*   **Core Agent Logic**: Versatile agents for planning and executing tasks.
+*   **Session Management**: Context compaction, history tracking, and persistence.
+*   **Universal Tooling**: Shell, File System, and MCP integration.
+*   **Server Architecture**: HTTP/WebSocket API for remote clients.
+*   **CLI Entry Point**: Headless CLI for running the server or executing specific commands.
+
+### Out of Scope
+*   **Terminal User Interface (TUI)**: The rich interactive TUI (found in OpenCode).
+*   **Desktop/Web Wrappers**: Specific frontend implementations (Electron, Tauri, React).
 
 ## 🏗️ Architecture
 
@@ -35,10 +60,10 @@ Sisyphus uses a **Cargo Workspace** architecture:
 sisyphus/
 ├── crates/
 │   ├── common/      # Shared utilities, traits, event bus
-│   ├── core/        # Agent logic, session management
+│   ├── core/        # Agent logic, session management, memory
 │   ├── provider/    # LLM provider adapters
 │   ├── tools/       # Standard tools (fs, shell)
-│   ├── server/      # HTTP/WebSocket API server (Planned)
+│   ├── server/      # HTTP/WebSocket API server
 │   └── cli/         # Command-line interface
 └── Cargo.toml       # Workspace configuration
 ```
@@ -46,22 +71,28 @@ sisyphus/
 ## ✨ Features
 
 ### Current Capabilities
-
 -   **Interactive CLI**: Chat with the agent directly in your terminal.
 -   **LLM Support**:
     -   OpenAI (GPT-4, etc.)
     -   Mock Provider (for testing)
 -   **Tools**:
-    -   **Shell Execution**: Run system commands.
+    -   **Shell Execution**: Run system commands safely.
     -   **File System**: Read and write files within a sandboxed environment.
 -   **Event System**: Internal event bus for observability.
 
 ### Planned Features
-
--   **MCP Support**: Native integration with Model Context Protocol.
--   **Server API**: HTTP/WebSocket server for remote clients.
--   **More Providers**: Anthropic, Google, Local Models (Ollama/vLLM).
--   **Specialized Agents**: Planner/Executor separation.
+-   **Advanced Agent System**:
+    -   **Executor Agent**: Capable of executing commands and editing files.
+    -   **Planner Agent**: Specialized for analysis, strategy, and research.
+    -   **Sub-agents**: Triage, Researcher, Data Analyst.
+-   **Session Management**:
+    -   Conversation history with context compaction.
+    -   Session persistence (save/load).
+-   **Skills System**:
+    -   Declarative skills via `SKILL.md`.
+    -   Dynamic skill injection and discovery.
+-   **MCP Support**: Native integration with Model Context Protocol (Web Search, Database, APIs).
+-   **Internationalization (i18n)**: Multi-language support for system messages.
 
 ## 🚀 Quick Start
 
@@ -109,12 +140,12 @@ Or if installed:
 sisyphus chat
 ```
 
-## � Documentation
+## 📚 Documentation
 
 -   **[PRD.md](PRD.md)** - Product requirements and feature specifications.
 -   **[AGENTS.md](AGENTS.md)** - Development guidelines and agent instructions.
 
-## �🛠️ Development
+## 🛠️ Development
 
 ### Building and Testing
 

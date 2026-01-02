@@ -12,6 +12,7 @@ use futures::StreamExt;
 use reqwest_eventsource::Event;
 
 mod server_manager;
+mod banner;
 use server_manager::ServerManager;
 
 #[macro_use]
@@ -67,6 +68,9 @@ async fn main() -> anyhow::Result<()> {
 
     // 4. Init Locale
     rust_i18n::set_locale(&config.language);
+
+    // 5. Print Startup Banner
+    banner::print_startup_info(&config);
 
     let config_path = cli.config.clone();
     match cli.command.unwrap_or(Commands::Chat) {

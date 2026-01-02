@@ -65,6 +65,10 @@ The scope includes the migration and generalization of the core business logic, 
 ### 3.6 Internationalization (i18n)
 - **Multi-language Support**: The system shall be designed to support Internationalization (i18n), enabling localization for system messages, logs, and user-facing interactions.
 
+### 3.7 CLI Experience
+- **Startup Banner**: Display a branded ASCII banner with version and configuration info on startup.
+- **Slash Commands**: Support for slash commands (e.g., `/undo`, `/help`) in the CLI chat interface.
+
 ## 4. Technical Architecture
 
 ### 4.1 Technology Stack
