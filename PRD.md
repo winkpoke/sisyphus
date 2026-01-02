@@ -67,13 +67,20 @@ The scope includes the migration and generalization of the core business logic, 
 ### 3.6 Internationalization (i18n)
 - **Multi-language Support**: The system shall be designed to support Internationalization (i18n), enabling localization for system messages, logs, and user-facing interactions.
 
-### 3.7 CLI Experience
+### 3.7 CLI & TUI Experience
+- **Interactive TUI**: A rich terminal user interface (TUI) featuring an async event loop that merges user input with backend events.
+- **Transcript**: Structured, progressively updating transcript with support for streaming, scrolling, and "stick to bottom" behavior.
+- **Command Palette**: A discoverable palette for slash commands triggered by `/`, supporting keyboard navigation and filtering.
+- **Polish**:
+  - **Overlays**: Safe rendering of help, errors, and long content (pager) without corrupting the terminal.
+  - **Selection**: Ability to select and copy transcript text.
+  - **Status**: Unobtrusive indicators and key hints.
 - **Startup Banner**: Display a branded ASCII banner with version and configuration info on startup.
-- **Slash Commands**: Support for slash commands (e.g., `/exit`, `/new`) in the CLI chat interface.
 
 ### 3.8 Slash Command System
 - **Interception Layer**: Parses user input starting with `/` before reaching the LLM.
 - **Registry**: Supports both built-in Rust functions and custom template-based commands.
+- **Command Palette Integration**: Commands shall be discoverable and executable via the TUI's command palette.
 - **Extensibility**: Automatically loads custom commands from `.sisyphus/command/*.md`.
 - **Templating**: Expands custom command arguments into prompt templates.
 
@@ -99,7 +106,7 @@ The system follows a **Headless Agent** design, decoupling the "Brain" (Rust Cor
 - **UI Clients**:
   - **VS Code Plugin**: TypeScript extension communicating via WebSocket.
   - **Dioxus TUI/Web**: Rust-based frontends (WASM or Native) connecting to the server.
-  - **CLI**: A lightweight client consuming the core directly or via server.
+  - **CLI**: A lightweight client with a feature-gated TUI frontend for interactive sessions, consuming the core directly or via server.
 
 ### 4.4 Platform Support
 - **Cross-Platform**: The system shall fully support **Linux**, **Windows**, and **macOS** environments for both the server runtime and client tools.

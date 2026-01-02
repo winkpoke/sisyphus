@@ -1,10 +1,129 @@
 use super::transcript::{Transcript, TranscriptItemKind};
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum InputMode {
+    Normal,
+    CommandPalette,
+    Overlay,
+    Selection,
+}
+
+#[derive(Debug, Clone)]
+pub struct SelectionState {
+    pub selected_message_index: Option<usize>,
+}
+
+impl SelectionState {
+    pub fn new() -> Self {
+        Self {
+            selected_message_index: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OverlayState {
+    pub title: String,
+    pub content: String,
+    pub scroll: u16,
+    pub is_error: bool,
+}
+
+impl OverlayState {
+    pub fn new() -> Self {
+        Self {
+            title: String::new(),
+            content: String::new(),
+            scroll: 0,
+            is_error: false,
+        }
+    }
+
+    pub fn show(&mut self, title: String, content: String, is_error: bool) {
+        self.title = title;
+        self.content = content;
+        self.scroll = 0;
+        self.is_error = is_error;
+    }
+
+    pub fn scroll_down(&mut self) {
+        self.scroll = self.scroll.saturating_add(1);
+    }
+
+    pub fn scroll_up(&mut self) {
+        self.scroll = self.scroll.saturating_sub(1);
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CommandPaletteState {
+    pub selected_index: usize,
+    pub input: String,
+    pub commands: Vec<String>,
+    pub filtered_commands: Vec<String>,
+}
+
+impl CommandPaletteState {
+    pub fn new() -> Self {
+        let commands = vec![
+            "/quit".to_string(),
+            "/exit".to_string(),
+            "/help".to_string(),
+            "/clear".to_string(),
+        ];
+        Self {
+            selected_index: 0,
+            input: String::new(),
+            filtered_commands: commands.clone(),
+            commands,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.input.clear();
+        self.update_filter();
+    }
+
+    pub fn update_filter(&mut self) {
+        if self.input.is_empty() {
+            self.filtered_commands = self.commands.clone();
+        } else {
+            self.filtered_commands = self
+                .commands
+                .iter()
+                .filter(|c| c.starts_with(&self.input))
+                .cloned()
+                .collect();
+        }
+        self.selected_index = 0;
+    }
+
+    pub fn select_next(&mut self) {
+        if !self.filtered_commands.is_empty() {
+            self.selected_index = (self.selected_index + 1) % self.filtered_commands.len();
+        }
+    }
+
+    pub fn select_prev(&mut self) {
+        if !self.filtered_commands.is_empty() {
+            if self.selected_index == 0 {
+                self.selected_index = self.filtered_commands.len() - 1;
+            } else {
+                self.selected_index -= 1;
+            }
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct TuiState {
     pub transcript: Transcript,
     pub input_buffer: String,
     pub session_id: String,
+    pub mode: InputMode,
+    pub command_palette: CommandPaletteState,
+    pub overlay: OverlayState,
+    pub selection: SelectionState,
 }
 
 impl TuiState {
@@ -13,6 +132,10 @@ impl TuiState {
             transcript: Transcript::new(),
             input_buffer: String::new(),
             session_id,
+            mode: InputMode::Normal,
+            command_palette: CommandPaletteState::new(),
+            overlay: OverlayState::new(),
+            selection: SelectionState::new(),
         }
     }
 
@@ -64,5 +187,23 @@ mod tests {
         let mut state = TuiState::new("sess-1".to_string());
         state.update_session_id("sess-2".to_string());
         assert_eq!(state.session_id, "sess-2");
+    }
+
+    #[test]
+    fn test_command_palette() {
+        let mut palette = CommandPaletteState::new();
+        assert_eq!(palette.selected_index, 0);
+
+        palette.select_next();
+        assert_eq!(palette.selected_index, 1);
+
+        palette.input.push_str("/h");
+        palette.update_filter();
+        assert_eq!(palette.filtered_commands.len(), 1); // /help
+        assert_eq!(palette.filtered_commands[0], "/help");
+
+        palette.reset();
+        assert!(palette.input.is_empty());
+        assert_eq!(palette.filtered_commands.len(), 4);
     }
 }

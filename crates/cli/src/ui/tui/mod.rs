@@ -10,12 +10,12 @@ use client::Client;
 use event::{Event, EventHandler};
 use futures::StreamExt;
 use ratatui::{
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Style},
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
-use state::TuiState;
+use state::{InputMode, TuiState};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -23,6 +23,7 @@ pub struct Tui {
     client: Client,
     shutdown_rx: mpsc::Receiver<()>,
     state: TuiState,
+    clipboard: Option<arboard::Clipboard>,
 }
 
 enum Action {
@@ -40,6 +41,7 @@ impl Tui {
             client,
             shutdown_rx,
             state: TuiState::new(session_id),
+            clipboard: arboard::Clipboard::new().ok(),
         }
     }
 
@@ -63,7 +65,14 @@ impl Tui {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
                     .margin(1)
-                    .constraints([Constraint::Min(1), Constraint::Length(3)].as_ref())
+                    .constraints(
+                        [
+                            Constraint::Min(1),
+                            Constraint::Length(3),
+                            Constraint::Length(1),
+                        ]
+                        .as_ref(),
+                    )
                     .split(f.size());
 
                 let transcript_block = Block::default().title("Transcript").borders(Borders::ALL);
@@ -71,7 +80,7 @@ impl Tui {
                 let width = inner_area.width as usize;
 
                 let mut lines = Vec::new();
-                for item in &self.state.transcript.items {
+                for (i, item) in self.state.transcript.items.iter().enumerate() {
                     let prefix = match item.kind {
                         TranscriptItemKind::User => "You: ",
                         TranscriptItemKind::Assistant => "Assistant: ",
@@ -79,12 +88,18 @@ impl Tui {
                         TranscriptItemKind::Error => "Error: ",
                     };
 
-                    let style = match item.kind {
+                    let mut style = match item.kind {
                         TranscriptItemKind::User => Style::default().fg(Color::Cyan),
                         TranscriptItemKind::Assistant => Style::default().fg(Color::Green),
                         TranscriptItemKind::System => Style::default().fg(Color::Yellow),
                         TranscriptItemKind::Error => Style::default().fg(Color::Red),
                     };
+
+                    if self.state.mode == InputMode::Selection
+                        && Some(i) == self.state.selection.selected_message_index
+                    {
+                        style = style.add_modifier(Modifier::REVERSED);
+                    }
 
                     let content = format!("{}{}", prefix, item.content);
                     lines.push(Line::from(Span::styled(content, style)));
@@ -95,7 +110,7 @@ impl Tui {
                 for line in &lines {
                     let content_len = line.width();
                     if width > 0 {
-                        total_lines += (content_len + width - 1) / width;
+                        total_lines += content_len.div_ceil(width);
                     } else {
                         total_lines += 1;
                     }
@@ -122,6 +137,68 @@ impl Tui {
                 let input_block = Block::default().title("Input").borders(Borders::ALL);
                 let input_text = Paragraph::new(self.state.input_buffer.clone()).block(input_block);
                 f.render_widget(input_text, chunks[1]);
+
+                let hints = match self.state.mode {
+                    InputMode::Normal => {
+                        "Ctrl+P: Palette | Ctrl+S: Select | /: Command | Enter: Send | Ctrl+C: Quit"
+                    }
+                    InputMode::CommandPalette => "Esc: Close | Enter: Select | Up/Down: Nav",
+                    InputMode::Selection => "Esc: Close | Enter/c: Copy | Up/Down: Nav",
+                    InputMode::Overlay => "Esc: Close | j/k: Scroll",
+                };
+                let footer =
+                    Paragraph::new(Line::from(hints)).style(Style::default().fg(Color::DarkGray));
+                f.render_widget(footer, chunks[2]);
+
+                if self.state.mode == InputMode::CommandPalette {
+                    let area = centered_rect(60, 40, f.size());
+                    f.render_widget(Clear, area);
+
+                    let items: Vec<ListItem> = self
+                        .state
+                        .command_palette
+                        .filtered_commands
+                        .iter()
+                        .map(|c| ListItem::new(Line::from(c.as_str())))
+                        .collect();
+
+                    let title = format!(
+                        "Command Palette (Filter: {})",
+                        self.state.command_palette.input
+                    );
+                    let list = List::new(items)
+                        .block(Block::default().title(title).borders(Borders::ALL))
+                        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+                        .highlight_symbol("> ");
+
+                    let mut state = ListState::default();
+                    state.select(Some(self.state.command_palette.selected_index));
+
+                    f.render_stateful_widget(list, area, &mut state);
+                }
+
+                if self.state.mode == InputMode::Overlay {
+                    let area = centered_rect(60, 40, f.size());
+                    f.render_widget(Clear, area);
+
+                    let style = if self.state.overlay.is_error {
+                        Style::default().fg(Color::Red)
+                    } else {
+                        Style::default()
+                    };
+
+                    let p = Paragraph::new(self.state.overlay.content.clone())
+                        .block(
+                            Block::default()
+                                .title(self.state.overlay.title.clone())
+                                .borders(Borders::ALL)
+                                .border_style(style),
+                        )
+                        .scroll((self.state.overlay.scroll, 0))
+                        .wrap(Wrap { trim: true });
+
+                    f.render_widget(p, area);
+                }
             })?;
 
             tokio::select! {
@@ -129,58 +206,170 @@ impl Tui {
                     match event {
                         Event::Key(key) => {
                              if key.kind == crossterm::event::KeyEventKind::Press {
-                                match key.code {
-                                    crossterm::event::KeyCode::Char('c') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
-                                        break;
-                                    }
-                                    crossterm::event::KeyCode::Char(c) => {
-                                        self.state.handle_char(c);
-                                    }
-                                    crossterm::event::KeyCode::Backspace => {
-                                        self.state.handle_backspace();
-                                    }
-                                    crossterm::event::KeyCode::PageUp => {
-                                        self.state.transcript.stick_to_bottom = false;
-                                        self.state.transcript.scroll_offset = self.state.transcript.scroll_offset.saturating_sub(5);
-                                    }
-                                    crossterm::event::KeyCode::PageDown => {
-                                        self.state.transcript.scroll_offset = self.state.transcript.scroll_offset.saturating_add(5);
-                                        // If we are at the bottom, we could re-enable stick_to_bottom
-                                        // For simplicity, user must explicitly go to end or type something to re-enable?
-                                        // Or we can check here, but we don't know total_lines easily without width.
-                                    }
-                                    crossterm::event::KeyCode::End => {
-                                        self.state.transcript.stick_to_bottom = true;
-                                    }
-                                    crossterm::event::KeyCode::Enter => {
-                                        if let Some(input) = self.state.get_input_and_clear() {
-                                            if input == "/quit" || input == "/exit" {
-                                                break;
-                                            }
-
-                                            // User sent a message, so we should stick to bottom to see it
-                                            self.state.transcript.stick_to_bottom = true;
-
-                                            let client = self.client.clone();
-                                            let session_id = self.state.session_id.clone();
-                                            let tx = action_tx.clone();
-                                            let input_clone = input.clone();
-
-                                            tx.send(Action::MessageSent(input_clone.clone())).await.ok();
-
-                                            tokio::spawn(async move {
-                                                match client.chat(&session_id, input_clone).await {
-                                                    Ok(resp) => {
-                                                        let _ = tx.send(Action::ResponseReceived(resp.response, resp.session_id)).await;
-                                                    }
-                                                    Err(e) => {
-                                                        let _ = tx.send(Action::Error(e.to_string())).await;
-                                                    }
-                                                }
-                                            });
+                                if self.state.mode == InputMode::Overlay {
+                                    match key.code {
+                                        crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Enter => {
+                                            self.state.mode = InputMode::Normal;
                                         }
+                                        crossterm::event::KeyCode::Down | crossterm::event::KeyCode::Char('j') => {
+                                            self.state.overlay.scroll_down();
+                                        }
+                                        crossterm::event::KeyCode::Up | crossterm::event::KeyCode::Char('k') => {
+                                            self.state.overlay.scroll_up();
+                                        }
+                                        _ => {}
                                     }
-                                    _ => {}
+                                } else if self.state.mode == InputMode::Selection {
+                                    match key.code {
+                                        crossterm::event::KeyCode::Esc => {
+                                            self.state.mode = InputMode::Normal;
+                                            self.state.selection.selected_message_index = None;
+                                        }
+                                        crossterm::event::KeyCode::Up => {
+                                            if let Some(idx) = self.state.selection.selected_message_index {
+                                                if idx > 0 {
+                                                    self.state.selection.selected_message_index = Some(idx - 1);
+                                                }
+                                            } else if !self.state.transcript.items.is_empty() {
+                                                self.state.selection.selected_message_index = Some(self.state.transcript.items.len() - 1);
+                                            }
+                                        }
+                                        crossterm::event::KeyCode::Down => {
+                                             if let Some(idx) = self.state.selection.selected_message_index {
+                                                if idx < self.state.transcript.items.len() - 1 {
+                                                    self.state.selection.selected_message_index = Some(idx + 1);
+                                                }
+                                            }
+                                        }
+                                        crossterm::event::KeyCode::Char('c') | crossterm::event::KeyCode::Enter => {
+                                             if let Some(idx) = self.state.selection.selected_message_index {
+                                                 if let Some(item) = self.state.transcript.items.get(idx) {
+                                                     if let Some(cb) = &mut self.clipboard {
+                                                         if cb.set_text(&item.content).is_err() {
+                                                             self.state.overlay.show("Copy Failed".to_string(), item.content.clone(), true);
+                                                             self.state.mode = InputMode::Overlay;
+                                                         } else {
+                                                             self.state.mode = InputMode::Normal;
+                                                         }
+                                                     } else {
+                                                         self.state.overlay.show("Copy (Clipboard Unavailable)".to_string(), item.content.clone(), false);
+                                                         self.state.mode = InputMode::Overlay;
+                                                     }
+                                                     self.state.selection.selected_message_index = None;
+                                                 }
+                                             }
+                                        }
+                                        _ => {}
+                                    }
+                                } else if self.state.mode == InputMode::CommandPalette {
+                                     match key.code {
+                                         crossterm::event::KeyCode::Esc => {
+                                             self.state.mode = InputMode::Normal;
+                                             self.state.command_palette.reset();
+                                         }
+                                         crossterm::event::KeyCode::Char(c) => {
+                                             self.state.command_palette.input.push(c);
+                                             self.state.command_palette.update_filter();
+                                         }
+                                         crossterm::event::KeyCode::Backspace => {
+                                             self.state.command_palette.input.pop();
+                                             self.state.command_palette.update_filter();
+                                         }
+                                         crossterm::event::KeyCode::Down => self.state.command_palette.select_next(),
+                                         crossterm::event::KeyCode::Up => self.state.command_palette.select_prev(),
+                                         crossterm::event::KeyCode::Enter => {
+                                             if let Some(cmd) = self.state.command_palette.filtered_commands.get(self.state.command_palette.selected_index) {
+                                                 let cmd = cmd.clone();
+                                                 self.state.mode = InputMode::Normal;
+                                                 self.state.command_palette.reset();
+
+                                                 if cmd == "/help" {
+                                                      self.state.mode = InputMode::Overlay;
+                                                      self.state.overlay.show(
+                                                          "Help".to_string(),
+                                                          "Available commands:\n/quit - Quit\n/exit - Quit\n/help - Show this help\n/clear - Clear transcript".to_string(),
+                                                          false
+                                                      );
+                                                  } else if cmd == "/clear" {
+                                                      self.state.transcript.clear();
+                                                  } else {
+                                                      self.state.input_buffer = cmd;
+                                                  }
+                                             } else {
+                                                 self.state.mode = InputMode::Normal;
+                                                 self.state.command_palette.reset();
+                                             }
+                                         }
+                                         _ => {}
+                                     }
+                                } else {
+                                    match key.code {
+                                        crossterm::event::KeyCode::Char('p') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+                                             self.state.mode = InputMode::CommandPalette;
+                                             self.state.command_palette.reset();
+                                         }
+                                         crossterm::event::KeyCode::Char('s') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+                                             self.state.mode = InputMode::Selection;
+                                             if !self.state.transcript.items.is_empty() {
+                                                 self.state.selection.selected_message_index = Some(self.state.transcript.items.len() - 1);
+                                             }
+                                         }
+                                         crossterm::event::KeyCode::Char('c') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
+                                            break;
+                                        }
+                                        crossterm::event::KeyCode::Char(c) => {
+                                            if c == '/' && self.state.input_buffer.is_empty() {
+                                                self.state.mode = InputMode::CommandPalette;
+                                                self.state.command_palette.reset();
+                                                self.state.command_palette.input.push('/');
+                                                self.state.command_palette.update_filter();
+                                            } else {
+                                                self.state.handle_char(c);
+                                            }
+                                        }
+                                        crossterm::event::KeyCode::Backspace => {
+                                            self.state.handle_backspace();
+                                        }
+                                        crossterm::event::KeyCode::PageUp => {
+                                            self.state.transcript.stick_to_bottom = false;
+                                            self.state.transcript.scroll_offset = self.state.transcript.scroll_offset.saturating_sub(5);
+                                        }
+                                        crossterm::event::KeyCode::PageDown => {
+                                            self.state.transcript.scroll_offset = self.state.transcript.scroll_offset.saturating_add(5);
+                                        }
+                                        crossterm::event::KeyCode::End => {
+                                            self.state.transcript.stick_to_bottom = true;
+                                        }
+                                        crossterm::event::KeyCode::Enter => {
+                                            if let Some(input) = self.state.get_input_and_clear() {
+                                                if input == "/quit" || input == "/exit" {
+                                                    break;
+                                                }
+
+                                                // User sent a message, so we should stick to bottom to see it
+                                                self.state.transcript.stick_to_bottom = true;
+
+                                                let client = self.client.clone();
+                                                let session_id = self.state.session_id.clone();
+                                                let tx = action_tx.clone();
+                                                let input_clone = input.clone();
+
+                                                tx.send(Action::MessageSent(input_clone.clone())).await.ok();
+
+                                                tokio::spawn(async move {
+                                                    match client.chat(&session_id, input_clone).await {
+                                                        Ok(resp) => {
+                                                            let _ = tx.send(Action::ResponseReceived(resp.response, resp.session_id)).await;
+                                                        }
+                                                        Err(e) => {
+                                                            let _ = tx.send(Action::Error(e.to_string())).await;
+                                                        }
+                                                    }
+                                                });
+                                            }
+                                        }
+                                        _ => {}
+                                    }
                                 }
                              }
                         }
@@ -239,4 +428,30 @@ impl Tui {
         terminal::restore()?;
         Ok(())
     }
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_y) / 2),
+                Constraint::Percentage(percent_y),
+                Constraint::Percentage((100 - percent_y) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Percentage((100 - percent_x) / 2),
+                Constraint::Percentage(percent_x),
+                Constraint::Percentage((100 - percent_x) / 2),
+            ]
+            .as_ref(),
+        )
+        .split(popup_layout[1])[1]
 }

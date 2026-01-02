@@ -24,11 +24,13 @@ The CLI SHALL support connecting to an external server instance via a URL argume
 
 ### Requirement: Event Streaming
 The CLI SHALL consume real-time events from the server to display agent activity.
+
 #### Scenario: Real-time Event Streaming
 - **Given** a connected CLI session
 - **When** the user sends a message
 - **Then** the CLI receives updates (thoughts, text chunks) via SSE
 - **And** renders them progressively to the terminal
+- **And** progressive rendering MUST remain stable under streaming (no flicker-driven input loss)
 
 ### Requirement: Startup Banner Display
 The CLI MUST display a branded startup banner upon initialization.
@@ -68,7 +70,7 @@ The CLI codebase MUST be organized into modular components to ensure maintainabi
 - **Then** `main.rs` MUST only handle argument parsing and dispatching
 - **And** business logic MUST be encapsulated in `commands/` modules
 - **And** UI logic MUST be encapsulated in `ui/` modules
-- **And** agent initialization MUST be isolated in a bootstrap module
+- **And** the interactive UI MUST support multiple frontends (REPL and TUI) behind a selection mechanism
 
 ### Requirement: REPL Session Switching
 The CLI REPL SHALL adopt new session IDs returned by the server after lifecycle commands.
