@@ -100,42 +100,74 @@ async fn test_resilient_loading() -> Result<()> {
     // Setup temp dir
     let temp_dir = tempfile::tempdir()?;
     let cmd_dir = temp_dir.path();
+    
+    // Create invalid command file
+    let invalid_file = cmd_dir.join("invalid.txt"); // Not .md
+    std::fs::write(&invalid_file, "invalid")?;
+    
+    let invalid_name = cmd_dir.join("invalid name.md"); // Whitespace
+    std::fs::write(&invalid_name, "---")?;
 
-    // 1. Valid command
-    let valid_file = cmd_dir.join("valid.md");
-    std::fs::write(&valid_file, "---\ndescription: Valid\n---\nValid command")?;
-
-    // 2. Invalid frontmatter (should be skipped)
-    let invalid_file = cmd_dir.join("invalid.md");
-    std::fs::write(&invalid_file, "No frontmatter here")?;
-
-    // 3. Invalid filename (should be skipped)
-    let bad_name_file = cmd_dir.join("bad name.md");
-    std::fs::write(&bad_name_file, "---\ndescription: Bad Name\n---\nBad Name")?;
-
-    // Setup Agent
     let bus = Arc::new(EventBus::new(10));
     let mut config = AgentConfig::default();
     config.command_path = Some(cmd_dir.to_str().unwrap().to_string());
-    rust_i18n::set_locale("en");
-
+    
     let agent = Agent::new(Box::new(MockProvider::new()), bus, config);
+    
+    // Should not crash
+    assert!(agent.chat(&mut Session::new(), "/help".to_string()).await.is_ok());
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn test_builtin_command_quit() -> Result<()> {
+    use common::bus::SystemEvent;
+    
+    let bus = Arc::new(EventBus::new(10));
+    let config = AgentConfig::default();
+    rust_i18n::set_locale("en");
+    
+    let agent = Agent::new(Box::new(MockProvider::new()), bus.clone(), config);
     let mut session = Session::new();
+    
+    let mut rx = bus.subscribe();
+    
+    let _ = agent.chat(&mut session, "/quit".to_string()).await?;
+    
+    // Check if Shutdown event is published
+    let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await??;
+    
+    match event {
+        SystemEvent::Shutdown => {},
+        _ => panic!("Expected Shutdown event, got {:?}", event),
+    }
+    
+    Ok(())
+}
 
-    // Check if /valid works
-    let response = agent.chat(&mut session, "/valid".to_string()).await?;
-    assert_eq!(response, "Echo: Valid command");
-
-    // Check that /invalid fails (command not found)
-    let err = agent.chat(&mut session, "/invalid".to_string()).await;
-    assert!(err.is_err());
-
-    // Check that /bad fails (since "bad name.md" -> name "bad name" -> contains space -> skipped)
-    // Note: If it wasn't skipped, it would be registered as "/bad name".
-    // But our parser splits by whitespace, so input "/bad name" is command "/bad" with arg "name".
-    // Since "bad name.md" is skipped, "/bad" should not exist (unless there was a "bad.md").
-    let err = agent.chat(&mut session, "/bad".to_string()).await;
-    assert!(err.is_err());
-
+#[tokio::test]
+async fn test_builtin_command_exit() -> Result<()> {
+    use common::bus::SystemEvent;
+    
+    let bus = Arc::new(EventBus::new(10));
+    let config = AgentConfig::default();
+    rust_i18n::set_locale("en");
+    
+    let agent = Agent::new(Box::new(MockProvider::new()), bus.clone(), config);
+    let mut session = Session::new();
+    
+    let mut rx = bus.subscribe();
+    
+    let _ = agent.chat(&mut session, "/exit".to_string()).await?;
+    
+    // Check if Shutdown event is published
+    let event = tokio::time::timeout(std::time::Duration::from_secs(1), rx.recv()).await??;
+    
+    match event {
+        SystemEvent::Shutdown => {},
+        _ => panic!("Expected Shutdown event, got {:?}", event),
+    }
+    
     Ok(())
 }

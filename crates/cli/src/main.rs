@@ -199,13 +199,12 @@ async fn run_chat(_config: Config, config_path: Option<String>) -> anyhow::Resul
         }
 
         let input = line.trim();
-        // Allow manual exit if user types "exit" without slash, but /exit and /quit go to server
-        if input == "exit" {
-            break;
-        }
-
         if input.is_empty() {
             continue;
+        }
+
+        if input.eq_ignore_ascii_case("/quit") || input.eq_ignore_ascii_case("/exit") {
+            break;
         }
 
         match client.chat(&session.id, input.to_string()).await {
@@ -273,12 +272,12 @@ async fn run_attach(url: String) -> anyhow::Result<()> {
         }
 
         let input = line.trim();
-        if input == "exit" || input == "/exit" || input == "/quit" {
-            break;
-        }
-
         if input.is_empty() {
             continue;
+        }
+
+        if input.eq_ignore_ascii_case("/quit") || input.eq_ignore_ascii_case("/exit") {
+            break;
         }
 
         match client.chat(&session.id, input.to_string()).await {
