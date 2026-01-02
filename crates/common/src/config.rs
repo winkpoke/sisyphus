@@ -42,7 +42,7 @@ impl Config {
             .set_default("server.host", "127.0.0.1")?
             .set_default("llm.provider", "openai")?
             .set_default("llm.model", "gpt-3.5-turbo")?
-            .set_default("llm.temperature", 0.7)?
+            .set_default("llm.temperature", 0.2)?
             .set_default("workspace.root", "./workspace")?
             .set_default("language", "en")?;
 
