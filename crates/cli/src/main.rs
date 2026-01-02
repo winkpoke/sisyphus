@@ -183,7 +183,6 @@ async fn run_chat(_config: Config, config_path: Option<String>) -> anyhow::Resul
         
         let bytes = tokio::select! {
             _ = shutdown_rx.recv() => {
-                println!("\nSession ended by server.");
                 break;
             }
             _ = tokio::signal::ctrl_c() => {
@@ -211,7 +210,9 @@ async fn run_chat(_config: Config, config_path: Option<String>) -> anyhow::Resul
 
         match client.chat(&session.id, input.to_string()).await {
             Ok(response) => {
-                println!("{}", t!("assistant_prefix", msg = response));
+                if !response.is_empty() {
+                    println!("{}", t!("assistant_prefix", msg = response));
+                }
             }
             Err(e) => {
                 eprintln!("{}", t!("error_prefix", err = e));
@@ -282,7 +283,9 @@ async fn run_attach(url: String) -> anyhow::Result<()> {
 
         match client.chat(&session.id, input.to_string()).await {
             Ok(response) => {
-                println!("{}", t!("assistant_prefix", msg = response));
+                if !response.is_empty() {
+                    println!("{}", t!("assistant_prefix", msg = response));
+                }
             }
             Err(e) => {
                 eprintln!("{}", t!("error_prefix", err = e));

@@ -47,13 +47,13 @@ impl Agent {
         let bus = self.bus.clone();
         self.commands.register_builtin("/exit", move |_, _| {
              bus.publish(SystemEvent::Shutdown);
-             Ok("Session ended.".to_string())
+             Ok("".to_string())
         });
         
         let bus = self.bus.clone();
         self.commands.register_builtin("/quit", move |_, _| {
              bus.publish(SystemEvent::Shutdown);
-             Ok("Session ended.".to_string())
+             Ok("".to_string())
         });
         
         self.commands.register_builtin("/new", |ctx, _| {

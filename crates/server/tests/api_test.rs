@@ -155,7 +155,7 @@ async fn test_exit_command() {
         
     assert!(resp.status().is_success());
     let chat_resp: serde_json::Value = resp.json().await.unwrap();
-    assert_eq!(chat_resp["response"], "Session ended.");
+    assert_eq!(chat_resp["response"], "");
     
     // Verify server is still running by making another request
     let resp = client.get(format!("{}/health", base_url))
