@@ -4,15 +4,26 @@ use tokio::sync::broadcast;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "payload")]
 pub enum SystemEvent {
-    AgentStateChanged { session_id: String, state: String },
-    MessageReceived { content: String, role: String },
-    ToolExecuted { tool: String, result: String },
+    AgentStateChanged {
+        session_id: String,
+        state: String,
+    },
+    MessageReceived {
+        content: String,
+        role: String,
+    },
+    ToolExecuted {
+        tool: String,
+        result: String,
+    },
     PermissionRequest {
         operation: String,
         tool_name: String,
         call_id: String,
     },
-    Error { message: String },
+    Error {
+        message: String,
+    },
     Shutdown,
 }
 

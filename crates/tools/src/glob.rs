@@ -45,14 +45,26 @@ impl Tool for GlobTool {
     }
 
     async fn execute(&self, args: Value) -> Result<String> {
-        let pattern = args["pattern"].as_str().ok_or_else(|| anyhow!("Missing pattern"))?;
+        let pattern = args["pattern"]
+            .as_str()
+            .ok_or_else(|| anyhow!("Missing pattern"))?;
         let path_str = args["path"].as_str().unwrap_or(".");
-        let include_ignored = args["include_ignored"].as_array().map(|a| {
-            a.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>()
-        }).unwrap_or_default();
-        let exclude = args["exclude"].as_array().map(|a| {
-            a.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>()
-        }).unwrap_or_default();
+        let include_ignored = args["include_ignored"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let exclude = args["exclude"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         let max_results = args["max_results"].as_u64().unwrap_or(1000) as usize;
 
         let root = self.sandbox.root().to_path_buf();
@@ -67,7 +79,7 @@ impl Tool for GlobTool {
         };
 
         let base_path = validate_path(&self.sandbox, path_str)?;
-        
+
         #[cfg(windows)]
         let base_path = {
             let s = base_path.to_string_lossy();
@@ -89,30 +101,35 @@ impl Tool for GlobTool {
         let exclude_set = exclude_builder.build()?;
 
         let _sandbox = self.sandbox.clone();
-        
+
         // Run blocking IO in spawn_blocking
         let result = tokio::task::spawn_blocking(move || -> Result<(Vec<String>, bool)> {
             let mut builder = WalkBuilder::new(&base_path);
-            
+
             // Configure ignore rules
-            builder.git_ignore(true)
-                   .require_git(false)
-                   .ignore(true)
-                   .parents(true)
-                   .sort_by_file_path(|a, b| a.cmp(b));
+            builder
+                .git_ignore(true)
+                .require_git(false)
+                .ignore(true)
+                .parents(true)
+                .sort_by_file_path(|a, b| a.cmp(b));
 
             // Handle include_ignored and exclude using Overrides
             let mut override_builder = OverrideBuilder::new(&base_path);
-            
+
             for pat in include_ignored {
                 // To re-include, we use the "!" prefix in overrides
                 let p = format!("!{}", pat);
-                override_builder.add(&p).map_err(|e| anyhow!("Invalid override pattern: {}", e))?;
+                override_builder
+                    .add(&p)
+                    .map_err(|e| anyhow!("Invalid override pattern: {}", e))?;
             }
-            
+
             // Excludes are handled manually via GlobSet
-            
-            let overrides = override_builder.build().map_err(|e| anyhow!("Invalid override pattern: {}", e))?;
+
+            let overrides = override_builder
+                .build()
+                .map_err(|e| anyhow!("Invalid override pattern: {}", e))?;
             builder.overrides(overrides);
 
             let mut paths = Vec::new();
@@ -127,7 +144,7 @@ impl Tool for GlobTool {
                         }
 
                         let path = entry.path();
-                        
+
                         // Check denylist on path components
                         if let Ok(rel) = path.strip_prefix(&root) {
                             let mut denylisted = false;
@@ -139,12 +156,14 @@ impl Tool for GlobTool {
                                     }
                                 }
                             }
-                            if denylisted { continue; }
+                            if denylisted {
+                                continue;
+                            }
                         }
 
                         // Check if path is within sandbox
                         // The base_path check verified the root of the search.
-                        
+
                         // Check pattern
                         if let Ok(rel_path) = path.strip_prefix(&base_path) {
                             if exclude_set.is_match(rel_path) {
@@ -156,10 +175,11 @@ impl Tool for GlobTool {
                                     truncated = true;
                                     break;
                                 }
-                                
+
                                 if let Ok(workspace_rel) = path.strip_prefix(&root) {
                                     // Normalize separators to /
-                                    let normalized = workspace_rel.to_string_lossy().replace('\\', "/");
+                                    let normalized =
+                                        workspace_rel.to_string_lossy().replace('\\', "/");
                                     paths.push(normalized);
                                     count += 1;
                                 }
@@ -168,14 +188,15 @@ impl Tool for GlobTool {
                     }
                     Err(_err) => {
                         continue;
-                    },
+                    }
                 }
             }
-            
+
             paths.sort(); // Ensure deterministic order
-            
+
             Ok((paths, truncated))
-        }).await??;
+        })
+        .await??;
 
         Ok(serde_json::to_string(&json!({
             "paths": result.0,
@@ -187,9 +208,9 @@ impl Tool for GlobTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs::File;
     use std::io::Write;
+    use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_glob_basic() -> Result<()> {
@@ -208,11 +229,11 @@ mod tests {
         });
         let result = tool.execute(args).await?;
         let result: Value = serde_json::from_str(&result)?;
-        
+
         let paths = result["paths"].as_array().unwrap();
         assert_eq!(paths.len(), 1);
         assert_eq!(paths[0].as_str().unwrap(), "b/c.rs");
-        
+
         Ok(())
     }
 
@@ -232,11 +253,11 @@ mod tests {
         });
         let result = tool.execute(args).await?;
         let result: Value = serde_json::from_str(&result)?;
-        
+
         let paths = result["paths"].as_array().unwrap();
         assert_eq!(paths.len(), 1);
         assert_eq!(paths[0].as_str().unwrap(), "a.rs");
-        
+
         Ok(())
     }
 
@@ -250,7 +271,7 @@ mod tests {
         // Create .gitignore
         let mut gitignore = File::create(root.join(".gitignore"))?;
         writeln!(gitignore, "ignored_file.rs")?;
-        
+
         File::create(root.join("ignored_file.rs"))?;
         File::create(root.join("visible.rs"))?;
 
@@ -259,7 +280,7 @@ mod tests {
         });
         let result = tool.execute(args).await?;
         let result: Value = serde_json::from_str(&result)?;
-        
+
         let paths = result["paths"].as_array().unwrap();
         assert_eq!(paths.len(), 1);
         assert_eq!(paths[0].as_str().unwrap(), "visible.rs");
@@ -267,17 +288,17 @@ mod tests {
         // Now test manual .ignore file which should work
         let mut ignore = File::create(root.join(".ignore"))?;
         writeln!(ignore, "!ignored_file.rs")?;
-        
+
         let args = json!({
             "pattern": "**/*.rs"
         });
         let result = tool.execute(args).await?;
         let result: Value = serde_json::from_str(&result)?;
-        
+
         let paths = result["paths"].as_array().unwrap();
         // println!("Paths with .ignore: {:?}", paths);
         assert_eq!(paths.len(), 2);
-        
+
         Ok(())
     }
 
@@ -297,12 +318,12 @@ mod tests {
         });
         let result = tool.execute(args).await?;
         let result: Value = serde_json::from_str(&result)?;
-        
+
         let _paths = result["paths"].as_array().unwrap();
         // Should not find .git content even if we asked for **/*
         // .git is usually ignored by default walk, but DENYLIST should catch it even if we include ignored?
         // Let's try to force include .git
-        
+
         let args = json!({
             "pattern": "**/*",
             "include_ignored": [".git/**"]
@@ -338,8 +359,11 @@ mod tests {
         });
         let result = tool.execute(args).await;
         assert!(result.is_err());
-        assert!(result.unwrap_err().to_string().contains("Invalid override pattern"));
-        
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Invalid override pattern"));
+
         Ok(())
     }
 }

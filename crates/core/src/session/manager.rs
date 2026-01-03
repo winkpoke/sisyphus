@@ -28,6 +28,9 @@ impl SessionManager {
     }
 
     pub fn list_sessions(&self) -> Vec<Arc<RwLock<Session>>> {
-        self.sessions.iter().map(|entry| entry.value().clone()).collect()
+        self.sessions
+            .iter()
+            .map(|entry| entry.value().clone())
+            .collect()
     }
 }

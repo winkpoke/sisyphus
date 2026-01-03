@@ -74,10 +74,8 @@ impl CommandRegistry {
     }
 
     pub fn register_builtin(&mut self, command: Box<dyn Command>) {
-        self.commands.insert(
-            command.name().to_string(),
-            CommandType::Builtin(command),
-        );
+        self.commands
+            .insert(command.name().to_string(), CommandType::Builtin(command));
     }
 
     pub fn register_custom(&mut self, name: &str, config: CommandConfig) {

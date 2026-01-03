@@ -46,6 +46,10 @@ impl Server {
             .route("/api/v1/sessions", get(list_sessions).post(create_session))
             .route("/api/v1/sessions/:id", get(get_session))
             .route("/api/v1/sessions/:id/chat", post(chat))
+            .route(
+                "/api/v1/sessions/:id/approvals/:call_id",
+                post(submit_approval),
+            )
             .route("/api/v1/commands", get(list_commands))
             .route("/api/v1/events", get(events))
             .layer(TraceLayer::new_for_http())
@@ -100,7 +104,7 @@ impl Server {
         tracing::info!("Server listening on {}", listener.local_addr()?);
 
         axum::serve(listener, self.router)
-        .with_graceful_shutdown(signal)
+            .with_graceful_shutdown(signal)
             .await?;
         Ok(())
     }
@@ -195,6 +199,45 @@ async fn chat(
 
 async fn list_commands(State(state): State<AppState>) -> Json<Vec<CommandInfo>> {
     Json(state.agent.list_commands())
+}
+
+#[derive(Deserialize)]
+struct ApprovalRequest {
+    decision: String,
+}
+
+async fn submit_approval(
+    State(state): State<AppState>,
+    Path((id, call_id)): Path<(String, String)>,
+    Json(req): Json<ApprovalRequest>,
+) -> Result<Json<ChatResponse>, (axum::http::StatusCode, String)> {
+    let session_lock = state.session_manager.get_session(&id).ok_or((
+        axum::http::StatusCode::NOT_FOUND,
+        "Session not found".to_string(),
+    ))?;
+
+    let mut session = session_lock.write().await;
+    let approved = match req.decision.as_str() {
+        "approve" => true,
+        "deny" => false,
+        _ => {
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                "Invalid decision".to_string(),
+            ))
+        }
+    };
+
+    let response = state
+        .agent
+        .resolve_approval(&mut session, &call_id, approved)
+        .await
+        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    Ok(Json(ChatResponse {
+        response,
+        session_id: None,
+    }))
 }
 
 async fn events(

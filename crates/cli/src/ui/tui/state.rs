@@ -27,6 +27,7 @@ pub struct OverlayState {
     pub content: String,
     pub scroll: u16,
     pub is_error: bool,
+    pub call_id: Option<String>,
 }
 
 impl OverlayState {
@@ -36,6 +37,7 @@ impl OverlayState {
             content: String::new(),
             scroll: 0,
             is_error: false,
+            call_id: None,
         }
     }
 
@@ -44,6 +46,15 @@ impl OverlayState {
         self.content = content;
         self.scroll = 0;
         self.is_error = is_error;
+        self.call_id = None;
+    }
+
+    pub fn show_approval(&mut self, title: String, content: String, call_id: String) {
+        self.title = title;
+        self.content = content;
+        self.scroll = 0;
+        self.is_error = false;
+        self.call_id = Some(call_id);
     }
 
     pub fn scroll_down(&mut self) {

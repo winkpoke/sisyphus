@@ -7,6 +7,7 @@ use transcript::TranscriptItemKind;
 
 use anyhow::Result;
 use client::Client;
+use common::bus::SystemEvent;
 use event::{Event, EventHandler};
 use futures::StreamExt;
 use ratatui::{
@@ -207,6 +208,47 @@ impl Tui {
                                     match key.code {
                                         crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Enter => {
                                             self.state.mode = InputMode::Normal;
+                                            self.state.overlay.call_id = None;
+                                        }
+                                        crossterm::event::KeyCode::Char('a') if self.state.overlay.call_id.is_some() => {
+                                             if let Some(call_id) = self.state.overlay.call_id.clone() {
+                                                 let client = self.client.clone();
+                                                 let session_id = self.state.session_id.clone();
+                                                 let tx = action_tx.clone();
+
+                                                 tokio::spawn(async move {
+                                                     match client.submit_approval(&session_id, &call_id, "approve").await {
+                                                         Ok(resp) => {
+                                                             let _ = tx.send(Action::ResponseReceived(resp.response, resp.session_id)).await;
+                                                         }
+                                                         Err(e) => {
+                                                             let _ = tx.send(Action::Error(e.to_string())).await;
+                                                         }
+                                                     }
+                                                 });
+                                                 self.state.mode = InputMode::Normal;
+                                                 self.state.overlay.call_id = None;
+                                             }
+                                        }
+                                        crossterm::event::KeyCode::Char('d') if self.state.overlay.call_id.is_some() => {
+                                             if let Some(call_id) = self.state.overlay.call_id.clone() {
+                                                 let client = self.client.clone();
+                                                 let session_id = self.state.session_id.clone();
+                                                 let tx = action_tx.clone();
+
+                                                 tokio::spawn(async move {
+                                                     match client.submit_approval(&session_id, &call_id, "deny").await {
+                                                         Ok(resp) => {
+                                                             let _ = tx.send(Action::ResponseReceived(resp.response, resp.session_id)).await;
+                                                         }
+                                                         Err(e) => {
+                                                             let _ = tx.send(Action::Error(e.to_string())).await;
+                                                         }
+                                                     }
+                                                 });
+                                                 self.state.mode = InputMode::Normal;
+                                                 self.state.overlay.call_id = None;
+                                             }
                                         }
                                         crossterm::event::KeyCode::Down | crossterm::event::KeyCode::Char('j') => {
                                             self.state.overlay.scroll_down();
@@ -380,6 +422,14 @@ impl Tui {
                     match result {
                         Ok(event) => {
                              if let reqwest_eventsource::Event::Message(msg) = event {
+                                 if let Ok(SystemEvent::PermissionRequest { operation, tool_name, call_id }) = serde_json::from_str::<SystemEvent>(&msg.data) {
+                                    self.state.mode = InputMode::Overlay;
+                                    self.state.overlay.show_approval(
+                                        "Permission Required".to_string(),
+                                        format!("Operation: {}\nTool: {}\nCall ID: {}\n\nPress 'a' to Approve or 'd' to Deny.", operation, tool_name, call_id),
+                                        call_id
+                                    );
+                                }
                                  // Handle streaming events here if possible
                                  // For now, mapping to System messages
                                  self.state.add_message(TranscriptItemKind::System, format!("Event: {}", msg.data));

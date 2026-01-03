@@ -1,12 +1,20 @@
+use chrono::{DateTime, Utc};
 use common::llm::Message;
 use serde::{Deserialize, Serialize};
-use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 
 pub mod context;
 
 pub mod manager;
 
 use context::{Context, ContextError, ContextLimits, RenderedContext, TokenEstimator};
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PendingApproval {
+    pub call_id: String,
+    pub tool_name: String,
+    pub args: String,
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum SessionStatus {
@@ -20,6 +28,8 @@ pub struct Session {
     pub created_at: DateTime<Utc>,
     context: Context,
     pub status: SessionStatus,
+    #[serde(default)]
+    pub pending_approvals: HashMap<String, PendingApproval>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -30,6 +40,12 @@ pub struct SessionSummary {
     pub status: SessionStatus,
 }
 
+impl Default for Session {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Session {
     pub fn new() -> Self {
         Self {
@@ -37,6 +53,7 @@ impl Session {
             created_at: Utc::now(),
             context: Context::new(),
             status: SessionStatus::Idle,
+            pending_approvals: HashMap::new(),
         }
     }
 

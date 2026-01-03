@@ -114,9 +114,8 @@ impl LLMProvider for OpenAIProvider {
 
         let stream = res.bytes_stream();
 
-        let stream = futures::stream::unfold(
-            (stream, Vec::new()),
-            |(mut stream, mut buf)| async move {
+        let stream =
+            futures::stream::unfold((stream, Vec::new()), |(mut stream, mut buf)| async move {
                 loop {
                     if let Some(i) = buf.iter().position(|&b| b == b'\n') {
                         let line_bytes = buf.drain(..=i).collect::<Vec<_>>();
@@ -131,10 +130,7 @@ impl LLMProvider for OpenAIProvider {
                                         json["choices"][0]["delta"]["content"].as_str()
                                     {
                                         if !content.is_empty() {
-                                            return Some((
-                                                Ok(content.to_string()),
-                                                (stream, buf),
-                                            ));
+                                            return Some((Ok(content.to_string()), (stream, buf)));
                                         }
                                     }
                                 }
@@ -155,8 +151,7 @@ impl LLMProvider for OpenAIProvider {
                         }
                     }
                 }
-            },
-        );
+            });
 
         Ok(Box::pin(stream))
     }

@@ -5,10 +5,13 @@ use self::config::{AgentConfig, PermissionLevel};
 use self::prompt::SystemPromptBuilder;
 use crate::command::loader::CommandLoader;
 use crate::command::parser::parse_command;
-use crate::command::{builtins, CommandContext, CommandEffect, CommandOutcome, CommandRegistry, CommandType};
+use crate::command::{
+    builtins, CommandContext, CommandEffect, CommandOutcome, CommandRegistry, CommandType,
+};
 use crate::session::context::DefaultTokenEstimator;
-use crate::session::{Session, SessionStatus};
+use crate::session::{PendingApproval, Session, SessionStatus};
 use anyhow::{anyhow, Result};
+use chrono::Utc;
 use common::bus::{EventBus, SystemEvent};
 use common::llm::{
     CompletionRequest, LLMProvider, Message, Role, ToolDefinition, ToolFunctionDefinition,
@@ -18,7 +21,6 @@ use rust_i18n::t;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
-use chrono::Utc;
 
 const MAX_TURNS: u32 = 1000;
 
@@ -29,6 +31,11 @@ pub struct Agent {
     config: AgentConfig,
     commands: CommandRegistry,
     workspace_root: PathBuf,
+}
+
+enum ToolExecResult {
+    Ok(String),
+    PermissionRequired(String),
 }
 
 impl Agent {
@@ -58,11 +65,16 @@ impl Agent {
     }
 
     fn register_builtins(&mut self) {
-        self.commands.register_builtin(Box::new(builtins::HelpCommand));
-        self.commands.register_builtin(Box::new(builtins::ExitCommand));
-        self.commands.register_builtin(Box::new(builtins::QuitCommand));
-        self.commands.register_builtin(Box::new(builtins::NewSessionCommand));
-        self.commands.register_builtin(Box::new(builtins::ClearHistoryCommand));
+        self.commands
+            .register_builtin(Box::new(builtins::HelpCommand));
+        self.commands
+            .register_builtin(Box::new(builtins::ExitCommand));
+        self.commands
+            .register_builtin(Box::new(builtins::QuitCommand));
+        self.commands
+            .register_builtin(Box::new(builtins::NewSessionCommand));
+        self.commands
+            .register_builtin(Box::new(builtins::ClearHistoryCommand));
     }
 
     pub fn list_commands(&self) -> Vec<crate::command::CommandInfo> {
@@ -105,11 +117,13 @@ impl Agent {
         }
     }
 
-    async fn execute_tool(&self, tool_name: &str, args_str: &str, call_id: &str) -> String {
+    async fn execute_tool(&self, tool_name: &str, args_str: &str, call_id: &str) -> ToolExecResult {
         let permission = self.get_permission_level(tool_name);
         match permission {
             PermissionLevel::Deny => {
-                return "Permission denied: tool execution is set to Deny.".to_string();
+                return ToolExecResult::Ok(
+                    "Permission denied: tool execution is set to Deny.".to_string(),
+                );
             }
             PermissionLevel::Ask => {
                 self.bus.publish(SystemEvent::PermissionRequest {
@@ -117,7 +131,9 @@ impl Agent {
                     tool_name: tool_name.to_string(),
                     call_id: call_id.to_string(),
                 });
-                return "Permission required: approve tool execution to continue.".to_string();
+                return ToolExecResult::PermissionRequired(
+                    "Permission required: approve tool execution to continue.".to_string(),
+                );
             }
             PermissionLevel::Allow => {}
         }
@@ -125,13 +141,13 @@ impl Agent {
         if let Some(tool) = self.tools.get(tool_name) {
             match serde_json::from_str::<serde_json::Value>(args_str) {
                 Ok(args) => match tool.execute(args).await {
-                    Ok(output) => output,
-                    Err(e) => t!("tool_exec_error", err = e).to_string(),
+                    Ok(output) => ToolExecResult::Ok(output),
+                    Err(e) => ToolExecResult::Ok(t!("tool_exec_error", err = e).to_string()),
                 },
-                Err(e) => t!("tool_args_error", err = e).to_string(),
+                Err(e) => ToolExecResult::Ok(t!("tool_args_error", err = e).to_string()),
             }
         } else {
-            t!("tool_not_found", name = tool_name).to_string()
+            ToolExecResult::Ok(t!("tool_not_found", name = tool_name).to_string())
         }
     }
 
@@ -149,8 +165,8 @@ impl Agent {
             let (cmd_name, parts, raw_args) = match parse_command(&input) {
                 Ok((name, args, raw)) => (name, args, raw),
                 Err(e) => {
-                     session.status = SessionStatus::Idle;
-                     return Err(e);
+                    session.status = SessionStatus::Idle;
+                    return Err(e);
                 }
             };
 
@@ -163,7 +179,7 @@ impl Agent {
                             registry: &self.commands,
                         };
                         let res = cmd.execute(&ctx, parts).await;
-                        
+
                         // Handle command effects
                         if let Ok(outcome) = &res {
                             match outcome.effect {
@@ -215,6 +231,57 @@ impl Agent {
         }
     }
 
+    pub async fn resolve_approval(
+        &self,
+        session: &mut Session,
+        call_id: &str,
+        approved: bool,
+    ) -> Result<String> {
+        if session.status == SessionStatus::Busy {
+            return Err(anyhow!("Session is busy"));
+        }
+        session.status = SessionStatus::Busy;
+
+        let approval = session
+            .pending_approvals
+            .remove(call_id)
+            .ok_or_else(|| anyhow!("No pending approval found for call_id: {}", call_id))?;
+
+        let result = if approved {
+            if let Some(tool) = self.tools.get(&approval.tool_name) {
+                match serde_json::from_str::<serde_json::Value>(&approval.args) {
+                    Ok(args) => match tool.execute(args).await {
+                        Ok(output) => output,
+                        Err(e) => t!("tool_exec_error", err = e).to_string(),
+                    },
+                    Err(e) => t!("tool_args_error", err = e).to_string(),
+                }
+            } else {
+                t!("tool_not_found", name = approval.tool_name).to_string()
+            }
+        } else {
+            "User denied permission to execute this tool.".to_string()
+        };
+
+        self.bus.publish(SystemEvent::ToolExecuted {
+            tool: approval.tool_name.clone(),
+            result: result.clone(),
+        });
+
+        let tool_msg = Message {
+            role: Role::Tool,
+            content: Some(result.clone()),
+            tool_calls: None,
+            tool_call_id: Some(call_id.to_string()),
+        };
+        session.add_message(tool_msg)?;
+
+        let output = self.run_turn_loop(session, 0).await;
+
+        session.status = SessionStatus::Idle;
+        output
+    }
+
     async fn process_turn(&self, session: &mut Session, input: String) -> Result<String> {
         let user_msg = Message {
             role: Role::User,
@@ -229,7 +296,11 @@ impl Agent {
             role: "user".to_string(),
         });
 
-        let mut current_turn = 0;
+        self.run_turn_loop(session, 0).await
+    }
+
+    async fn run_turn_loop(&self, session: &mut Session, start_turn: u32) -> Result<String> {
+        let mut current_turn = start_turn;
         let snapshot = SystemPromptBuilder::snapshot(Some(&self.workspace_root)).await;
 
         loop {
@@ -287,7 +358,24 @@ impl Agent {
                     let tool_name = &call.function.name;
                     let args_str = &call.function.arguments;
 
-                    let result = self.execute_tool(tool_name, args_str, &call.id).await;
+                    let execution = self.execute_tool(tool_name, args_str, &call.id).await;
+
+                    let (result, is_permission_req) = match execution {
+                        ToolExecResult::Ok(res) => (res, false),
+                        ToolExecResult::PermissionRequired(res) => (res, true),
+                    };
+
+                    if is_permission_req {
+                        session.pending_approvals.insert(
+                            call.id.clone(),
+                            PendingApproval {
+                                call_id: call.id.clone(),
+                                tool_name: tool_name.clone(),
+                                args: args_str.clone(),
+                            },
+                        );
+                        return Ok(result);
+                    }
 
                     self.bus.publish(SystemEvent::ToolExecuted {
                         tool: tool_name.clone(),
@@ -296,7 +384,7 @@ impl Agent {
 
                     let tool_msg = Message {
                         role: Role::Tool,
-                        content: Some(result),
+                        content: Some(result.clone()),
                         tool_calls: None,
                         tool_call_id: Some(call.id.clone()),
                     };
@@ -308,5 +396,3 @@ impl Agent {
         }
     }
 }
-
-

@@ -15,11 +15,11 @@ impl Command for HelpCommand {
     async fn execute(&self, ctx: &CommandContext, _args: CommandArgs) -> Result<CommandOutcome> {
         let commands = ctx.registry.list();
         let mut output = String::from("Available commands:\n");
-        
+
         for cmd in commands {
             output.push_str(&format!("{} - {}\n", cmd.name, cmd.description));
         }
-        
+
         Ok(CommandOutcome {
             output: Some(output.trim().to_string()),
             effect: CommandEffect::None,

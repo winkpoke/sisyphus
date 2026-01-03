@@ -10,6 +10,11 @@ struct ChatRequest {
     message: String,
 }
 
+#[derive(Debug, Serialize)]
+struct ApprovalRequest {
+    decision: String,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct ChatResponse {
     pub response: String,
@@ -65,6 +70,32 @@ impl Client {
         if !resp.status().is_success() {
             let error_text = resp.text().await.unwrap_or_default();
             return Err(anyhow::anyhow!("Failed to send message: {}", error_text));
+        }
+
+        let chat_resp = resp.json::<ChatResponse>().await?;
+        Ok(chat_resp)
+    }
+
+    pub async fn submit_approval(
+        &self,
+        session_id: &str,
+        call_id: &str,
+        decision: &str,
+    ) -> Result<ChatResponse> {
+        let url = self.base_url.join(&format!(
+            "/api/v1/sessions/{}/approvals/{}",
+            session_id, call_id
+        ))?;
+
+        let req = ApprovalRequest {
+            decision: decision.to_string(),
+        };
+
+        let resp = self.http.post(url).json(&req).send().await?;
+
+        if !resp.status().is_success() {
+            let error_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Failed to submit approval: {}", error_text));
         }
 
         let chat_resp = resp.json::<ChatResponse>().await?;

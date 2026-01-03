@@ -13,10 +13,8 @@ pub fn parse_command(input: &str) -> Result<(String, Vec<String>, String)> {
     }
 
     // Find where the command ends (first whitespace)
-    let cmd_end = input
-        .find(char::is_whitespace)
-        .unwrap_or(input.len());
-    
+    let cmd_end = input.find(char::is_whitespace).unwrap_or(input.len());
+
     let cmd = input[..cmd_end].to_string();
     let raw_args = input[cmd_end..].trim().to_string();
 
@@ -32,7 +30,7 @@ fn parse_args(input: &str) -> Result<Vec<String>> {
     let mut escape = false;
 
     let chars = input.chars();
-    
+
     for c in chars {
         if in_quote {
             if escape {
@@ -69,11 +67,11 @@ fn parse_args(input: &str) -> Result<Vec<String>> {
     if in_quote {
         return Err(anyhow!("Unterminated quote"));
     }
-    
+
     if !current.is_empty() {
         args.push(current);
     }
-    
+
     Ok(args)
 }
 

@@ -60,7 +60,12 @@ Hello {{args}}, how are you?"#;
     // We assume default language is en, which matches our messages
     rust_i18n::set_locale("en");
 
-    let agent = Agent::new(Box::new(MockProvider::new()), bus, config, std::path::PathBuf::from("."));
+    let agent = Agent::new(
+        Box::new(MockProvider::new()),
+        bus,
+        config,
+        std::path::PathBuf::from("."),
+    );
     let mut session = Session::new();
 
     // Execute command
@@ -81,7 +86,12 @@ async fn test_builtin_command_new() -> Result<()> {
     let config = AgentConfig::default();
     rust_i18n::set_locale("en");
 
-    let agent = Agent::new(Box::new(MockProvider::new()), bus, config, std::path::PathBuf::from("."));
+    let agent = Agent::new(
+        Box::new(MockProvider::new()),
+        bus,
+        config,
+        std::path::PathBuf::from("."),
+    );
     let mut session = Session::new();
 
     session.add_message(Message {
@@ -118,7 +128,12 @@ async fn test_resilient_loading() -> Result<()> {
     let mut config = AgentConfig::default();
     config.command_path = Some(cmd_dir.to_str().unwrap().to_string());
 
-    let agent = Agent::new(Box::new(MockProvider::new()), bus, config, std::path::PathBuf::from("."));
+    let agent = Agent::new(
+        Box::new(MockProvider::new()),
+        bus,
+        config,
+        std::path::PathBuf::from("."),
+    );
 
     // Should not crash
     assert!(agent
@@ -135,7 +150,12 @@ async fn test_builtin_command_quit() -> Result<()> {
     let config = AgentConfig::default();
     rust_i18n::set_locale("en");
 
-    let agent = Agent::new(Box::new(MockProvider::new()), bus.clone(), config, std::path::PathBuf::from("."));
+    let agent = Agent::new(
+        Box::new(MockProvider::new()),
+        bus.clone(),
+        config,
+        std::path::PathBuf::from("."),
+    );
     let mut session = Session::new();
 
     let outcome = agent.chat(&mut session, "/quit".to_string()).await?;
@@ -151,7 +171,12 @@ async fn test_builtin_command_exit() -> Result<()> {
     let config = AgentConfig::default();
     rust_i18n::set_locale("en");
 
-    let agent = Agent::new(Box::new(MockProvider::new()), bus.clone(), config, std::path::PathBuf::from("."));
+    let agent = Agent::new(
+        Box::new(MockProvider::new()),
+        bus.clone(),
+        config,
+        std::path::PathBuf::from("."),
+    );
     let mut session = Session::new();
 
     let outcome = agent.chat(&mut session, "/exit".to_string()).await?;

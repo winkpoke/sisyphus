@@ -50,15 +50,27 @@ impl Tool for GrepTool {
     }
 
     async fn execute(&self, args: Value) -> Result<String> {
-        let pattern_str = args["pattern"].as_str().ok_or_else(|| anyhow!("Missing pattern"))?;
+        let pattern_str = args["pattern"]
+            .as_str()
+            .ok_or_else(|| anyhow!("Missing pattern"))?;
         let path_str = args["path"].as_str().unwrap_or(".");
         let output_mode = args["output_mode"].as_str().unwrap_or("files_with_matches");
-        let include_ignored = args["include_ignored"].as_array().map(|a| {
-            a.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>()
-        }).unwrap_or_default();
-        let exclude = args["exclude"].as_array().map(|a| {
-            a.iter().filter_map(|v| v.as_str().map(String::from)).collect::<Vec<_>>()
-        }).unwrap_or_default();
+        let include_ignored = args["include_ignored"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
+        let exclude = args["exclude"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect::<Vec<_>>()
+            })
+            .unwrap_or_default();
         let max_results = args["max_results"].as_u64().unwrap_or(100) as usize;
         let max_file_bytes = args["max_file_bytes"].as_u64().unwrap_or(1000000);
         let max_line_length = args["max_line_length"].as_u64().unwrap_or(2000) as usize;
@@ -97,11 +109,12 @@ impl Tool for GrepTool {
 
         let result = tokio::task::spawn_blocking(move || -> Result<(Vec<Value>, bool)> {
             let mut builder = WalkBuilder::new(&base_path);
-            builder.git_ignore(true)
-                   .require_git(false)
-                   .ignore(true)
-                   .parents(true)
-                   .sort_by_file_path(|a, b| a.cmp(b));
+            builder
+                .git_ignore(true)
+                .require_git(false)
+                .ignore(true)
+                .parents(true)
+                .sort_by_file_path(|a, b| a.cmp(b));
 
             let mut override_builder = OverrideBuilder::new(&base_path);
             for pat in include_ignored {
@@ -110,7 +123,9 @@ impl Tool for GrepTool {
             for pat in exclude {
                 override_builder.add(&pat)?;
             }
-            let overrides = override_builder.build().map_err(|e| anyhow!("Invalid override pattern: {}", e))?;
+            let overrides = override_builder
+                .build()
+                .map_err(|e| anyhow!("Invalid override pattern: {}", e))?;
             builder.overrides(overrides);
 
             let mut results = Vec::new();
@@ -131,16 +146,18 @@ impl Tool for GrepTool {
 
                         let path = entry.path();
                         if let Ok(rel) = path.strip_prefix(&root) {
-                             let mut denylisted = false;
-                             for comp in rel.components() {
-                                 if let std::path::Component::Normal(c) = comp {
-                                     if DENYLIST.contains(&c.to_str().unwrap_or("")) {
-                                         denylisted = true;
-                                         break;
-                                     }
-                                 }
-                             }
-                             if denylisted { continue; }
+                            let mut denylisted = false;
+                            for comp in rel.components() {
+                                if let std::path::Component::Normal(c) = comp {
+                                    if DENYLIST.contains(&c.to_str().unwrap_or("")) {
+                                        denylisted = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if denylisted {
+                                continue;
+                            }
                         }
 
                         // Read file with limit
@@ -148,7 +165,7 @@ impl Tool for GrepTool {
                             Ok(f) => f,
                             Err(_) => continue,
                         };
-                        
+
                         let mut buffer = Vec::new();
                         let mut take = file.take(max_file_bytes);
                         if take.read_to_end(&mut buffer).is_err() {
@@ -165,21 +182,21 @@ impl Tool for GrepTool {
                             Ok(s) => s,
                             Err(_) => continue,
                         };
-                        
+
                         let normalized_path = if let Ok(workspace_rel) = path.strip_prefix(&root) {
-                             workspace_rel.to_string_lossy().replace('\\', "/")
+                            workspace_rel.to_string_lossy().replace('\\', "/")
                         } else {
                             continue;
                         };
 
                         if output_mode_for_thread == "files_with_matches" {
-                             for l in content.lines() {
-                                 if regex.is_match(l) {
-                                     results.push(json!(normalized_path));
-                                     count += 1;
-                                     break;
-                                 }
-                             }
+                            for l in content.lines() {
+                                if regex.is_match(l) {
+                                    results.push(json!(normalized_path));
+                                    count += 1;
+                                    break;
+                                }
+                            }
                         } else if output_mode_for_thread == "count" {
                             let mut file_count = 0;
                             for l in content.lines() {
@@ -201,16 +218,16 @@ impl Tool for GrepTool {
                                         truncated = true;
                                         break;
                                     }
-                                    
+
                                     let byte_start = mat.start();
                                     let column = l[..byte_start].chars().count() + 1;
-                                    
+
                                     if column > max_line_length {
                                         continue;
                                     }
 
                                     let text: String = l.chars().take(max_line_length).collect();
-                                    
+
                                     results.push(json!({
                                         "path": normalized_path,
                                         "line": line_num,
@@ -219,17 +236,22 @@ impl Tool for GrepTool {
                                     }));
                                     count += 1;
                                 }
-                                if truncated { break; }
+                                if truncated {
+                                    break;
+                                }
                             }
                         }
                     }
                     Err(_) => continue,
                 }
-                if truncated { break; }
+                if truncated {
+                    break;
+                }
             }
 
             Ok((results, truncated))
-        }).await??;
+        })
+        .await??;
 
         Ok(serde_json::to_string(&json!({
             "output_mode": output_mode,
@@ -242,9 +264,9 @@ impl Tool for GrepTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tempfile::TempDir;
     use std::fs::File;
     use std::io::Write;
+    use tempfile::TempDir;
 
     #[tokio::test]
     async fn test_grep_basic() -> Result<()> {
@@ -262,11 +284,11 @@ mod tests {
         });
         let result = tool.execute(args).await?;
         let result: Value = serde_json::from_str(&result)?;
-        
+
         let results = result["results"].as_array().unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].as_str().unwrap(), "a.txt");
-        
+
         Ok(())
     }
 
@@ -288,10 +310,10 @@ mod tests {
         });
         let result = tool.execute(args).await?;
         let result: Value = serde_json::from_str(&result)?;
-        
+
         let results = result["results"].as_array().unwrap();
         assert_eq!(results.len(), 2);
-        
+
         let r1 = &results[0];
         assert_eq!(r1["path"], "a.txt");
         assert_eq!(r1["line"], 1);
@@ -322,7 +344,7 @@ mod tests {
         });
         let result = tool.execute(args).await?;
         let result: Value = serde_json::from_str(&result)?;
-        
+
         let results = result["results"].as_array().unwrap();
         assert_eq!(results.len(), 1);
         assert_eq!(results[0]["path"], "a.txt");
@@ -350,7 +372,7 @@ mod tests {
         });
         let result = tool.execute(args).await?;
         let result: Value = serde_json::from_str(&result)?;
-        
+
         assert_eq!(result["truncated"], true);
         let results = result["results"].as_array().unwrap();
         assert_eq!(results.len(), 2);
@@ -418,11 +440,11 @@ mod tests {
         let result = tool.execute(args).await?;
         let result: Value = serde_json::from_str(&result)?;
         let results = result["results"].as_array().unwrap();
-        
+
         assert_eq!(results.len(), 1);
         let r = &results[0];
         assert_eq!(r["column"], 3); // 1 (crab) + 1 (space) + 1 = 3.
-        
+
         Ok(())
     }
 

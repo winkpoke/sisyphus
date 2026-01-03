@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use common::bus::{EventBus, SystemEvent};
-use common::llm::{CompletionRequest, LLMProvider, Message, Role, ToolCall, FunctionCall};
+use common::llm::{CompletionRequest, FunctionCall, LLMProvider, Message, Role, ToolCall};
 use common::tool::Tool;
 use futures::Stream;
 use serde_json::{json, Value};
@@ -74,24 +74,24 @@ async fn test_permission_enforcement_deny() {
     let mut config = AgentConfig::default();
     config.permissions.edit = PermissionLevel::Deny;
 
-    let provider = Box::new(MockProvider::new(vec![
-        Message {
-            role: Role::Assistant,
-            content: None,
-            tool_calls: Some(vec![ToolCall {
-                id: "call_1".to_string(),
-                function: FunctionCall {
-                    name: "write_file".to_string(),
-                    arguments: "{}".to_string(),
-                },
-                kind: "function".to_string(),
-            }]),
-            tool_call_id: None,
-        }
-    ]));
+    let provider = Box::new(MockProvider::new(vec![Message {
+        role: Role::Assistant,
+        content: None,
+        tool_calls: Some(vec![ToolCall {
+            id: "call_1".to_string(),
+            function: FunctionCall {
+                name: "write_file".to_string(),
+                arguments: "{}".to_string(),
+            },
+            kind: "function".to_string(),
+        }]),
+        tool_call_id: None,
+    }]));
 
     let mut agent = Agent::new(provider, bus.clone(), config, std::path::PathBuf::from("."));
-    agent.register_tool(Box::new(MockTool { name: "write_file".to_string() }));
+    agent.register_tool(Box::new(MockTool {
+        name: "write_file".to_string(),
+    }));
 
     let mut session = Session::new();
     let result = agent.chat(&mut session, "test".to_string()).await;
@@ -99,8 +99,14 @@ async fn test_permission_enforcement_deny() {
 
     // Check history for permission denied message
     let history = session.history();
-    let tool_msg = history.iter().find(|m| m.role == Role::Tool).expect("Tool message not found");
-    assert_eq!(tool_msg.content.as_ref().unwrap(), "Permission denied: tool execution is set to Deny.");
+    let tool_msg = history
+        .iter()
+        .find(|m| m.role == Role::Tool)
+        .expect("Tool message not found");
+    assert_eq!(
+        tool_msg.content.as_ref().unwrap(),
+        "Permission denied: tool execution is set to Deny."
+    );
 }
 
 #[tokio::test]
@@ -110,37 +116,47 @@ async fn test_permission_enforcement_ask() {
     let mut config = AgentConfig::default();
     config.permissions.edit = PermissionLevel::Ask;
 
-    let provider = Box::new(MockProvider::new(vec![
-        Message {
-            role: Role::Assistant,
-            content: None,
-            tool_calls: Some(vec![ToolCall {
-                id: "call_2".to_string(),
-                function: FunctionCall {
-                    name: "write_file".to_string(),
-                    arguments: "{}".to_string(),
-                },
-                kind: "function".to_string(),
-            }]),
-            tool_call_id: None,
-        }
-    ]));
+    let provider = Box::new(MockProvider::new(vec![Message {
+        role: Role::Assistant,
+        content: None,
+        tool_calls: Some(vec![ToolCall {
+            id: "call_2".to_string(),
+            function: FunctionCall {
+                name: "write_file".to_string(),
+                arguments: "{}".to_string(),
+            },
+            kind: "function".to_string(),
+        }]),
+        tool_call_id: None,
+    }]));
 
     let mut agent = Agent::new(provider, bus.clone(), config, std::path::PathBuf::from("."));
-    agent.register_tool(Box::new(MockTool { name: "write_file".to_string() }));
+    agent.register_tool(Box::new(MockTool {
+        name: "write_file".to_string(),
+    }));
 
     let mut session = Session::new();
     let _ = agent.chat(&mut session, "test".to_string()).await;
 
     // Check history for permission required message
     let history = session.history();
-    let tool_msg = history.iter().find(|m| m.role == Role::Tool).expect("Tool message not found");
-    assert_eq!(tool_msg.content.as_ref().unwrap(), "Permission required: approve tool execution to continue.");
+    let tool_msg = history
+        .iter()
+        .find(|m| m.role == Role::Tool)
+        .expect("Tool message not found");
+    assert_eq!(
+        tool_msg.content.as_ref().unwrap(),
+        "Permission required: approve tool execution to continue."
+    );
 
     // Check for event
     loop {
         match rx.try_recv() {
-            Ok(SystemEvent::PermissionRequest { operation, tool_name, call_id }) => {
+            Ok(SystemEvent::PermissionRequest {
+                operation,
+                tool_name,
+                call_id,
+            }) => {
                 assert_eq!(operation, "tool_execution");
                 assert_eq!(tool_name, "write_file");
                 assert_eq!(call_id, "call_2");
@@ -152,7 +168,6 @@ async fn test_permission_enforcement_ask() {
     }
 }
 
-
 #[tokio::test]
 async fn test_command_effect_clear() {
     let bus = Arc::new(EventBus::new(10));
@@ -161,10 +176,20 @@ async fn test_command_effect_clear() {
     let agent = Agent::new(provider, bus, config, std::path::PathBuf::from("."));
     let mut session = Session::new();
 
-    session.add_message(Message { role: Role::User, content: Some("Hi".into()), tool_calls: None, tool_call_id: None }).unwrap();
+    session
+        .add_message(Message {
+            role: Role::User,
+            content: Some("Hi".into()),
+            tool_calls: None,
+            tool_call_id: None,
+        })
+        .unwrap();
     assert_eq!(session.history().len(), 1);
 
-    let res = agent.chat(&mut session, "/clear".to_string()).await.unwrap();
+    let res = agent
+        .chat(&mut session, "/clear".to_string())
+        .await
+        .unwrap();
     assert_eq!(res.effect, CommandEffect::ClearHistory);
     assert_eq!(session.history().len(), 0);
 }
@@ -178,7 +203,14 @@ async fn test_command_effect_new_session() {
     let mut session = Session::new();
     let old_id = session.id.clone();
 
-    session.add_message(Message { role: Role::User, content: Some("Hi".into()), tool_calls: None, tool_call_id: None }).unwrap();
+    session
+        .add_message(Message {
+            role: Role::User,
+            content: Some("Hi".into()),
+            tool_calls: None,
+            tool_call_id: None,
+        })
+        .unwrap();
 
     let res = agent.chat(&mut session, "/new".to_string()).await.unwrap();
     assert_eq!(res.effect, CommandEffect::NewSession);
@@ -191,4 +223,62 @@ fn test_prompt_snapshot() {
     // This requires inspecting internals or relying on SystemPromptBuilder tests.
     // SystemPromptBuilder tests were updated in prompt.rs.
     // So we are covered.
+}
+
+#[tokio::test]
+async fn test_permission_ask_stops_turn() {
+    let bus = Arc::new(EventBus::new(10));
+    let mut config = AgentConfig::default();
+    config.permissions.edit = PermissionLevel::Ask;
+
+    let provider = Box::new(MockProvider::new(vec![
+        Message {
+            role: Role::Assistant,
+            content: None,
+            tool_calls: Some(vec![ToolCall {
+                id: "call_ask".to_string(),
+                function: FunctionCall {
+                    name: "write_file".to_string(),
+                    arguments: "{}".to_string(),
+                },
+                kind: "function".to_string(),
+            }]),
+            tool_call_id: None,
+        },
+        // Provide a second response that should NOT be consumed if it stops
+        Message {
+            role: Role::Assistant,
+            content: Some("I should not be called".to_string()),
+            tool_calls: None,
+            tool_call_id: None,
+        },
+    ]));
+
+    let mut agent = Agent::new(provider, bus.clone(), config, std::path::PathBuf::from("."));
+    agent.register_tool(Box::new(MockTool {
+        name: "write_file".to_string(),
+    }));
+
+    let mut session = Session::new();
+    let result = agent.chat(&mut session, "test".to_string()).await.unwrap();
+
+    // 1. Check return value
+    assert_eq!(
+        result.output.unwrap(),
+        "Permission required: approve tool execution to continue."
+    );
+
+    // 2. Check history: User, Assistant (Call), Tool (Permission msg)
+    // We don't expect the second Assistant message
+    let history = session.history();
+    // 1. User "test"
+    // 2. Assistant (Tool Call)
+    // 3. Tool (Permission required)
+
+    assert_eq!(history.len(), 3);
+    assert_eq!(history.last().unwrap().role, Role::Tool);
+    assert_eq!(
+        history.last().unwrap().content.as_ref().unwrap(),
+        "Permission required: approve tool execution to continue."
+    );
 }

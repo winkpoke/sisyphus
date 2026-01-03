@@ -25,7 +25,7 @@ impl SystemPromptBuilder {
             .map(|p| p.to_string_lossy().to_string())
             .unwrap_or_else(|_| "Unknown".to_string());
         let date = Local::now().format("%Y-%m-%d").to_string();
-        
+
         // Try to read AGENTS.md from workspace root or current directory
         let agents_file = if let Some(root) = workspace_root {
             root.join("AGENTS.md")
@@ -69,7 +69,7 @@ mod tests {
             instructions: "You are a helpful assistant.".to_string(),
             ..Default::default()
         };
-        
+
         let snapshot = PromptSnapshot {
             os: "linux".to_string(),
             cwd: "/tmp".to_string(),
