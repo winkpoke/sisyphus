@@ -1,6 +1,7 @@
 pub mod event;
 pub mod state;
 pub mod terminal;
+pub mod theme;
 pub mod transcript;
 
 use transcript::TranscriptItemKind;
@@ -12,13 +13,14 @@ use event::{Event, EventHandler};
 use futures::StreamExt;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use serde_json::Value;
-use state::{AppStatus, InputMode, TuiState};
-use std::time::Duration;
+use state::{AppStatus, InputMode, Toast, ToastKind, TuiState};
+use std::time::{Duration, Instant};
+use theme::Theme;
 use tokio::sync::mpsc;
 
 pub struct Tui {
@@ -26,6 +28,7 @@ pub struct Tui {
     shutdown_rx: mpsc::Receiver<()>,
     state: TuiState,
     clipboard: Option<arboard::Clipboard>,
+    theme: Theme,
 }
 
 enum Action {
@@ -41,6 +44,7 @@ impl Tui {
             shutdown_rx,
             state: TuiState::new(session_id),
             clipboard: arboard::Clipboard::new().ok(),
+            theme: Theme::default(),
         }
     }
 
@@ -65,6 +69,13 @@ impl Tui {
 
         // Loop
         loop {
+            // Check for expired toast
+            if let Some(toast) = &self.state.toast {
+                if Instant::now() > toast.expires_at {
+                    self.state.toast = None;
+                }
+            }
+
             terminal.draw(|f| {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
@@ -82,6 +93,7 @@ impl Tui {
                 let transcript_block = Block::default()
                     .title(self.state.context_title.clone())
                     .borders(Borders::ALL)
+                    .border_style(Style::default().fg(self.theme.border))
                     .padding(ratatui::widgets::Padding::new(2, 2, 1, 1));
                 let inner_area = transcript_block.inner(chunks[0]);
                 let width = inner_area.width as usize;
@@ -94,12 +106,11 @@ impl Tui {
                         TranscriptItemKind::System => "System: ",
                         TranscriptItemKind::Error => "Error: ",
                     };
-
                     let mut style = match item.kind {
-                        TranscriptItemKind::User => Style::default().fg(Color::Cyan),
-                        TranscriptItemKind::Assistant => Style::default().fg(Color::Green),
-                        TranscriptItemKind::System => Style::default().fg(Color::Yellow),
-                        TranscriptItemKind::Error => Style::default().fg(Color::Red),
+                        TranscriptItemKind::User => Style::default().fg(self.theme.user),
+                        TranscriptItemKind::Assistant => Style::default().fg(self.theme.assistant),
+                        TranscriptItemKind::System => Style::default().fg(self.theme.system),
+                        TranscriptItemKind::Error => Style::default().fg(self.theme.error),
                     };
 
                     if self.state.mode == InputMode::Selection
@@ -108,7 +119,12 @@ impl Tui {
                         style = style.add_modifier(Modifier::REVERSED);
                     }
 
-                    let content = format!("{}{}", prefix, item.content);
+                    let mut content = format!("{}{}", prefix, item.content);
+                    if item.is_streaming {
+                        let spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+                        let frame = self.state.spinner_frame % spinner_chars.len();
+                        content.push_str(spinner_chars[frame]);
+                    }
                     lines.push(Line::from(Span::styled(content, style)));
                 }
 
@@ -157,23 +173,23 @@ impl Tui {
 
                 // Left: Session ID
                 let session_info = Paragraph::new(format!("Session: {}", self.state.session_id))
-                    .style(Style::default().fg(Color::Blue));
+                    .style(Style::default().fg(self.theme.user));
                 f.render_widget(session_info, status_chunks[0]);
 
                 // Center: Model & Token Usage
                 let model_info = Paragraph::new(format!("{} | {}", self.state.active_model, self.state.token_usage))
                     .alignment(ratatui::layout::Alignment::Center)
-                    .style(Style::default().fg(Color::White));
+                    .style(Style::default().fg(self.theme.system));
                 f.render_widget(model_info, status_chunks[1]);
 
                 // Right: Status
                 let spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
                 let status_text = match self.state.status {
-                    AppStatus::Connected => Span::styled("● Connected", Style::default().fg(Color::Green)),
-                    AppStatus::Disconnected => Span::styled("○ Disconnected", Style::default().fg(Color::Red)),
+                    AppStatus::Connected => Span::styled("● Connected", Style::default().fg(self.theme.success)),
+                    AppStatus::Disconnected => Span::styled("○ Disconnected", Style::default().fg(self.theme.error)),
                     AppStatus::Processing => {
                         let frame = self.state.spinner_frame % spinner_chars.len();
-                        Span::styled(format!("{} Processing", spinner_chars[frame]), Style::default().fg(Color::Yellow))
+                        Span::styled(format!("{} Processing", spinner_chars[frame]), Style::default().fg(self.theme.highlight))
                     }
                 };
                 let status_widget = Paragraph::new(Line::from(status_text))
@@ -198,7 +214,7 @@ impl Tui {
                     );
                     let list = List::new(items)
                         .block(Block::default().title(title).borders(Borders::ALL))
-                        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+                        .highlight_style(Style::default().fg(self.theme.highlight).add_modifier(Modifier::REVERSED))
                         .highlight_symbol("> ");
 
                     let mut state = ListState::default();
@@ -212,9 +228,9 @@ impl Tui {
                     f.render_widget(Clear, area);
 
                     let style = if self.state.overlay.is_error {
-                        Style::default().fg(Color::Red)
+                        Style::default().fg(self.theme.error)
                     } else {
-                        Style::default()
+                        Style::default().fg(self.theme.border)
                     };
 
                     let p = Paragraph::new(self.state.overlay.content.clone())
@@ -229,6 +245,37 @@ impl Tui {
 
                     f.render_widget(p, area);
                 }
+
+                if let Some(toast) = &self.state.toast {
+                    if Instant::now() <= toast.expires_at {
+                        let width = (toast.message.len() as u16 + 4).min(f.size().width.saturating_sub(4));
+                        let height = 3;
+                        let area = Rect::new(
+                            f.size().width.saturating_sub(width + 2),
+                            2,
+                            width,
+                            height
+                        );
+                        f.render_widget(Clear, area);
+                        
+                        let color = match toast.kind {
+                            ToastKind::Success => self.theme.success,
+                            ToastKind::Info => self.theme.user,
+                            ToastKind::Error => self.theme.error,
+                        };
+                        
+                        let block = Block::default()
+                            .borders(Borders::ALL)
+                            .border_style(Style::default().fg(color));
+                        
+                        let text = Paragraph::new(toast.message.clone())
+                            .block(block)
+                            .alignment(ratatui::layout::Alignment::Center)
+                            .style(Style::default().fg(color));
+                        
+                        f.render_widget(text, area);
+                    }
+                }
             })?;
 
             tokio::select! {
@@ -239,6 +286,22 @@ impl Tui {
                                 if self.state.mode == InputMode::Overlay {
                                     match key.code {
                                         crossterm::event::KeyCode::Esc | crossterm::event::KeyCode::Enter => {
+                                            if let Some(call_id) = self.state.overlay.call_id.clone() {
+                                                let client = self.client.clone();
+                                                let session_id = self.state.session_id.clone();
+                                                let tx = action_tx.clone();
+
+                                                tokio::spawn(async move {
+                                                    match client.submit_approval(&session_id, &call_id, "deny").await {
+                                                        Ok(resp) => {
+                                                            let _ = tx.send(Action::ResponseReceived(resp)).await;
+                                                        }
+                                                        Err(e) => {
+                                                            let _ = tx.send(Action::Error(e.to_string())).await;
+                                                        }
+                                                    }
+                                                });
+                                            }
                                             self.state.mode = InputMode::Normal;
                                             self.state.overlay.call_id = None;
                                         }
@@ -323,15 +386,14 @@ impl Tui {
                                                  if let Some(item) = self.state.transcript.items.get(idx) {
                                                      if let Some(cb) = &mut self.clipboard {
                                                          if cb.set_text(&item.content).is_err() {
-                                                             self.state.overlay.show("Copy Failed".to_string(), item.content.clone(), true);
-                                                             self.state.mode = InputMode::Overlay;
+                                                             self.state.toast = Some(Toast::new("Copy Failed".to_string(), ToastKind::Error, Duration::from_secs(2)));
                                                          } else {
-                                                             self.state.mode = InputMode::Normal;
+                                                             self.state.toast = Some(Toast::new("✓ Copied to clipboard".to_string(), ToastKind::Success, Duration::from_secs(2)));
                                                          }
                                                      } else {
-                                                         self.state.overlay.show("Copy (Clipboard Unavailable)".to_string(), item.content.clone(), false);
-                                                         self.state.mode = InputMode::Overlay;
+                                                         self.state.toast = Some(Toast::new("Clipboard Unavailable".to_string(), ToastKind::Error, Duration::from_secs(2)));
                                                      }
+                                                     self.state.mode = InputMode::Normal;
                                                      self.state.selection.selected_message_index = None;
                                                  }
                                              }
@@ -388,6 +450,8 @@ impl Tui {
                                         crossterm::event::KeyCode::Char('p') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
                                              self.state.mode = InputMode::CommandPalette;
                                              self.state.command_palette.reset();
+                                             self.state.command_palette.input.push('/');
+                                             self.state.command_palette.update_filter();
                                          }
                                          crossterm::event::KeyCode::Char('s') if key.modifiers.contains(crossterm::event::KeyModifiers::CONTROL) => {
                                              self.state.mode = InputMode::Selection;

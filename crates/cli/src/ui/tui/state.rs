@@ -1,5 +1,30 @@
 use super::transcript::{Transcript, TranscriptItemKind};
 use std::collections::VecDeque;
+use std::time::Instant;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ToastKind {
+    Success,
+    Info,
+    Error,
+}
+
+#[derive(Debug, Clone)]
+pub struct Toast {
+    pub message: String,
+    pub expires_at: Instant,
+    pub kind: ToastKind,
+}
+
+impl Toast {
+    pub fn new(message: String, kind: ToastKind, duration: std::time::Duration) -> Self {
+        Self {
+            message,
+            expires_at: Instant::now() + duration,
+            kind,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InputMode {
@@ -174,6 +199,7 @@ pub struct TuiState {
     pub active_model: String,
     pub token_usage: String,
     pub context_title: String,
+    pub toast: Option<Toast>,
 }
 
 impl TuiState {
@@ -192,6 +218,7 @@ impl TuiState {
             active_model: "claude-3-5-sonnet".to_string(), // Default or load from config
             token_usage: "0 tokens".to_string(),
             context_title: "Transcript".to_string(),
+            toast: None,
         }
     }
 
@@ -223,6 +250,7 @@ impl TuiState {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::Instant;
 
     #[test]
     fn test_input_handling() {
@@ -304,5 +332,13 @@ mod tests {
         let has_next = overlay.show_next_approval();
         assert!(!has_next);
         // call_id remains as is unless cleared by caller, but show_next only updates if queue has item
+    }
+
+    #[test]
+    fn test_toast() {
+        let toast = Toast::new("test".to_string(), ToastKind::Info, std::time::Duration::from_secs(1));
+        assert_eq!(toast.message, "test");
+        assert_eq!(toast.kind, ToastKind::Info);
+        assert!(toast.expires_at > Instant::now());
     }
 }
