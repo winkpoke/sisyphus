@@ -12,7 +12,6 @@ use sisyphus_core::session::manager::SessionManager;
 use std::collections::VecDeque;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 fn init_tracing() {
     let _ = tracing_subscriber::fmt()
@@ -64,6 +63,21 @@ impl Tool for MockTool {
     }
 }
 
+async fn wait_for_server(port: u16) {
+    let client = reqwest::Client::new();
+    let url = format!("http://127.0.0.1:{}/health", port);
+    let start = std::time::Instant::now();
+    while start.elapsed() < std::time::Duration::from_secs(5) {
+        if let Ok(resp) = client.get(&url).send().await {
+            if resp.status().is_success() {
+                return;
+            }
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    }
+    panic!("Server failed to start on port {}", port);
+}
+
 #[tokio::test]
 async fn test_approval_flow() {
     init_tracing();
@@ -112,14 +126,16 @@ async fn test_approval_flow() {
     let server = Server::new(port, agent, session_manager, bus);
 
     tokio::spawn(async move {
-        server
+        if let Err(e) = server
             .run_on_listener(listener, std::future::pending::<()>())
             .await
-            .unwrap();
+        {
+            tracing::error!("Server exited with error: {:?}", e);
+        }
     });
 
     // Give server time to start
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    wait_for_server(port).await;
 
     let client = reqwest::Client::builder().build().unwrap();
     let base_url = format!("http://127.0.0.1:{}", port);
@@ -232,13 +248,15 @@ async fn test_denial_flow() {
     let server = Server::new(port, agent, session_manager, bus);
 
     tokio::spawn(async move {
-        server
+        if let Err(e) = server
             .run_on_listener(listener, std::future::pending::<()>())
             .await
-            .unwrap();
+        {
+            tracing::error!("Server (denial) exited with error: {:?}", e);
+        }
     });
 
-    tokio::time::sleep(Duration::from_millis(500)).await;
+    wait_for_server(port).await;
 
     let client = reqwest::Client::builder().build().unwrap();
     let base_url = format!("http://127.0.0.1:{}", port);

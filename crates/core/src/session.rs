@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use common::llm::Message;
+use common::llm::{Message, ToolCall};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
@@ -30,6 +30,8 @@ pub struct Session {
     pub status: SessionStatus,
     #[serde(default)]
     pub pending_approvals: HashMap<String, PendingApproval>,
+    #[serde(default)]
+    pub pending_batch: Vec<ToolCall>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -54,6 +56,7 @@ impl Session {
             context: Context::new(),
             status: SessionStatus::Idle,
             pending_approvals: HashMap::new(),
+            pending_batch: Vec::new(),
         }
     }
 

@@ -10,6 +10,7 @@ pub enum TranscriptItemKind {
 pub struct TranscriptItem {
     pub kind: TranscriptItemKind,
     pub content: String,
+    #[allow(dead_code)]
     pub is_streaming: bool,
 }
 
@@ -37,6 +38,7 @@ impl Transcript {
         });
     }
 
+    #[allow(dead_code)]
     pub fn start_streaming(&mut self, kind: TranscriptItemKind) {
         self.items.push(TranscriptItem {
             kind,
@@ -45,6 +47,7 @@ impl Transcript {
         });
     }
 
+    #[allow(dead_code)]
     pub fn append_streaming(&mut self, content: &str) {
         if let Some(last) = self.items.last_mut() {
             if last.is_streaming {
@@ -53,6 +56,7 @@ impl Transcript {
         }
     }
 
+    #[allow(dead_code)]
     pub fn finish_streaming(&mut self) {
         if let Some(last) = self.items.last_mut() {
             last.is_streaming = false;

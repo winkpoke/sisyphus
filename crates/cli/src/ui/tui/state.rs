@@ -1,3 +1,4 @@
+use std::collections::VecDeque;
 use super::transcript::{Transcript, TranscriptItemKind};
 
 #[derive(Debug, Clone, PartialEq)]
@@ -28,6 +29,7 @@ pub struct OverlayState {
     pub scroll: u16,
     pub is_error: bool,
     pub call_id: Option<String>,
+    pub permission_queue: VecDeque<(String, String, String)>, // (title, content, call_id)
 }
 
 impl OverlayState {
@@ -38,6 +40,7 @@ impl OverlayState {
             scroll: 0,
             is_error: false,
             call_id: None,
+            permission_queue: VecDeque::new(),
         }
     }
 
@@ -55,6 +58,22 @@ impl OverlayState {
         self.scroll = 0;
         self.is_error = false;
         self.call_id = Some(call_id);
+    }
+
+    pub fn enqueue_approval(&mut self, title: String, content: String, call_id: String) {
+        self.permission_queue.push_back((title, content, call_id));
+        if self.call_id.is_none() {
+            self.show_next_approval();
+        }
+    }
+
+    pub fn show_next_approval(&mut self) -> bool {
+        if let Some((title, content, call_id)) = self.permission_queue.pop_front() {
+            self.show_approval(title, content, call_id);
+            true
+        } else {
+            false
+        }
     }
 
     pub fn scroll_down(&mut self) {
@@ -216,5 +235,39 @@ mod tests {
         palette.reset();
         assert!(palette.input.is_empty());
         assert_eq!(palette.filtered_commands.len(), 4);
+    }
+
+    #[test]
+    fn test_overlay_queue() {
+        let mut overlay = OverlayState::new();
+        
+        // Enqueue first approval
+        overlay.enqueue_approval("Title1".to_string(), "Content1".to_string(), "id1".to_string());
+        
+        // Should be showing immediately
+        assert_eq!(overlay.call_id, Some("id1".to_string()));
+        assert_eq!(overlay.title, "Title1");
+        assert!(overlay.permission_queue.is_empty()); // Pop happened
+
+        // Enqueue second approval while showing first
+        overlay.enqueue_approval("Title2".to_string(), "Content2".to_string(), "id2".to_string());
+        
+        // Still showing first
+        assert_eq!(overlay.call_id, Some("id1".to_string()));
+        assert_eq!(overlay.permission_queue.len(), 1);
+
+        // Simulate approval of first (clearing call_id is done by caller usually, but here we just call show_next)
+        // Actually show_next_approval pops the next one.
+        
+        let has_next = overlay.show_next_approval();
+        assert!(has_next);
+        assert_eq!(overlay.call_id, Some("id2".to_string()));
+        assert_eq!(overlay.title, "Title2");
+        assert!(overlay.permission_queue.is_empty());
+
+        // Try show next again
+        let has_next = overlay.show_next_approval();
+        assert!(!has_next);
+        // call_id remains as is unless cleared by caller, but show_next only updates if queue has item
     }
 }

@@ -2,7 +2,7 @@ use assert_cmd::Command;
 
 #[test]
 fn test_cli_help() {
-    let mut cmd = Command::cargo_bin("sisyphus").unwrap();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_sisyphus"));
     cmd.arg("--help")
         .assert()
         .success()
@@ -11,7 +11,7 @@ fn test_cli_help() {
 
 #[test]
 fn test_cli_chat_tui_flag() {
-    let mut cmd = Command::cargo_bin("sisyphus").unwrap();
+    let mut cmd = Command::new(env!("CARGO_BIN_EXE_sisyphus"));
     cmd.arg("chat")
         .arg("--help")
         .assert()

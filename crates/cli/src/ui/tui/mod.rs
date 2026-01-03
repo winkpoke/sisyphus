@@ -226,8 +226,11 @@ impl Tui {
                                                          }
                                                      }
                                                  });
-                                                 self.state.mode = InputMode::Normal;
-                                                 self.state.overlay.call_id = None;
+                                                 
+                                                 if !self.state.overlay.show_next_approval() {
+                                                     self.state.mode = InputMode::Normal;
+                                                     self.state.overlay.call_id = None;
+                                                 }
                                              }
                                         }
                                         crossterm::event::KeyCode::Char('d') if self.state.overlay.call_id.is_some() => {
@@ -246,8 +249,11 @@ impl Tui {
                                                          }
                                                      }
                                                  });
-                                                 self.state.mode = InputMode::Normal;
-                                                 self.state.overlay.call_id = None;
+                                                 
+                                                 if !self.state.overlay.show_next_approval() {
+                                                     self.state.mode = InputMode::Normal;
+                                                     self.state.overlay.call_id = None;
+                                                 }
                                              }
                                         }
                                         crossterm::event::KeyCode::Down | crossterm::event::KeyCode::Char('j') => {
@@ -424,7 +430,7 @@ impl Tui {
                              if let reqwest_eventsource::Event::Message(msg) = event {
                                  if let Ok(SystemEvent::PermissionRequest { operation, tool_name, call_id }) = serde_json::from_str::<SystemEvent>(&msg.data) {
                                     self.state.mode = InputMode::Overlay;
-                                    self.state.overlay.show_approval(
+                                    self.state.overlay.enqueue_approval(
                                         "Permission Required".to_string(),
                                         format!("Operation: {}\nTool: {}\nCall ID: {}\n\nPress 'a' to Approve or 'd' to Deny.", operation, tool_name, call_id),
                                         call_id

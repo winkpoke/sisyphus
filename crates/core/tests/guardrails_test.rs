@@ -136,18 +136,16 @@ async fn test_permission_enforcement_ask() {
     }));
 
     let mut session = Session::new();
-    let _ = agent.chat(&mut session, "test".to_string()).await;
+    let result = agent.chat(&mut session, "test".to_string()).await;
+    assert!(result.is_ok());
+    assert_eq!(result.unwrap().output.unwrap(), "Permission required: approve tool execution to continue.");
 
-    // Check history for permission required message
+    // Check history: should NOT have tool message yet
     let history = session.history();
-    let tool_msg = history
-        .iter()
-        .find(|m| m.role == Role::Tool)
-        .expect("Tool message not found");
-    assert_eq!(
-        tool_msg.content.as_ref().unwrap(),
-        "Permission required: approve tool execution to continue."
-    );
+    assert!(!history.iter().any(|m| m.role == Role::Tool));
+
+    // Check pending approvals
+    assert!(session.pending_approvals.contains_key("call_2"));
 
     // Check for event
     loop {
@@ -268,17 +266,15 @@ async fn test_permission_ask_stops_turn() {
         "Permission required: approve tool execution to continue."
     );
 
-    // 2. Check history: User, Assistant (Call), Tool (Permission msg)
-    // We don't expect the second Assistant message
+    // 2. Check history: User, Assistant (Call)
+    // We don't expect the second Assistant message, nor the Tool message yet
     let history = session.history();
     // 1. User "test"
     // 2. Assistant (Tool Call)
-    // 3. Tool (Permission required)
-
-    assert_eq!(history.len(), 3);
-    assert_eq!(history.last().unwrap().role, Role::Tool);
-    assert_eq!(
-        history.last().unwrap().content.as_ref().unwrap(),
-        "Permission required: approve tool execution to continue."
-    );
+    
+    assert_eq!(history.len(), 2);
+    assert_eq!(history.last().unwrap().role, Role::Assistant);
+    
+    // Check pending approvals
+    assert!(session.pending_approvals.contains_key("call_ask"));
 }

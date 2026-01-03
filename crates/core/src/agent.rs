@@ -14,7 +14,7 @@ use anyhow::{anyhow, Result};
 use chrono::Utc;
 use common::bus::{EventBus, SystemEvent};
 use common::llm::{
-    CompletionRequest, LLMProvider, Message, Role, ToolDefinition, ToolFunctionDefinition,
+    CompletionRequest, LLMProvider, Message, Role, ToolCall, ToolDefinition, ToolFunctionDefinition,
 };
 use common::tool::Tool;
 use rust_i18n::t;
@@ -276,10 +276,73 @@ impl Agent {
         };
         session.add_message(tool_msg)?;
 
+        if !session.pending_approvals.is_empty() {
+            session.status = SessionStatus::Idle;
+            return Ok(result);
+        }
+
+        // Resume batch execution if any
+        if !session.pending_batch.is_empty() {
+            let batch = std::mem::take(&mut session.pending_batch);
+            if let Some(msg) = self.process_tool_batch(session, batch).await? {
+                session.status = SessionStatus::Idle;
+                return Ok(msg);
+            }
+        }
+
         let output = self.run_turn_loop(session, 0).await;
 
         session.status = SessionStatus::Idle;
         output
+    }
+
+    async fn process_tool_batch(
+        &self,
+        session: &mut Session,
+        mut calls: Vec<ToolCall>,
+    ) -> Result<Option<String>> {
+        let mut i = 0;
+        while i < calls.len() {
+            let call = &calls[i];
+            let tool_name = &call.function.name;
+            let args_str = &call.function.arguments;
+
+            let execution = self.execute_tool(tool_name, args_str, &call.id).await;
+
+            match execution {
+                ToolExecResult::Ok(result) => {
+                    self.bus.publish(SystemEvent::ToolExecuted {
+                        tool: tool_name.clone(),
+                        result: result.clone(),
+                    });
+
+                    let tool_msg = Message {
+                        role: Role::Tool,
+                        content: Some(result),
+                        tool_calls: None,
+                        tool_call_id: Some(call.id.clone()),
+                    };
+                    session.add_message(tool_msg)?;
+                }
+                ToolExecResult::PermissionRequired(msg) => {
+                    session.pending_approvals.insert(
+                        call.id.clone(),
+                        PendingApproval {
+                            call_id: call.id.clone(),
+                            tool_name: tool_name.clone(),
+                            args: args_str.clone(),
+                        },
+                    );
+
+                    let remaining = calls.split_off(i + 1);
+                    session.pending_batch = remaining;
+
+                    return Ok(Some(msg));
+                }
+            }
+            i += 1;
+        }
+        Ok(None)
     }
 
     async fn process_turn(&self, session: &mut Session, input: String) -> Result<String> {
@@ -354,41 +417,8 @@ impl Agent {
                     return Ok(response_msg.content.unwrap_or_default());
                 }
 
-                for call in tool_calls {
-                    let tool_name = &call.function.name;
-                    let args_str = &call.function.arguments;
-
-                    let execution = self.execute_tool(tool_name, args_str, &call.id).await;
-
-                    let (result, is_permission_req) = match execution {
-                        ToolExecResult::Ok(res) => (res, false),
-                        ToolExecResult::PermissionRequired(res) => (res, true),
-                    };
-
-                    if is_permission_req {
-                        session.pending_approvals.insert(
-                            call.id.clone(),
-                            PendingApproval {
-                                call_id: call.id.clone(),
-                                tool_name: tool_name.clone(),
-                                args: args_str.clone(),
-                            },
-                        );
-                        return Ok(result);
-                    }
-
-                    self.bus.publish(SystemEvent::ToolExecuted {
-                        tool: tool_name.clone(),
-                        result: result.clone(),
-                    });
-
-                    let tool_msg = Message {
-                        role: Role::Tool,
-                        content: Some(result.clone()),
-                        tool_calls: None,
-                        tool_call_id: Some(call.id.clone()),
-                    };
-                    session.add_message(tool_msg)?;
+                if let Some(msg) = self.process_tool_batch(session, tool_calls.clone()).await? {
+                    return Ok(msg);
                 }
             } else {
                 return Ok(response_msg.content.unwrap_or_default());
