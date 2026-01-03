@@ -71,11 +71,13 @@ The scope includes the migration and generalization of the core business logic, 
 - **Multi-language Support**: The system shall be designed to support Internationalization (i18n), enabling localization for system messages, logs, and user-facing interactions.
 
 ### 3.7 CLI & TUI Experience
-- **Interactive TUI**: A rich terminal user interface (TUI) featuring an async event loop that merges user input with backend events.
+- **Interactive TUI**: A rich terminal user interface (TUI) built on the Model-View-Update (MVU) pattern, featuring an async event loop.
 - **Transcript**: Structured, progressively updating transcript with support for streaming, scrolling, and "stick to bottom" behavior; backend `SystemEvent`s render as concise, end-user-readable entries by default.
 - **Command Palette**: A discoverable palette for slash commands triggered by `/`, supporting keyboard navigation and filtering (including `/debug`).
 - **Polish**:
   - **Overlays**: Safe rendering of help, errors, and long content (pager) without corrupting the terminal.
+  - **Visual Feedback**: Toast notifications for actions (e.g., copy) and loading indicators for active processing.
+  - **Theming**: Semantic color palette (Soft Blue, Lavender, Muted Grey) for reduced visual fatigue.
   - **Selection**: Ability to select and copy transcript text.
   - **Status**: Structured status bar with session/model/connectivity indicators and a processing spinner.
   - **Layout**: Dynamic transcript header (context name or session ID) and content padding for readability.

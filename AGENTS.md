@@ -29,6 +29,9 @@ Key runtime behavior (normative in OpenSpec):
 - LLM Providers must use the shared `SSEParser` (`crates/provider/src/sse.rs`) for streaming to ensure correct handling of split network chunks and multi-byte characters.
 
 CLI TUI requirements (see `spec/cli-tui` in OpenSpec):
-- Render backend SSE `SystemEvent`s as concise, end-user-readable transcript entries by default; unparseable events must not crash the UI.
-- Provide a `/debug` toggle (discoverable in the command palette) to show redacted + truncated raw event payloads.
-- Provide a structured status bar and improve transcript readability (dynamic header + padding).
+- **Architecture**: Follow the Model-View-Update (MVU) pattern with a pure `update` function and centralized `Action` enum.
+- **Visuals**: Use the centralized `Theme` struct for semantic colors; avoid hardcoded ANSI values.
+- **Feedback**: Use `Toast` overlays for transient user feedback (e.g., clipboard success) and spinners for active states.
+- **Events**: Render backend SSE `SystemEvent`s as concise, end-user-readable transcript entries by default; unparseable events must not crash the UI.
+- **Debug**: Provide a `/debug` toggle (discoverable in the command palette) to show redacted + truncated raw event payloads.
+- **Layout**: Provide a structured status bar and improve transcript readability (dynamic header + padding).
