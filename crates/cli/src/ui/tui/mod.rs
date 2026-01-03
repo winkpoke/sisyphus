@@ -171,18 +171,7 @@ impl Tui {
                     ])
                     .split(chunks[2]);
 
-                // Left: Session ID
-                let session_info = Paragraph::new(format!("Session: {}", self.state.session_id))
-                    .style(Style::default().fg(self.theme.user));
-                f.render_widget(session_info, status_chunks[0]);
-
-                // Center: Model & Token Usage
-                let model_info = Paragraph::new(format!("{} | {}", self.state.active_model, self.state.token_usage))
-                    .alignment(ratatui::layout::Alignment::Center)
-                    .style(Style::default().fg(self.theme.system));
-                f.render_widget(model_info, status_chunks[1]);
-
-                // Right: Status
+                // Left: Status
                 let spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
                 let status_text = match self.state.status {
                     AppStatus::Connected => Span::styled("● Connected", Style::default().fg(self.theme.success)),
@@ -192,9 +181,20 @@ impl Tui {
                         Span::styled(format!("{} Processing", spinner_chars[frame]), Style::default().fg(self.theme.highlight))
                     }
                 };
-                let status_widget = Paragraph::new(Line::from(status_text))
-                    .alignment(ratatui::layout::Alignment::Right);
-                f.render_widget(status_widget, status_chunks[2]);
+                let status_widget = Paragraph::new(Line::from(status_text));
+                f.render_widget(status_widget, status_chunks[0]);
+
+                // Center: Model & Token Usage
+                let model_info = Paragraph::new(format!("{} | {}", self.state.active_model, self.state.token_usage))
+                    .alignment(ratatui::layout::Alignment::Center)
+                    .style(Style::default().fg(self.theme.system));
+                f.render_widget(model_info, status_chunks[1]);
+
+                // Right: Session ID
+                let session_info = Paragraph::new(format!("Session: {}", self.state.session_id))
+                    .alignment(ratatui::layout::Alignment::Right)
+                    .style(Style::default().fg(self.theme.user));
+                f.render_widget(session_info, status_chunks[2]);
 
                 if self.state.mode == InputMode::CommandPalette {
                     let area = centered_rect(60, 40, f.size());
