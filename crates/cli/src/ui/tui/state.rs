@@ -237,7 +237,7 @@ mod tests {
 
         palette.reset();
         assert!(palette.input.is_empty());
-        assert_eq!(palette.filtered_commands.len(), 4);
+        assert_eq!(palette.filtered_commands.len(), 5);
     }
 
     #[test]

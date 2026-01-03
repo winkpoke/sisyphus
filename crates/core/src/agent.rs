@@ -242,6 +242,20 @@ impl Agent {
         }
         session.status = SessionStatus::Busy;
 
+        let result = self
+            .resolve_approval_inner(session, call_id, approved)
+            .await;
+
+        session.status = SessionStatus::Idle;
+        result
+    }
+
+    async fn resolve_approval_inner(
+        &self,
+        session: &mut Session,
+        call_id: &str,
+        approved: bool,
+    ) -> Result<String> {
         let approval = session
             .pending_approvals
             .remove(call_id)
@@ -277,7 +291,6 @@ impl Agent {
         session.add_message(tool_msg)?;
 
         if !session.pending_approvals.is_empty() {
-            session.status = SessionStatus::Idle;
             return Ok(result);
         }
 
@@ -285,15 +298,11 @@ impl Agent {
         if !session.pending_batch.is_empty() {
             let batch = std::mem::take(&mut session.pending_batch);
             if let Some(msg) = self.process_tool_batch(session, batch).await? {
-                session.status = SessionStatus::Idle;
                 return Ok(msg);
             }
         }
 
-        let output = self.run_turn_loop(session, 0).await;
-
-        session.status = SessionStatus::Idle;
-        output
+        self.run_turn_loop(session, 0).await
     }
 
     async fn process_tool_batch(
