@@ -70,4 +70,6 @@ pub trait LLMProvider: Send + Sync {
         &self,
         request: CompletionRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<String>> + Send>>>;
+
+    fn model(&self) -> String;
 }

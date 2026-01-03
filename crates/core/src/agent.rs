@@ -81,6 +81,10 @@ impl Agent {
         self.commands.list()
     }
 
+    pub fn model_name(&self) -> String {
+        self.provider.model()
+    }
+
     pub fn register_tool(&mut self, tool: Box<dyn Tool>) {
         self.tools.insert(tool.name().to_string(), tool);
     }

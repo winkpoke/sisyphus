@@ -1,7 +1,7 @@
 # Product Requirement Document: Sisyphus (General Purpose Agent System)
 
 ## 1. Executive Summary
-Sisyphus aims to be a robust, open-source **general-purpose AI agent framework**, ported from the core logic of [OpenCode](https://opencode.ai). While maintaining strong coding capabilities, the system is designed to handle a broad spectrum of tasks including system automation, data analysis, research, and content generation. The goal is to provide a provider-agnostic, extensible, and high-performance agent runtime that can power various clients (CLI, IDE extensions, Web) while maintaining a separation between the core logic and the user interface. This project focuses on porting the backend/core capabilities of OpenCode; the OpenCode TUI is not ported.
+Sisyphus aims to be a robust, open-source **general-purpose AI agent framework**. While maintaining strong coding capabilities, the system is designed to handle a broad spectrum of tasks including system automation, data analysis, research, and content generation. The goal is to provide a provider-agnostic, extensible, and high-performance agent runtime that can power various clients (CLI, IDE extensions, Web) while maintaining a separation between the core logic and the user interface. This project focuses on porting the backend/core capabilities of OpenCode; the OpenCode TUI is not ported.
 
 ## 2. Product Scope
 The scope includes the migration and generalization of the core business logic, agent orchestration, tool execution, and state management systems from the `opencode` package.
@@ -72,13 +72,15 @@ The scope includes the migration and generalization of the core business logic, 
 
 ### 3.7 CLI & TUI Experience
 - **Interactive TUI**: A rich terminal user interface (TUI) featuring an async event loop that merges user input with backend events.
-- **Transcript**: Structured, progressively updating transcript with support for streaming, scrolling, and "stick to bottom" behavior.
-- **Command Palette**: A discoverable palette for slash commands triggered by `/`, supporting keyboard navigation and filtering.
+- **Transcript**: Structured, progressively updating transcript with support for streaming, scrolling, and "stick to bottom" behavior; backend `SystemEvent`s render as concise, end-user-readable entries by default.
+- **Command Palette**: A discoverable palette for slash commands triggered by `/`, supporting keyboard navigation and filtering (including `/debug`).
 - **Polish**:
   - **Overlays**: Safe rendering of help, errors, and long content (pager) without corrupting the terminal.
   - **Selection**: Ability to select and copy transcript text.
-  - **Status**: Unobtrusive indicators and key hints.
+  - **Status**: Structured status bar with session/model/connectivity indicators and a processing spinner.
+  - **Layout**: Dynamic transcript header (context name or session ID) and content padding for readability.
 - **Permission Prompts**: Decode `PermissionRequest` events into a first-class overlay with Approve/Deny actions to resume the blocked turn; multiple requests are queued FIFO.
+- **Debug Mode**: `/debug` toggles raw backend event payload visibility; raw payloads are redacted and truncated when shown.
 - **Startup Banner**: Display a branded ASCII banner with version and configuration info on startup.
 
 ### 3.8 Slash Command System

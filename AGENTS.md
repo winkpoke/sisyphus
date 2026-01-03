@@ -26,3 +26,8 @@ Key runtime behavior (normative in OpenSpec):
 - Tool calls in a single assistant message are processed in order; later calls are held until the blocking call resolves.
 - Deny appends a deterministic Tool result: `Permission denied: user rejected tool execution.`
 - Clients render permission prompts (operation/tool_name/call_id), queue multiple requests FIFO, and submit approve/deny decisions.
+
+CLI TUI requirements (see `spec/cli-tui` in OpenSpec):
+- Render backend SSE `SystemEvent`s as concise, end-user-readable transcript entries by default; unparseable events must not crash the UI.
+- Provide a `/debug` toggle (discoverable in the command palette) to show redacted + truncated raw event payloads.
+- Provide a structured status bar and improve transcript readability (dynamic header + padding).

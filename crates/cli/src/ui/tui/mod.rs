@@ -6,7 +6,7 @@ pub mod transcript;
 use transcript::TranscriptItemKind;
 
 use anyhow::Result;
-use client::Client;
+use client::{ChatResponse, Client};
 use common::bus::SystemEvent;
 use event::{Event, EventHandler};
 use futures::StreamExt;
@@ -17,7 +17,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
 use serde_json::Value;
-use state::{InputMode, TuiState};
+use state::{AppStatus, InputMode, TuiState};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
@@ -30,7 +30,7 @@ pub struct Tui {
 
 enum Action {
     MessageSent(String),
-    ResponseReceived(String, Option<String>), // response, new_session_id
+    ResponseReceived(ChatResponse),
     Error(String),
 }
 
@@ -58,6 +58,11 @@ impl Tui {
         let mut backend_events = self.client.subscribe_events()?;
         let (action_tx, mut action_rx) = mpsc::channel::<Action>(10);
 
+        // Fetch initial model info
+        if let Ok(model) = self.client.get_model().await {
+            self.state.active_model = model;
+        }
+
         // Loop
         loop {
             terminal.draw(|f| {
@@ -74,7 +79,10 @@ impl Tui {
                     )
                     .split(f.size());
 
-                let transcript_block = Block::default().title("Transcript").borders(Borders::ALL);
+                let transcript_block = Block::default()
+                    .title(self.state.context_title.clone())
+                    .borders(Borders::ALL)
+                    .padding(ratatui::widgets::Padding::new(2, 2, 1, 1));
                 let inner_area = transcript_block.inner(chunks[0]);
                 let width = inner_area.width as usize;
 
@@ -137,17 +145,40 @@ impl Tui {
                 let input_text = Paragraph::new(self.state.input_buffer.clone()).block(input_block);
                 f.render_widget(input_text, chunks[1]);
 
-                let hints = match self.state.mode {
-                    InputMode::Normal => {
-                        "Ctrl+P: Palette | Ctrl+S: Select | /: Command | Enter: Send | Ctrl+C: Quit"
+                // Status Bar Layout
+                let status_chunks = Layout::default()
+                    .direction(Direction::Horizontal)
+                    .constraints([
+                        Constraint::Percentage(25),
+                        Constraint::Percentage(50),
+                        Constraint::Percentage(25),
+                    ])
+                    .split(chunks[2]);
+
+                // Left: Session ID
+                let session_info = Paragraph::new(format!("Session: {}", self.state.session_id))
+                    .style(Style::default().fg(Color::Blue));
+                f.render_widget(session_info, status_chunks[0]);
+
+                // Center: Model & Token Usage
+                let model_info = Paragraph::new(format!("{} | {}", self.state.active_model, self.state.token_usage))
+                    .alignment(ratatui::layout::Alignment::Center)
+                    .style(Style::default().fg(Color::White));
+                f.render_widget(model_info, status_chunks[1]);
+
+                // Right: Status
+                let spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+                let status_text = match self.state.status {
+                    AppStatus::Connected => Span::styled("● Connected", Style::default().fg(Color::Green)),
+                    AppStatus::Disconnected => Span::styled("○ Disconnected", Style::default().fg(Color::Red)),
+                    AppStatus::Processing => {
+                        let frame = self.state.spinner_frame % spinner_chars.len();
+                        Span::styled(format!("{} Processing", spinner_chars[frame]), Style::default().fg(Color::Yellow))
                     }
-                    InputMode::CommandPalette => "Esc: Close | Enter: Select | Up/Down: Nav",
-                    InputMode::Selection => "Esc: Close | Enter/c: Copy | Up/Down: Nav",
-                    InputMode::Overlay => "Esc: Close | j/k: Scroll",
                 };
-                let footer =
-                    Paragraph::new(Line::from(hints)).style(Style::default().fg(Color::DarkGray));
-                f.render_widget(footer, chunks[2]);
+                let status_widget = Paragraph::new(Line::from(status_text))
+                    .alignment(ratatui::layout::Alignment::Right);
+                f.render_widget(status_widget, status_chunks[2]);
 
                 if self.state.mode == InputMode::CommandPalette {
                     let area = centered_rect(60, 40, f.size());
@@ -220,7 +251,7 @@ impl Tui {
                                                  tokio::spawn(async move {
                                                      match client.submit_approval(&session_id, &call_id, "approve").await {
                                                          Ok(resp) => {
-                                                             let _ = tx.send(Action::ResponseReceived(resp.response, resp.session_id)).await;
+                                                             let _ = tx.send(Action::ResponseReceived(resp)).await;
                                                          }
                                                          Err(e) => {
                                                              let _ = tx.send(Action::Error(e.to_string())).await;
@@ -243,7 +274,7 @@ impl Tui {
                                                  tokio::spawn(async move {
                                                      match client.submit_approval(&session_id, &call_id, "deny").await {
                                                          Ok(resp) => {
-                                                             let _ = tx.send(Action::ResponseReceived(resp.response, resp.session_id)).await;
+                                                             let _ = tx.send(Action::ResponseReceived(resp)).await;
                                                          }
                                                          Err(e) => {
                                                              let _ = tx.send(Action::Error(e.to_string())).await;
@@ -409,7 +440,7 @@ impl Tui {
                                                 tokio::spawn(async move {
                                                     match client.chat(&session_id, input_clone).await {
                                                         Ok(resp) => {
-                                                            let _ = tx.send(Action::ResponseReceived(resp.response, resp.session_id)).await;
+                                                            let _ = tx.send(Action::ResponseReceived(resp)).await;
                                                         }
                                                         Err(e) => {
                                                             let _ = tx.send(Action::Error(e.to_string())).await;
@@ -423,10 +454,10 @@ impl Tui {
                                 }
                              }
                         }
-                        Event::Tick => {}
-                        Event::Resize(w, h) => {
-                             tracing::debug!("Resize: {}x{}", w, h);
+                        Event::Tick => {
+                            self.state.spinner_frame = self.state.spinner_frame.wrapping_add(1);
                         }
+                        _ => {}
                     }
                 }
                 Some(result) = backend_events.next() => {
@@ -454,8 +485,13 @@ impl Tui {
                                                  self.state.add_message(TranscriptItemKind::Error, format!("Error: {}", message));
                                              }
                                              SystemEvent::AgentStateChanged { state, .. } => {
-                                                 self.state.add_message(TranscriptItemKind::System, format!("Agent state: {}", state));
-                                             }
+                                                self.state.add_message(TranscriptItemKind::System, format!("Agent state: {}", state));
+                                                if state.eq_ignore_ascii_case("busy") {
+                                                    self.state.status = AppStatus::Processing;
+                                                } else {
+                                                    self.state.status = AppStatus::Connected;
+                                                }
+                                            }
                                              SystemEvent::MessageReceived { .. } => {
                                                  // Suppress as it's shown in chat UI
                                              }
@@ -487,15 +523,24 @@ impl Tui {
                 Some(action) = action_rx.recv() => {
                     match action {
                         Action::MessageSent(msg) => {
+                            self.state.status = AppStatus::Processing;
                             self.state.add_message(TranscriptItemKind::User, msg);
                         }
-                        Action::ResponseReceived(response, new_sid) => {
-                            if let Some(sid) = new_sid {
+                        Action::ResponseReceived(resp) => {
+                            self.state.status = AppStatus::Connected;
+                            if let Some(sid) = resp.session_id {
                                 self.state.update_session_id(sid);
                             }
-                            self.state.add_message(TranscriptItemKind::Assistant, response);
+                            if let Some(usage) = resp.usage {
+                                self.state.token_usage = usage;
+                            }
+                            if let Some(model) = resp.model {
+                                self.state.active_model = model;
+                            }
+                            self.state.add_message(TranscriptItemKind::Assistant, resp.response);
                         }
                         Action::Error(err) => {
+                            self.state.status = AppStatus::Connected;
                             self.state.add_message(TranscriptItemKind::Error, err);
                         }
                     }

@@ -9,6 +9,19 @@ pub enum InputMode {
     Selection,
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum AppStatus {
+    Connected,
+    Disconnected,
+    Processing,
+}
+
+impl Default for AppStatus {
+    fn default() -> Self {
+        Self::Connected
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SelectionState {
     pub selected_message_index: Option<usize>,
@@ -156,6 +169,11 @@ pub struct TuiState {
     pub overlay: OverlayState,
     pub selection: SelectionState,
     pub debug_mode: bool,
+    pub status: AppStatus,
+    pub spinner_frame: usize,
+    pub active_model: String,
+    pub token_usage: String,
+    pub context_title: String,
 }
 
 impl TuiState {
@@ -169,6 +187,11 @@ impl TuiState {
             overlay: OverlayState::new(),
             selection: SelectionState::new(),
             debug_mode: false,
+            status: AppStatus::Connected,
+            spinner_frame: 0,
+            active_model: "claude-3-5-sonnet".to_string(), // Default or load from config
+            token_usage: "0 tokens".to_string(),
+            context_title: "Transcript".to_string(),
         }
     }
 
@@ -192,7 +215,8 @@ impl TuiState {
     }
 
     pub fn update_session_id(&mut self, session_id: String) {
-        self.session_id = session_id;
+        self.session_id = session_id.clone();
+        self.context_title = format!("Transcript - {}", session_id);
     }
 }
 

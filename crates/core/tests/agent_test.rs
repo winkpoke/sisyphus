@@ -25,6 +25,10 @@ impl MockProvider {
 
 #[async_trait]
 impl LLMProvider for MockProvider {
+    fn model(&self) -> String {
+        "mock-model".to_string()
+    }
+
     async fn complete(&self, _request: CompletionRequest) -> Result<Message> {
         let mut responses = self.responses.lock().unwrap();
         if !responses.is_empty() {

@@ -51,6 +51,7 @@ impl Server {
                 post(submit_approval),
             )
             .route("/api/v1/commands", get(list_commands))
+            .route("/api/v1/model", get(get_model))
             .route("/api/v1/events", get(events))
             .layer(TraceLayer::new_for_http())
             .layer(CorsLayer::permissive())
@@ -154,6 +155,8 @@ struct ChatResponse {
     response: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     session_id: Option<String>,
+    usage: Option<String>,
+    model: Option<String>,
 }
 
 async fn chat(
@@ -191,10 +194,27 @@ async fn chat(
         CommandEffect::None => {}
     }
 
+    let tokens = session.estimate_tokens();
+    let usage = format!("{} tokens", tokens);
+    let model = state.agent.model_name();
+
     Ok(Json(ChatResponse {
         response: outcome.output.unwrap_or_default(),
         session_id: new_session_id,
+        usage: Some(usage),
+        model: Some(model),
     }))
+}
+
+#[derive(Serialize)]
+struct ModelInfo {
+    model: String,
+}
+
+async fn get_model(State(state): State<AppState>) -> Json<ModelInfo> {
+    Json(ModelInfo {
+        model: state.agent.model_name(),
+    })
 }
 
 async fn list_commands(State(state): State<AppState>) -> Json<Vec<CommandInfo>> {
@@ -237,6 +257,8 @@ async fn submit_approval(
     Ok(Json(ChatResponse {
         response,
         session_id: None,
+        usage: None,
+        model: None,
     }))
 }
 

@@ -13,6 +13,10 @@ use std::sync::Arc;
 struct MockProvider;
 #[async_trait]
 impl LLMProvider for MockProvider {
+    fn model(&self) -> String {
+        "mock-model".to_string()
+    }
+
     async fn complete(&self, request: CompletionRequest) -> Result<Message> {
         let content = request.messages.last().unwrap().content.as_ref().unwrap();
 

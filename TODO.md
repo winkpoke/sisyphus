@@ -74,3 +74,48 @@
   - **Location**: `crates/cli/src/ui/tui/mod.rs` (`redact_json`)
   - **Issue**: Falls back to printing raw string if JSON parse fails, potentially leaking secrets.
   - **Goal**: Use regex-based fallback or conservative masking for non-JSON payloads.
+
+
+UI Designer
+
+
+- 
+- 2. Rich Content Rendering (Typography)
+Current State: Plain text lines with basic coloring per message type. Goal: Make content—especially code—highly readable and actionable.
+
+- Markdown Rendering: Implement a Markdown renderer (using pulldown-cmark or tui-markdown ).
+  - Render Bold and Italic text for emphasis.
+  - Render Headers ( # , ## ) with distinct colors or underlining to break up long responses.
+- Syntax Highlighting: Use syntect to render code blocks.
+  - Detect language (e.g., ````rust`) and apply a theme (e.g., "Dracula" or "Monokai") to the code block.
+  - Draw a distinct background color or border around code blocks to separate them from prose. 
+  
+- 3. Component Design & Systems
+Current State: Basic Overlays for text; Command Palette lists strings. Goal: Create recognizable, interactive UI patterns.
+
+- Approval Dialogs: Transform the "Permission Queue" overlay into a proper Dialog Window .
+  - Center-aligned modal with a distinct border style (e.g., Double Line).
+  - Action Buttons: visually render [ Approve ] and [ Deny ] buttons.
+  - Diff View: If the approval is for a file edit, show a color-coded diff (Red/Green) inside the dialog.
+- Enhanced Command Palette:
+  - Add icons (using Nerd Fonts if available, or simple ASCII glyphs) next to commands (e.g., ⚙️ /settings , 🚪 /quit ).
+  - Show a description column explaining what each command does. 
+
+- 4. Color Theory & Feedback
+Current State: User=Cyan, Assistant=Green, System=Yellow, Error=Red. Goal: A more sophisticated, "pro-tool" aesthetic.
+
+- Semantic Palette:
+  - User: Soft Blue ( #5dade2 ) - Friendly, input-focused.
+  - Assistant: Lavender or Mint ( #a569bd or #58d68d ) - Distinct from user, implies "intelligence".
+  - System/Log: Muted Grey ( #808b96 ) - Should recede into background, not compete for attention like Yellow.
+  - Success/Action: Bright Green ( #2ecc71 ) - For "Copied!" toasts or "Connected" status.
+- Visual Feedback:
+  - Clipboard Toast: When the user presses c to copy a message, show a temporary "Toast" notification overlay ("✓ Copied to clipboard") that fades out after 2 seconds.
+  - Loading State: When TranscriptItemKind::Assistant is streaming, add a blinking cursor █ or a small spinner animation at the end of the stream to indicate "thinking". 
+
+5. User-Centered Interactions
+- Smart Scrolling:
+  - If the user scrolls up to read history, pause auto-scrolling even if new tokens arrive.
+  - Show a "↓ New messages" floating badge at the bottom right if they are scrolled up while content is generating.
+- Input Expansion:
+  - Allow the Input area to auto-expand (up to a limit, e.g., 5-6 lines) as the user types multi-line prompts, rather than scrolling immediately within a small 3-line box.

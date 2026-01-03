@@ -112,47 +112,42 @@ impl LLMProvider for OpenAIProvider {
             return Err(anyhow!("OpenAI API error: {}", error));
         }
 
-        let stream = res.bytes_stream();
-
-        let stream =
-            futures::stream::unfold((stream, Vec::new()), |(mut stream, mut buf)| async move {
-                loop {
-                    if let Some(i) = buf.iter().position(|&b| b == b'\n') {
-                        let line_bytes = buf.drain(..=i).collect::<Vec<_>>();
-                        let line = String::from_utf8_lossy(&line_bytes);
-                        let line = line.trim();
-
-                        if line.starts_with("data: ") {
-                            let data = &line["data: ".len()..];
-                            if data != "[DONE]" {
-                                if let Ok(json) = serde_json::from_str::<Value>(data) {
-                                    if let Some(content) =
-                                        json["choices"][0]["delta"]["content"].as_str()
-                                    {
-                                        if !content.is_empty() {
-                                            return Some((Ok(content.to_string()), (stream, buf)));
-                                        }
+        let stream = res
+            .bytes_stream()
+            .map(|result| match result {
+                Ok(bytes) => {
+                    let s = String::from_utf8_lossy(&bytes);
+                    Ok(s.to_string())
+                }
+                Err(e) => Err(anyhow::Error::new(e)),
+            })
+            .filter_map(|result| async {
+                match result {
+                    Ok(s) => {
+                        if s.starts_with("data: ") {
+                            if s.contains("[DONE]") {
+                                None
+                            } else {
+                                let json_str = s.trim_start_matches("data: ").trim();
+                                if let Ok(json) = serde_json::from_str::<Value>(json_str) {
+                                    if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
+                                        return Some(Ok(content.to_string()));
                                     }
                                 }
+                                None
                             }
-                        }
-                        continue;
-                    }
-
-                    match stream.next().await {
-                        Some(Ok(bytes)) => {
-                            buf.extend_from_slice(&bytes);
-                        }
-                        Some(Err(e)) => {
-                            return Some((Err(anyhow::anyhow!(e)), (stream, buf)));
-                        }
-                        None => {
-                            return None;
+                        } else {
+                            None
                         }
                     }
+                    Err(e) => Some(Err(e)),
                 }
             });
 
         Ok(Box::pin(stream))
+    }
+
+    fn model(&self) -> String {
+        self.model.clone()
     }
 }

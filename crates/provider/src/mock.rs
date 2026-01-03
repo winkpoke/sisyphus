@@ -38,4 +38,8 @@ impl LLMProvider for MockProvider {
             Ok("response".to_string()),
         ])))
     }
+
+    fn model(&self) -> String {
+        "mock-model".to_string()
+    }
 }

@@ -19,6 +19,13 @@ struct ApprovalRequest {
 pub struct ChatResponse {
     pub response: String,
     pub session_id: Option<String>,
+    pub usage: Option<String>,
+    pub model: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ModelInfo {
+    pub model: String,
 }
 
 #[derive(Clone)]
@@ -33,6 +40,19 @@ impl Client {
             base_url,
             http: ReqwestClient::new(),
         }
+    }
+
+    pub async fn get_model(&self) -> Result<String> {
+        let url = self.base_url.join("/api/v1/model")?;
+        let resp = self.http.get(url).send().await?;
+
+        if !resp.status().is_success() {
+            let error_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Failed to get model: {}", error_text));
+        }
+
+        let info = resp.json::<ModelInfo>().await?;
+        Ok(info.model)
     }
 
     pub async fn health_check(&self) -> Result<()> {

@@ -25,6 +25,10 @@ struct ScriptedProvider {
 
 #[async_trait]
 impl LLMProvider for ScriptedProvider {
+    fn model(&self) -> String {
+        "scripted-model".to_string()
+    }
+
     async fn complete(&self, _request: CompletionRequest) -> anyhow::Result<Message> {
         let mut responses = self.responses.lock().unwrap();
         if let Some(msg) = responses.pop_front() {
