@@ -20,3 +20,7 @@ Keep this managed block so 'openspec update' can refresh the instructions.
 
 For overall product requirements and system architecture, refer to the [PRD](PRD.md).
 For testing standards and strategies, refer to [TEST_STRATEGY.md](TEST_STRATEGY.md).
+
+Key runtime behavior (normative in OpenSpec):
+- Ask-gated tool execution emits a `PermissionRequest` and blocks the current assistant turn.
+- Clients render permission prompts (operation/tool_name/call_id) and can submit approve/deny decisions to resume.

@@ -1,7 +1,7 @@
 # Product Requirement Document: Sisyphus (General Purpose Agent System)
 
 ## 1. Executive Summary
-Sisyphus aims to be a robust, open-source **general-purpose AI agent framework**, ported from the core logic of [OpenCode](https://opencode.ai). While maintaining strong coding capabilities, the system is designed to handle a broad spectrum of tasks including system automation, data analysis, research, and content generation. The goal is to provide a provider-agnostic, extensible, and high-performance agent runtime that can power various clients (CLI, IDE extensions, Web) while maintaining a separation between the core logic and the user interface. This project specifically focuses on porting the backend/core capabilities of OpenCode, excluding the Terminal User Interface (TUI).
+Sisyphus aims to be a robust, open-source **general-purpose AI agent framework**, ported from the core logic of [OpenCode](https://opencode.ai). While maintaining strong coding capabilities, the system is designed to handle a broad spectrum of tasks including system automation, data analysis, research, and content generation. The goal is to provide a provider-agnostic, extensible, and high-performance agent runtime that can power various clients (CLI, IDE extensions, Web) while maintaining a separation between the core logic and the user interface. This project focuses on porting the backend/core capabilities of OpenCode; the OpenCode TUI is not ported.
 
 ## 2. Product Scope
 The scope includes the migration and generalization of the core business logic, agent orchestration, tool execution, and state management systems from the `opencode` package.
@@ -20,7 +20,7 @@ The scope includes the migration and generalization of the core business logic, 
 - **CLI Entry Point**: A headless CLI for running the server or executing specific commands.
 
 ### Out of Scope
-- **Terminal User Interface (TUI)**: The rich interactive TUI components found in `opencode`.
+- **OpenCode Terminal UI**: The rich interactive TUI components found in `opencode`.
 - **Desktop App Wrapper**: The Electron/Tauri wrappers.
 - **Web Interface**: The specific React-based web UI.
 
@@ -32,6 +32,7 @@ The scope includes the migration and generalization of the core business logic, 
   - **Planner Agent**: Read-only agent for analysis, strategy formulation, and research without making state-changing modifications.
 - **Sub-agents**: Support for specialized sub-agents (e.g., Triage, Researcher, Data Analyst).
 - **Prompt Engineering**: Dynamic prompt generation adaptable to the task domain (coding, writing, analysis).
+- **Agent Permissions**: Enforce Allow/Ask/Deny gating for tool execution; Ask emits a `PermissionRequest` and pauses the current assistant turn until an explicit approve/deny decision.
 
 ### 3.2 Session & Context Management
 - **Conversation History**: Store message history structured as **turns** to maintain logical consistency (e.g., keeping tool calls and results together).
@@ -62,7 +63,9 @@ The scope includes the migration and generalization of the core business logic, 
 ### 3.5 Server & API
 - **RPC/HTTP Server**: Expose agent capabilities via an API.
 - **Event Bus**: Internal event system for inter-component communication.
-- **Security**: Basic authentication and permission management for tool execution.
+- **Events**: Stream `SystemEvent` payloads to clients (including `PermissionRequest`) via the SSE endpoint.
+- **Permission Approvals API**: Provide an endpoint to submit approve/deny decisions for Ask-gated tool calls.
+- **Security**: Basic authentication and permission management for privileged operations.
 
 ### 3.6 Internationalization (i18n)
 - **Multi-language Support**: The system shall be designed to support Internationalization (i18n), enabling localization for system messages, logs, and user-facing interactions.
@@ -75,6 +78,7 @@ The scope includes the migration and generalization of the core business logic, 
   - **Overlays**: Safe rendering of help, errors, and long content (pager) without corrupting the terminal.
   - **Selection**: Ability to select and copy transcript text.
   - **Status**: Unobtrusive indicators and key hints.
+- **Permission Prompts**: Decode `PermissionRequest` events into a first-class overlay with Approve/Deny actions to resume the blocked turn.
 - **Startup Banner**: Display a branded ASCII banner with version and configuration info on startup.
 
 ### 3.8 Slash Command System
