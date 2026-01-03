@@ -32,7 +32,7 @@ The scope includes the migration and generalization of the core business logic, 
   - **Planner Agent**: Read-only agent for analysis, strategy formulation, and research without making state-changing modifications.
 - **Sub-agents**: Support for specialized sub-agents (e.g., Triage, Researcher, Data Analyst).
 - **Prompt Engineering**: Dynamic prompt generation adaptable to the task domain (coding, writing, analysis).
-- **Agent Permissions**: Enforce Allow/Ask/Deny gating for tool execution; Ask emits a `PermissionRequest` and pauses the current assistant turn until an explicit approve/deny decision.
+- **Agent Permissions**: Enforce Allow/Ask/Deny gating for tool execution; Ask emits a `PermissionRequest` and pauses the current assistant turn until an explicit approve/deny decision. Tool-call batches resume in order after each decision.
 
 ### 3.2 Session & Context Management
 - **Conversation History**: Store message history structured as **turns** to maintain logical consistency (e.g., keeping tool calls and results together).
@@ -78,7 +78,7 @@ The scope includes the migration and generalization of the core business logic, 
   - **Overlays**: Safe rendering of help, errors, and long content (pager) without corrupting the terminal.
   - **Selection**: Ability to select and copy transcript text.
   - **Status**: Unobtrusive indicators and key hints.
-- **Permission Prompts**: Decode `PermissionRequest` events into a first-class overlay with Approve/Deny actions to resume the blocked turn.
+- **Permission Prompts**: Decode `PermissionRequest` events into a first-class overlay with Approve/Deny actions to resume the blocked turn; multiple requests are queued FIFO.
 - **Startup Banner**: Display a branded ASCII banner with version and configuration info on startup.
 
 ### 3.8 Slash Command System

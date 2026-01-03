@@ -23,4 +23,6 @@ For testing standards and strategies, refer to [TEST_STRATEGY.md](TEST_STRATEGY.
 
 Key runtime behavior (normative in OpenSpec):
 - Ask-gated tool execution emits a `PermissionRequest` and blocks the current assistant turn.
-- Clients render permission prompts (operation/tool_name/call_id) and can submit approve/deny decisions to resume.
+- Tool calls in a single assistant message are processed in order; later calls are held until the blocking call resolves.
+- Deny appends a deterministic Tool result: `Permission denied: user rejected tool execution.`
+- Clients render permission prompts (operation/tool_name/call_id), queue multiple requests FIFO, and submit approve/deny decisions.
