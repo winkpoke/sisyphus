@@ -1,5 +1,5 @@
-use std::collections::VecDeque;
 use super::transcript::{Transcript, TranscriptItemKind};
+use std::collections::VecDeque;
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum InputMode {
@@ -100,6 +100,7 @@ impl CommandPaletteState {
             "/exit".to_string(),
             "/help".to_string(),
             "/clear".to_string(),
+            "/debug".to_string(),
         ];
         Self {
             selected_index: 0,
@@ -154,6 +155,7 @@ pub struct TuiState {
     pub command_palette: CommandPaletteState,
     pub overlay: OverlayState,
     pub selection: SelectionState,
+    pub debug_mode: bool,
 }
 
 impl TuiState {
@@ -166,6 +168,7 @@ impl TuiState {
             command_palette: CommandPaletteState::new(),
             overlay: OverlayState::new(),
             selection: SelectionState::new(),
+            debug_mode: false,
         }
     }
 
@@ -240,25 +243,33 @@ mod tests {
     #[test]
     fn test_overlay_queue() {
         let mut overlay = OverlayState::new();
-        
+
         // Enqueue first approval
-        overlay.enqueue_approval("Title1".to_string(), "Content1".to_string(), "id1".to_string());
-        
+        overlay.enqueue_approval(
+            "Title1".to_string(),
+            "Content1".to_string(),
+            "id1".to_string(),
+        );
+
         // Should be showing immediately
         assert_eq!(overlay.call_id, Some("id1".to_string()));
         assert_eq!(overlay.title, "Title1");
         assert!(overlay.permission_queue.is_empty()); // Pop happened
 
         // Enqueue second approval while showing first
-        overlay.enqueue_approval("Title2".to_string(), "Content2".to_string(), "id2".to_string());
-        
+        overlay.enqueue_approval(
+            "Title2".to_string(),
+            "Content2".to_string(),
+            "id2".to_string(),
+        );
+
         // Still showing first
         assert_eq!(overlay.call_id, Some("id1".to_string()));
         assert_eq!(overlay.permission_queue.len(), 1);
 
         // Simulate approval of first (clearing call_id is done by caller usually, but here we just call show_next)
         // Actually show_next_approval pops the next one.
-        
+
         let has_next = overlay.show_next_approval();
         assert!(has_next);
         assert_eq!(overlay.call_id, Some("id2".to_string()));

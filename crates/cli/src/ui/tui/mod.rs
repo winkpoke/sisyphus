@@ -16,6 +16,7 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Clear, List, ListItem, ListState, Paragraph, Wrap},
 };
+use serde_json::Value;
 use state::{InputMode, TuiState};
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -226,7 +227,7 @@ impl Tui {
                                                          }
                                                      }
                                                  });
-                                                 
+
                                                  if !self.state.overlay.show_next_approval() {
                                                      self.state.mode = InputMode::Normal;
                                                      self.state.overlay.call_id = None;
@@ -249,7 +250,7 @@ impl Tui {
                                                          }
                                                      }
                                                  });
-                                                 
+
                                                  if !self.state.overlay.show_next_approval() {
                                                      self.state.mode = InputMode::Normal;
                                                      self.state.overlay.call_id = None;
@@ -337,6 +338,10 @@ impl Tui {
                                                       );
                                                   } else if cmd == "/clear" {
                                                       self.state.transcript.clear();
+                                                  } else if cmd == "/debug" {
+                                                      self.state.debug_mode = !self.state.debug_mode;
+                                                      let status = if self.state.debug_mode { "enabled" } else { "disabled" };
+                                                      self.state.add_message(TranscriptItemKind::System, format!("Debug mode {}", status));
                                                   } else {
                                                       self.state.input_buffer = cmd;
                                                   }
@@ -428,17 +433,50 @@ impl Tui {
                     match result {
                         Ok(event) => {
                              if let reqwest_eventsource::Event::Message(msg) = event {
-                                 if let Ok(SystemEvent::PermissionRequest { operation, tool_name, call_id }) = serde_json::from_str::<SystemEvent>(&msg.data) {
-                                    self.state.mode = InputMode::Overlay;
-                                    self.state.overlay.enqueue_approval(
-                                        "Permission Required".to_string(),
-                                        format!("Operation: {}\nTool: {}\nCall ID: {}\n\nPress 'a' to Approve or 'd' to Deny.", operation, tool_name, call_id),
-                                        call_id
-                                    );
-                                }
-                                 // Handle streaming events here if possible
-                                 // For now, mapping to System messages
-                                 self.state.add_message(TranscriptItemKind::System, format!("Event: {}", msg.data));
+                                 // Try to parse as SystemEvent
+                                 match serde_json::from_str::<SystemEvent>(&msg.data) {
+                                     Ok(sys_event) => {
+                                         match sys_event {
+                                             SystemEvent::PermissionRequest { operation, tool_name, call_id } => {
+                                                self.state.mode = InputMode::Overlay;
+                                                self.state.overlay.enqueue_approval(
+                                                    "Permission Required".to_string(),
+                                                    format!("Operation: {}\nTool: {}\nCall ID: {}\n\nPress 'a' to Approve or 'd' to Deny.", operation, tool_name, call_id),
+                                                    call_id
+                                                );
+                                             }
+                                             SystemEvent::ToolExecuted { tool, result } => {
+                                                 self.state.add_message(TranscriptItemKind::System, format!("Tool executed: {}", tool));
+                                                 let preview = truncate_payload(&result, 100);
+                                                 self.state.add_message(TranscriptItemKind::System, format!("Result: {}", preview));
+                                             }
+                                             SystemEvent::Error { message } => {
+                                                 self.state.add_message(TranscriptItemKind::Error, format!("Error: {}", message));
+                                             }
+                                             SystemEvent::AgentStateChanged { state, .. } => {
+                                                 self.state.add_message(TranscriptItemKind::System, format!("Agent state: {}", state));
+                                             }
+                                             SystemEvent::MessageReceived { .. } => {
+                                                 // Suppress as it's shown in chat UI
+                                             }
+                                             SystemEvent::Shutdown => {
+                                                 self.state.add_message(TranscriptItemKind::System, "Server shutting down".to_string());
+                                             }
+                                         }
+                                     }
+                                     Err(_) => {
+                                         if !self.state.debug_mode {
+                                             self.state.add_message(TranscriptItemKind::System, "Received system event".to_string());
+                                         }
+                                     }
+                                 }
+
+                                 // Debug output
+                                 if self.state.debug_mode {
+                                     let redacted = redact_json(&msg.data);
+                                     let truncated = truncate_payload(&redacted, 500);
+                                     self.state.add_message(TranscriptItemKind::System, format!("DEBUG: {}", truncated));
+                                 }
                              }
                         }
                         Err(e) => {
@@ -498,4 +536,71 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             .as_ref(),
         )
         .split(popup_layout[1])[1]
+}
+
+fn redact_json(json_str: &str) -> String {
+    if let Ok(mut value) = serde_json::from_str::<Value>(json_str) {
+        redact_value(&mut value);
+        serde_json::to_string(&value).unwrap_or_else(|_| json_str.to_string())
+    } else {
+        json_str.to_string()
+    }
+}
+
+fn redact_value(value: &mut Value) {
+    match value {
+        Value::Object(map) => {
+            for (k, v) in map.iter_mut() {
+                let key_lower = k.to_lowercase();
+                if key_lower.contains("token")
+                    || key_lower.contains("secret")
+                    || key_lower.contains("api_key")
+                    || key_lower.contains("authorization")
+                {
+                    *v = Value::String("[REDACTED]".to_string());
+                } else {
+                    redact_value(v);
+                }
+            }
+        }
+        Value::Array(arr) => {
+            for v in arr {
+                redact_value(v);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn truncate_payload(s: &str, max_len: usize) -> String {
+    if s.len() > max_len {
+        format!("{}... (truncated)", &s[..max_len])
+    } else {
+        s.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_redaction() {
+        let json = r#"{"token": "secret123", "other": "value", "nested": {"api_key": "abc"}}"#;
+        let redacted = redact_json(json);
+        assert!(redacted.contains("[REDACTED]"));
+        assert!(!redacted.contains("secret123"));
+        assert!(!redacted.contains("abc"));
+        assert!(redacted.contains("value"));
+    }
+
+    #[test]
+    fn test_truncation() {
+        let s = "1234567890";
+        let truncated = truncate_payload(s, 5);
+        assert_eq!(truncated, "12345... (truncated)");
+
+        let not_truncated = truncate_payload(s, 10);
+        assert_eq!(not_truncated, "1234567890");
+    }
 }

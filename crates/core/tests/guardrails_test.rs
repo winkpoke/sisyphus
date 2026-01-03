@@ -138,7 +138,10 @@ async fn test_permission_enforcement_ask() {
     let mut session = Session::new();
     let result = agent.chat(&mut session, "test".to_string()).await;
     assert!(result.is_ok());
-    assert_eq!(result.unwrap().output.unwrap(), "Permission required: approve tool execution to continue.");
+    assert_eq!(
+        result.unwrap().output.unwrap(),
+        "Permission required: approve tool execution to continue."
+    );
 
     // Check history: should NOT have tool message yet
     let history = session.history();
@@ -271,10 +274,10 @@ async fn test_permission_ask_stops_turn() {
     let history = session.history();
     // 1. User "test"
     // 2. Assistant (Tool Call)
-    
+
     assert_eq!(history.len(), 2);
     assert_eq!(history.last().unwrap().role, Role::Assistant);
-    
+
     // Check pending approvals
     assert!(session.pending_approvals.contains_key("call_ask"));
 }
