@@ -4,6 +4,7 @@ use common::bus::SystemEvent;
 use sisyphus_core::command::CommandOutcome;
 
 #[derive(Debug, Clone, PartialEq)]
+#[allow(dead_code)]
 pub enum Action {
     Tick,
     Render,

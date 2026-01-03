@@ -82,6 +82,7 @@ impl OverlayState {
         }
     }
 
+    #[allow(dead_code)]
     pub fn show(&mut self, title: String, content: String, is_error: bool) {
         self.title = title;
         self.content = content;
