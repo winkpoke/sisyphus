@@ -53,3 +53,10 @@
   - *Goal*: Allow the application to report all loading failures to the user/admin.
 - [ ] **Strict Name Validation**: Enforce strict alphanumeric naming for commands in `CommandLoader`.
   - *Goal*: Prevent security issues and ensure compatibility with future filesystem/API mappings.
+
+## 5. Critical Bugs
+- [ ] **Memory Leak in Session Manager**
+  - **Location**: `crates/core/src/session/manager.rs`
+  - **Issue**: `SessionManager` stores sessions in a `DashMap` but provides no mechanism to remove them. `CommandEffect::NewSession` creates a new session but leaves the old one in the map.
+  - **Impact**: Long-running servers will eventually run out of memory as abandoned sessions accumulate.
+  - **Fix**: Implement a cleanup strategy (e.g., TTL, explicit `delete_session`, or LRU eviction).
