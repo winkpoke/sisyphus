@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use tokio::sync::broadcast;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "payload")]
 pub enum SystemEvent {
     AgentStateChanged {

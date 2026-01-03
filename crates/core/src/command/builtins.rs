@@ -98,3 +98,21 @@ impl Command for ClearHistoryCommand {
         })
     }
 }
+
+pub struct DebugCommand;
+
+#[async_trait]
+impl Command for DebugCommand {
+    fn name(&self) -> &str {
+        "/debug"
+    }
+    fn description(&self) -> &str {
+        "Toggle debug mode"
+    }
+    async fn execute(&self, _ctx: &CommandContext, _args: CommandArgs) -> Result<CommandOutcome> {
+        Ok(CommandOutcome {
+            output: None, // The UI will handle the message
+            effect: CommandEffect::ToggleDebug,
+        })
+    }
+}

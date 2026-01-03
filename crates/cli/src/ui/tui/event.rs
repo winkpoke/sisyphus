@@ -1,23 +1,21 @@
-use crossterm::event::{Event as CrosstermEvent, KeyEvent};
+use super::action::Action;
+use crossterm::event::{Event as CrosstermEvent};
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
 
-#[derive(Clone, Debug)]
-pub enum Event {
-    Tick,
-    Key(KeyEvent),
-    Resize(u16, u16),
-}
-
+#[allow(dead_code)]
 pub struct EventHandler {
-    receiver: mpsc::UnboundedReceiver<Event>,
+    sender: mpsc::UnboundedSender<Action>,
+    receiver: mpsc::UnboundedReceiver<Action>,
+    handler: tokio::task::JoinHandle<()>,
 }
 
 impl EventHandler {
     pub fn new(tick_rate: std::time::Duration) -> Self {
         let (sender, receiver) = mpsc::unbounded_channel();
+        let _sender = sender.clone();
 
-        tokio::spawn(async move {
+        let handler = tokio::spawn(async move {
             let mut reader = crossterm::event::EventStream::new();
             let mut tick_interval = tokio::time::interval(tick_rate);
 
@@ -27,21 +25,21 @@ impl EventHandler {
 
                 tokio::select! {
                     _ = tick_delay => {
-                        if sender.send(Event::Tick).is_err() {
+                        if _sender.send(Action::Tick).is_err() {
                             break;
                         }
                     }
                     Some(Ok(evt)) = crossterm_event => {
                         match evt {
                             CrosstermEvent::Key(key) => {
-                                if key.kind == crossterm::event::KeyEventKind::Press
-                                    && sender.send(Event::Key(key)).is_err()
-                                {
-                                    break;
+                                if key.kind == crossterm::event::KeyEventKind::Press {
+                                    if _sender.send(Action::Key(key)).is_err() {
+                                        break;
+                                    }
                                 }
                             }
                             CrosstermEvent::Resize(w, h) => {
-                                if sender.send(Event::Resize(w, h)).is_err() {
+                                if _sender.send(Action::Resize(w, h)).is_err() {
                                     break;
                                 }
                             }
@@ -52,10 +50,18 @@ impl EventHandler {
             }
         });
 
-        Self { receiver }
+        Self {
+            sender,
+            receiver,
+            handler,
+        }
     }
 
-    pub async fn next(&mut self) -> Option<Event> {
+    pub async fn next(&mut self) -> Option<Action> {
         self.receiver.recv().await
+    }
+
+    pub fn sender(&self) -> mpsc::UnboundedSender<Action> {
+        self.sender.clone()
     }
 }

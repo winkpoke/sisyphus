@@ -15,8 +15,10 @@ pub enum CommandEffect {
     ClearHistory,
     NewSession,
     Exit,
+    ToggleDebug,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub struct CommandOutcome {
     pub output: Option<String>,
     pub effect: CommandEffect,

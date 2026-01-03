@@ -202,6 +202,7 @@ async fn chat(
         CommandEffect::Exit => {
             state.bus.publish(SystemEvent::Shutdown);
         }
+        CommandEffect::ToggleDebug => {}
         CommandEffect::None => {}
     }
 

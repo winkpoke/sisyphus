@@ -1,4 +1,4 @@
-use super::transcript::{Transcript, TranscriptItemKind};
+pub use super::transcript::{Transcript, TranscriptItemKind};
 use std::collections::VecDeque;
 use std::time::Instant;
 
@@ -132,14 +132,7 @@ pub struct CommandPaletteState {
 }
 
 impl CommandPaletteState {
-    pub fn new() -> Self {
-        let commands = vec![
-            "/quit".to_string(),
-            "/exit".to_string(),
-            "/help".to_string(),
-            "/clear".to_string(),
-            "/debug".to_string(),
-        ];
+    pub fn new(commands: Vec<String>) -> Self {
         Self {
             selected_index: 0,
             input: String::new(),
@@ -203,13 +196,13 @@ pub struct TuiState {
 }
 
 impl TuiState {
-    pub fn new(session_id: String) -> Self {
+    pub fn new(session_id: String, commands: Vec<String>) -> Self {
         Self {
             transcript: Transcript::new(),
             input_buffer: String::new(),
             session_id,
             mode: InputMode::Normal,
-            command_palette: CommandPaletteState::new(),
+            command_palette: CommandPaletteState::new(commands),
             overlay: OverlayState::new(),
             selection: SelectionState::new(),
             debug_mode: false,
@@ -254,7 +247,7 @@ mod tests {
 
     #[test]
     fn test_input_handling() {
-        let mut state = TuiState::new("sess-1".to_string());
+        let mut state = TuiState::new("sess-1".to_string(), vec![]);
         state.handle_char('a');
         state.handle_char('b');
         assert_eq!(state.input_buffer, "ab");
@@ -269,14 +262,15 @@ mod tests {
 
     #[test]
     fn test_session_update() {
-        let mut state = TuiState::new("sess-1".to_string());
+        let mut state = TuiState::new("sess-1".to_string(), vec![]);
         state.update_session_id("sess-2".to_string());
         assert_eq!(state.session_id, "sess-2");
     }
 
     #[test]
     fn test_command_palette() {
-        let mut palette = CommandPaletteState::new();
+        let commands = vec!["/help".to_string(), "/quit".to_string()];
+        let mut palette = CommandPaletteState::new(commands);
         assert_eq!(palette.selected_index, 0);
 
         palette.select_next();
@@ -289,7 +283,7 @@ mod tests {
 
         palette.reset();
         assert!(palette.input.is_empty());
-        assert_eq!(palette.filtered_commands.len(), 5);
+        assert_eq!(palette.filtered_commands.len(), 2);
     }
 
     #[test]

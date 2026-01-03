@@ -15,7 +15,7 @@ struct ApprovalRequest {
     decision: String,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Clone, PartialEq)]
 pub struct ChatResponse {
     pub response: String,
     pub session_id: Option<String>,

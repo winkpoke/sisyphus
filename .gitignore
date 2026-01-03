@@ -138,5 +138,5 @@ bun.lockb
 opencode/
 codex/
 
-
+.cargo/
 target/
