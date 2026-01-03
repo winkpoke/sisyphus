@@ -1,0 +1,16 @@
+## 1. Implementation
+- [x] 1.1 Create `crates/provider/src/sse.rs` implementing `SSEParser`
+    -   Use `bytes::BytesMut` for buffering.
+    -   Implement `Stream<Item = Result<SSEEvent>>`.
+    -   Enforce `MAX_LINE_LENGTH` (1MB).
+- [x] 1.2 Add Unit Tests for `SSEParser`
+    -   Test basic field parsing (`data`, `event`, `id`).
+    -   Test comment ignoring.
+    -   Test split UTF-8 characters (byte boundary fuzzing).
+    -   Test DoS protection (long lines).
+- [x] 1.3 Refactor `OpenAIProvider::stream`
+    -   Replace manual string splitting with `SSEParser`.
+    -   Map `SSEEvent` to `Result<String>`.
+- [x] 1.4 Integration Verification
+    -   Run `cargo test -p provider`.
+    -   (Optional) Run manual verification script if available.

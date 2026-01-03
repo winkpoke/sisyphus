@@ -68,7 +68,10 @@ impl Tool for MockTool {
 }
 
 async fn wait_for_server(port: u16) {
-    let client = reqwest::Client::new();
+    let client = reqwest::Client::builder()
+        .pool_max_idle_per_host(0)
+        .build()
+        .unwrap();
     let url = format!("http://127.0.0.1:{}/health", port);
     let start = std::time::Instant::now();
     while start.elapsed() < std::time::Duration::from_secs(5) {
@@ -134,14 +137,17 @@ async fn test_approval_flow() {
             .run_on_listener(listener, std::future::pending::<()>())
             .await
         {
-            tracing::error!("Server exited with error: {:?}", e);
+            eprintln!("Server exited with error: {:?}", e);
         }
     });
 
     // Give server time to start
     wait_for_server(port).await;
 
-    let client = reqwest::Client::builder().build().unwrap();
+    let client = reqwest::Client::builder()
+        .pool_max_idle_per_host(0)
+        .build()
+        .unwrap();
     let base_url = format!("http://127.0.0.1:{}", port);
 
     // Create session
@@ -256,13 +262,16 @@ async fn test_denial_flow() {
             .run_on_listener(listener, std::future::pending::<()>())
             .await
         {
-            tracing::error!("Server (denial) exited with error: {:?}", e);
+            eprintln!("Server (denial) exited with error: {:?}", e);
         }
     });
 
     wait_for_server(port).await;
 
-    let client = reqwest::Client::builder().build().unwrap();
+    let client = reqwest::Client::builder()
+        .pool_max_idle_per_host(0)
+        .build()
+        .unwrap();
     let base_url = format!("http://127.0.0.1:{}", port);
 
     // Create session

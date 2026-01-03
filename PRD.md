@@ -58,7 +58,7 @@ The scope includes the migration and generalization of the core business logic, 
 ### 3.4 LLM Abstraction Layer
 - **Provider Agnostic**: Unified API for calling different LLMs.
 - **Model Configuration**: Support for configuring model parameters (temperature, max tokens).
-- **Streaming**: Support for streaming responses from LLMs.
+- **Streaming**: Robust support for streaming responses, ensuring zero data loss from network fragmentation or multi-byte character splits (e.g., using a shared `SSEParser`).
 
 ### 3.5 Server & API
 - **RPC/HTTP Server**: Expose agent capabilities via an API.

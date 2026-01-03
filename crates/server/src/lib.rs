@@ -76,7 +76,14 @@ impl Server {
                         match rx.recv().await {
                             Ok(SystemEvent::Shutdown) => break,
                             Ok(_) => continue,
-                            Err(_) => break,
+                            Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
+                                tracing::warn!("Server event loop lagged, skipped {} events", skipped);
+                                continue;
+                            }
+                            Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                                tracing::error!("Event bus closed unexpectedly");
+                                break;
+                            }
                         }
                     }
                     tracing::info!("Received Shutdown event, shutting down");
@@ -164,6 +171,7 @@ async fn chat(
     Path(id): Path<String>,
     Json(req): Json<ChatRequest>,
 ) -> Result<Json<ChatResponse>, (axum::http::StatusCode, String)> {
+    tracing::info!("Handling chat request for session {}", id);
     let session_lock = state.session_manager.get_session(&id).ok_or((
         axum::http::StatusCode::NOT_FOUND,
         "Session not found".to_string(),
@@ -175,7 +183,10 @@ async fn chat(
         .agent
         .chat(&mut *session, req.message)
         .await
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("Agent chat error: {:?}", e);
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
 
     let mut new_session_id = None;
 
@@ -231,6 +242,7 @@ async fn submit_approval(
     Path((id, call_id)): Path<(String, String)>,
     Json(req): Json<ApprovalRequest>,
 ) -> Result<Json<ChatResponse>, (axum::http::StatusCode, String)> {
+    tracing::info!("Handling approval for session {}, call {}", id, call_id);
     let session_lock = state.session_manager.get_session(&id).ok_or((
         axum::http::StatusCode::NOT_FOUND,
         "Session not found".to_string(),
@@ -252,7 +264,10 @@ async fn submit_approval(
         .agent
         .resolve_approval(&mut session, &call_id, approved)
         .await
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        .map_err(|e| {
+            tracing::error!("Agent resolve_approval error: {:?}", e);
+            (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
+        })?;
 
     Ok(Json(ChatResponse {
         response,
