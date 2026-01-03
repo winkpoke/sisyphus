@@ -60,3 +60,17 @@
   - **Issue**: `SessionManager` stores sessions in a `DashMap` but provides no mechanism to remove them. `CommandEffect::NewSession` creates a new session but leaves the old one in the map.
   - **Impact**: Long-running servers will eventually run out of memory as abandoned sessions accumulate.
   - **Fix**: Implement a cleanup strategy (e.g., TTL, explicit `delete_session`, or LRU eviction).
+
+## 6. CLI/TUI Improvements
+- [ ] **Monolithic Tui::run Refactor**
+  - **Location**: `crates/cli/src/ui/tui/mod.rs`
+  - **Issue**: `run` method is ~450 lines mixing layout, logic, and event handling.
+  - **Goal**: Split into `draw_ui`, `handle_input`, and `handle_events`.
+- [ ] **Async Task Error Handling**
+  - **Location**: `crates/cli/src/ui/tui/mod.rs` (background tasks)
+  - **Issue**: `let _ = tx.send(...)` swallows errors. If the receiver dies, the UI freezes without feedback.
+  - **Goal**: Log errors or show a UI alert when channel sending fails.
+- [ ] **Secure Redaction**
+  - **Location**: `crates/cli/src/ui/tui/mod.rs` (`redact_json`)
+  - **Issue**: Falls back to printing raw string if JSON parse fails, potentially leaking secrets.
+  - **Goal**: Use regex-based fallback or conservative masking for non-JSON payloads.

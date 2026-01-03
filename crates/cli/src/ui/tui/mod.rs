@@ -573,8 +573,9 @@ fn redact_value(value: &mut Value) {
 }
 
 fn truncate_payload(s: &str, max_len: usize) -> String {
-    if s.len() > max_len {
-        format!("{}... (truncated)", &s[..max_len])
+    if s.chars().count() > max_len {
+        let truncated: String = s.chars().take(max_len).collect();
+        format!("{}... (truncated)", truncated)
     } else {
         s.to_string()
     }
@@ -602,5 +603,10 @@ mod tests {
 
         let not_truncated = truncate_payload(s, 10);
         assert_eq!(not_truncated, "1234567890");
+
+        // Test with multi-byte characters (emoji)
+        let s_emoji = "👋 world";
+        let truncated_emoji = truncate_payload(s_emoji, 1);
+        assert_eq!(truncated_emoji, "👋... (truncated)");
     }
 }
