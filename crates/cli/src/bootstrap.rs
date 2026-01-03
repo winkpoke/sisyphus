@@ -5,6 +5,8 @@ use std::sync::Arc;
 use tools::{
     cmd::CommandTool,
     fs::{ReadFileTool, WriteFileTool},
+    glob::GlobTool,
+    grep::GrepTool,
 };
 
 pub struct AgentComponents {
@@ -56,7 +58,9 @@ pub async fn build_agent(config: &Config) -> anyhow::Result<AgentComponents> {
     let sandbox = Arc::new(SandboxedPath::new(cwd)?);
 
     agent.register_tool(Box::new(ReadFileTool::new(sandbox.clone())));
-    agent.register_tool(Box::new(WriteFileTool::new(sandbox)));
+    agent.register_tool(Box::new(WriteFileTool::new(sandbox.clone())));
+    agent.register_tool(Box::new(GlobTool::new(sandbox.clone())));
+    agent.register_tool(Box::new(GrepTool::new(sandbox)));
 
     Ok(AgentComponents {
         agent: Arc::new(agent),

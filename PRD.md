@@ -93,7 +93,7 @@ The scope includes the migration and generalization of the core business logic, 
 ### 4.2 Key Components (Rust Crates)
 - `crates/core`: Core agent logic, session, and memory.
 - `crates/common`: Shared utilities, traits, and event bus.
-- `crates/tools`: Standard tool implementations (fs, shell).
+- `crates/tools`: Standard tool implementations (fs, shell, glob, grep).
 - `crates/provider`: LLM provider adapters.
 - `crates/server`: HTTP/WebSocket API server.
 - `crates/cli`: Command-line interface.

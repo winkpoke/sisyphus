@@ -2995,8 +2995,12 @@ dependencies = [
  "anyhow",
  "async-trait",
  "common",
+ "globset",
+ "ignore",
+ "regex",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tracing",
 ]
