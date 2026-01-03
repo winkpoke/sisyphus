@@ -5,7 +5,6 @@ use sisyphus_core::agent::{config::AgentConfig, Agent};
 use sisyphus_core::session::manager::SessionManager;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::Mutex;
 
 fn init_tracing() {
     let _ = tracing_subscriber::fmt()
@@ -18,7 +17,7 @@ async fn test_server_health() {
     init_tracing();
     let bus = Arc::new(EventBus::new(100));
     let provider = Box::new(MockProvider::new());
-    let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default()));
+    let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default(), std::path::PathBuf::from(".")));
     let session_manager = Arc::new(SessionManager::new());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -58,7 +57,7 @@ async fn test_session_flow() {
     init_tracing();
     let bus = Arc::new(EventBus::new(100));
     let provider = Box::new(MockProvider::new());
-    let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default()));
+    let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default(), std::path::PathBuf::from(".")));
     let session_manager = Arc::new(SessionManager::new());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -141,7 +140,7 @@ async fn test_exit_command() {
     init_tracing();
     let bus = Arc::new(EventBus::new(100));
     let provider = Box::new(MockProvider::new());
-    let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default()));
+    let agent = Arc::new(Agent::new(provider, bus.clone(), AgentConfig::default(), std::path::PathBuf::from(".")));
     let session_manager = Arc::new(SessionManager::new());
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();

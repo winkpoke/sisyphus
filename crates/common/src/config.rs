@@ -9,6 +9,7 @@ pub struct Config {
     pub llm: LLMConfig,
     pub workspace: WorkspaceConfig,
     pub language: String,
+    pub agent: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Deserialize, Clone)]

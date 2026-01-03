@@ -12,9 +12,16 @@ impl Command for HelpCommand {
     fn description(&self) -> &str {
         "Show this help"
     }
-    async fn execute(&self, _ctx: &CommandContext, _args: CommandArgs) -> Result<CommandOutcome> {
+    async fn execute(&self, ctx: &CommandContext, _args: CommandArgs) -> Result<CommandOutcome> {
+        let commands = ctx.registry.list();
+        let mut output = String::from("Available commands:\n");
+        
+        for cmd in commands {
+            output.push_str(&format!("{} - {}\n", cmd.name, cmd.description));
+        }
+        
         Ok(CommandOutcome {
-            output: Some("Available commands:\n/help - Show this help\n/exit, /quit - End the session\n/new - Start a new session\n/clear - Clear history".to_string()),
+            output: Some(output.trim().to_string()),
             effect: CommandEffect::None,
         })
     }

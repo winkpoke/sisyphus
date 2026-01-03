@@ -29,9 +29,6 @@ pub struct Tui {
 enum Action {
     MessageSent(String),
     ResponseReceived(String, Option<String>), // response, new_session_id
-    StreamStart(TranscriptItemKind),
-    StreamDelta(String),
-    StreamEnd,
     Error(String),
 }
 
@@ -403,15 +400,6 @@ impl Tui {
                                 self.state.update_session_id(sid);
                             }
                             self.state.add_message(TranscriptItemKind::Assistant, response);
-                        }
-                        Action::StreamStart(kind) => {
-                            self.state.transcript.start_streaming(kind);
-                        }
-                        Action::StreamDelta(delta) => {
-                            self.state.transcript.append_streaming(&delta);
-                        }
-                        Action::StreamEnd => {
-                            self.state.transcript.finish_streaming();
                         }
                         Action::Error(err) => {
                             self.state.add_message(TranscriptItemKind::Error, err);

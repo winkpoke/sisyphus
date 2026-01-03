@@ -3,7 +3,7 @@ use anyhow::Result;
 use gray_matter::{engine::YAML, Matter, Pod};
 use serde::Deserialize;
 use std::path::Path;
-use tracing::{info, warn};
+use tracing::warn;
 
 pub struct CommandLoader;
 

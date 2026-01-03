@@ -7,7 +7,6 @@ use url::Url;
 
 pub struct ServerManager {
     process: Option<Child>,
-    port: u16,
     base_url: Url,
 }
 
@@ -31,7 +30,6 @@ impl ServerManager {
         let base_url = Url::parse(&format!("http://localhost:{}", port))?;
         let manager = Self {
             process: Some(child),
-            port,
             base_url,
         };
 
@@ -45,7 +43,6 @@ impl ServerManager {
     pub async fn connect(url: Url) -> Result<Self> {
         let manager = Self {
             process: None,
-            port: url.port().unwrap_or(80),
             base_url: url,
         };
         manager.wait_for_ready().await?;

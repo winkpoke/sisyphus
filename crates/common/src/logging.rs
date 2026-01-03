@@ -31,6 +31,9 @@ pub async fn start_event_logger(bus: &EventBus) {
                 SystemEvent::ToolExecuted { tool, result } => {
                     info!(target: "bus", event = "tool_executed", tool = %tool, result_preview = %&result[..std::cmp::min(result.len(), 50)]);
                 }
+                SystemEvent::PermissionRequest { operation, tool_name, call_id } => {
+                    info!(target: "bus", event = "permission_request", operation = %operation, tool = %tool_name, call_id = %call_id);
+                }
                 SystemEvent::Error { message } => {
                     error!(target: "bus", event = "error", message = %message);
                 }

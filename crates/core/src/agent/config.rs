@@ -1,5 +1,6 @@
 use crate::session::context::ContextLimits;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum AgentMode {
@@ -16,8 +17,8 @@ impl Default for AgentMode {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PermissionLevel {
-    Full,
-    ReadOnly,
+    Allow,
+    Deny,
     Ask,
 }
 
@@ -26,6 +27,8 @@ pub struct AgentPermissions {
     pub edit: PermissionLevel,
     pub bash: PermissionLevel,
     pub skill: PermissionLevel,
+    #[serde(default)]
+    pub overrides: HashMap<String, PermissionLevel>,
 }
 
 impl Default for AgentPermissions {
@@ -34,6 +37,7 @@ impl Default for AgentPermissions {
             edit: PermissionLevel::Ask,
             bash: PermissionLevel::Ask,
             skill: PermissionLevel::Ask,
+            overrides: HashMap::new(),
         }
     }
 }

@@ -107,7 +107,7 @@ impl Tool for GlobTool {
             for pat in include_ignored {
                 // To re-include, we use the "!" prefix in overrides
                 let p = format!("!{}", pat);
-                override_builder.add(&p)?;
+                override_builder.add(&p).map_err(|e| anyhow!("Invalid override pattern: {}", e))?;
             }
             
             // Excludes are handled manually via GlobSet

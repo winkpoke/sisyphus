@@ -1,0 +1,21 @@
+- [ ] Extract command parsing logic
+  - [ ] Create `crates/core/src/command/parser.rs`
+  - [ ] Move `parse_command_args` and unit tests from `agent.rs` to `parser.rs`
+  - [ ] Update agent flow to consume parsed cmd, args, and raw_args
+- [ ] Refactor SystemPromptBuilder for async I/O
+  - [ ] Change `SystemPromptBuilder::snapshot` to `async fn`
+  - [ ] Use `tokio::fs` for file reading
+  - [ ] Ensure snapshot is captured once per user turn and reused within the turn
+- [ ] Define deterministic `AGENTS.md` resolution
+  - [ ] Resolve `AGENTS.md` from workspace root (tool sandbox root)
+  - [ ] Add coverage for missing file and large file behavior
+- [ ] Implement safe, configurable permissions
+  - [ ] Add per-tool permission overrides without removing category defaults
+  - [ ] Ensure unknown tools fall back to a safe default (Ask/Deny)
+  - [ ] Preserve current behavior for standard tools (write/edit vs run)
+- [ ] Wire permissions into runtime configuration
+  - [ ] Load agent permission settings from the runtime config entrypoint (e.g., `sisyphus.toml`)
+  - [ ] Keep safe defaults when config is absent
+- [ ] Verify
+  - [ ] Run existing tests
+  - [ ] Validate OpenSpec: `openspec validate refactor-agent-guardrails --strict`

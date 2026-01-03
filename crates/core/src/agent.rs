@@ -1,9 +1,10 @@
 pub mod config;
 pub mod prompt;
 
-use self::config::AgentConfig;
+use self::config::{AgentConfig, PermissionLevel};
 use self::prompt::SystemPromptBuilder;
 use crate::command::loader::CommandLoader;
+use crate::command::parser::parse_command;
 use crate::command::{builtins, CommandContext, CommandEffect, CommandOutcome, CommandRegistry, CommandType};
 use crate::session::context::DefaultTokenEstimator;
 use crate::session::{Session, SessionStatus};
@@ -15,7 +16,9 @@ use common::llm::{
 use common::tool::Tool;
 use rust_i18n::t;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::Arc;
+use chrono::Utc;
 
 const MAX_TURNS: u32 = 1000;
 
@@ -25,16 +28,23 @@ pub struct Agent {
     tools: HashMap<String, Box<dyn Tool>>,
     config: AgentConfig,
     commands: CommandRegistry,
+    workspace_root: PathBuf,
 }
 
 impl Agent {
-    pub fn new(provider: Box<dyn LLMProvider>, bus: Arc<EventBus>, config: AgentConfig) -> Self {
+    pub fn new(
+        provider: Box<dyn LLMProvider>,
+        bus: Arc<EventBus>,
+        config: AgentConfig,
+        workspace_root: PathBuf,
+    ) -> Self {
         let mut agent = Self {
             provider,
             bus,
             tools: HashMap::new(),
             config,
             commands: CommandRegistry::new(),
+            workspace_root,
         };
         agent.register_builtins();
         // Load custom commands from .sisyphus/command or config
@@ -83,7 +93,35 @@ impl Agent {
         }
     }
 
-    async fn execute_tool(&self, tool_name: &str, args_str: &str) -> String {
+    fn get_permission_level(&self, tool_name: &str) -> &PermissionLevel {
+        if let Some(level) = self.config.permissions.overrides.get(tool_name) {
+            return level;
+        }
+
+        match tool_name {
+            "run_command" => &self.config.permissions.bash,
+            "write_file" | "replace_in_file" | "delete_file" => &self.config.permissions.edit,
+            _ => &self.config.permissions.skill,
+        }
+    }
+
+    async fn execute_tool(&self, tool_name: &str, args_str: &str, call_id: &str) -> String {
+        let permission = self.get_permission_level(tool_name);
+        match permission {
+            PermissionLevel::Deny => {
+                return "Permission denied: tool execution is set to Deny.".to_string();
+            }
+            PermissionLevel::Ask => {
+                self.bus.publish(SystemEvent::PermissionRequest {
+                    operation: "tool_execution".to_string(),
+                    tool_name: tool_name.to_string(),
+                    call_id: call_id.to_string(),
+                });
+                return "Permission required: approve tool execution to continue.".to_string();
+            }
+            PermissionLevel::Allow => {}
+        }
+
         if let Some(tool) = self.tools.get(tool_name) {
             match serde_json::from_str::<serde_json::Value>(args_str) {
                 Ok(args) => match tool.execute(args).await {
@@ -108,19 +146,39 @@ impl Agent {
         const MAX_DEPTH: usize = 10;
 
         while input.starts_with('/') {
-            let parts: Vec<&str> = input.trim().split_whitespace().collect();
-            let cmd_name = parts[0];
+            let (cmd_name, parts, raw_args) = match parse_command(&input) {
+                Ok((name, args, raw)) => (name, args, raw),
+                Err(e) => {
+                     session.status = SessionStatus::Idle;
+                     return Err(e);
+                }
+            };
 
-            if let Some(command) = self.commands.get(cmd_name) {
+            if let Some(command) = self.commands.get(&cmd_name) {
                 match command {
                     CommandType::Builtin(cmd) => {
-                        let args: Vec<String> =
-                            parts.iter().skip(1).map(|s| s.to_string()).collect();
                         let ctx = CommandContext {
                             session_id: session.id.clone(),
                             event_bus: self.bus.clone(),
+                            registry: &self.commands,
                         };
-                        let res = cmd.execute(&ctx, args).await;
+                        let res = cmd.execute(&ctx, parts).await;
+                        
+                        // Handle command effects
+                        if let Ok(outcome) = &res {
+                            match outcome.effect {
+                                CommandEffect::ClearHistory => {
+                                    session.clear_context();
+                                }
+                                CommandEffect::NewSession => {
+                                    session.clear_context();
+                                    session.id = uuid::Uuid::new_v4().to_string();
+                                    session.created_at = Utc::now();
+                                }
+                                _ => {}
+                            }
+                        }
+
                         session.status = SessionStatus::Idle;
                         return res;
                     }
@@ -130,9 +188,9 @@ impl Agent {
                             session.status = SessionStatus::Idle;
                             return Err(anyhow!(t!("command_recursion_limit")));
                         }
-                        let args_str = input.trim_start_matches(cmd_name).trim();
+                        // For custom commands, we use the raw_args directly.
                         if config.template.contains("{{args}}") {
-                            input = config.template.replace("{{args}}", args_str);
+                            input = config.template.replace("{{args}}", &raw_args);
                         } else {
                             input = config.template.clone();
                         }
@@ -172,6 +230,7 @@ impl Agent {
         });
 
         let mut current_turn = 0;
+        let snapshot = SystemPromptBuilder::snapshot(Some(&self.workspace_root)).await;
 
         loop {
             if current_turn >= MAX_TURNS {
@@ -179,7 +238,7 @@ impl Agent {
             }
             current_turn += 1;
 
-            let system_prompt = SystemPromptBuilder::build(&self.config);
+            let system_prompt = SystemPromptBuilder::build(&self.config, &snapshot);
             let system_msg = Message {
                 role: Role::System,
                 content: Some(system_prompt),
@@ -228,7 +287,7 @@ impl Agent {
                     let tool_name = &call.function.name;
                     let args_str = &call.function.arguments;
 
-                    let result = self.execute_tool(tool_name, args_str).await;
+                    let result = self.execute_tool(tool_name, args_str, &call.id).await;
 
                     self.bus.publish(SystemEvent::ToolExecuted {
                         tool: tool_name.clone(),
@@ -249,3 +308,5 @@ impl Agent {
         }
     }
 }
+
+

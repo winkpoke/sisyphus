@@ -1,5 +1,6 @@
 pub mod builtins;
 pub mod loader;
+pub mod parser;
 
 use anyhow::Result;
 use async_trait::async_trait;
@@ -21,9 +22,10 @@ pub struct CommandOutcome {
     pub effect: CommandEffect,
 }
 
-pub struct CommandContext {
+pub struct CommandContext<'a> {
     pub session_id: String,
     pub event_bus: Arc<EventBus>,
+    pub registry: &'a CommandRegistry,
 }
 
 pub type CommandArgs = Vec<String>;

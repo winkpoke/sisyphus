@@ -49,7 +49,17 @@ pub async fn build_agent(config: &Config) -> anyhow::Result<AgentComponents> {
         }
     };
 
-    let mut agent = Agent::new(provider, bus.clone(), AgentConfig::default());
+    let agent_config: AgentConfig = if let Some(agent_val) = &config.agent {
+        serde_json::from_value(agent_val.clone()).unwrap_or_else(|e| {
+            println!("Warning: Failed to parse agent config: {}", e);
+            AgentConfig::default()
+        })
+    } else {
+        AgentConfig::default()
+    };
+
+    let workspace_root = std::path::PathBuf::from(&config.workspace.root);
+    let mut agent = Agent::new(provider, bus.clone(), agent_config, workspace_root);
 
     // Register tools
     agent.register_tool(Box::new(CommandTool));
