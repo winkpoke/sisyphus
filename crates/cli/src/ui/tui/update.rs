@@ -248,6 +248,14 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
                     let cmd = cmd.clone();
                     app.state.mode = InputMode::Normal;
                     app.state.command_palette.reset();
+                    
+                    if cmd == "/clear" || cmd == "/new" {
+                        return TuiInstruction::Chat {
+                            session_id: app.state.session_id.clone(),
+                            input: cmd,
+                        };
+                    }
+                    
                     return TuiInstruction::DispatchCommand(cmd);
                 } else {
                     app.state.mode = InputMode::Normal;
@@ -299,8 +307,12 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
                 if let Some(input) = app.state.get_input_and_clear() {
                     if input.starts_with('/') {
                         let cmd_name = input.split_whitespace().next().unwrap_or("");
-                        if app.registry.get(cmd_name).is_some() {
-                            return TuiInstruction::DispatchCommand(input);
+                        
+                        // Force these commands to be sent to server even if they are in registry
+                        if cmd_name != "/clear" && cmd_name != "/new" {
+                            if app.registry.get(cmd_name).is_some() {
+                                return TuiInstruction::DispatchCommand(input);
+                            }
                         }
                     }
 
