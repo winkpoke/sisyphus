@@ -64,6 +64,7 @@ The scope includes the migration and generalization of the core business logic, 
 - **RPC/HTTP Server**: Expose agent capabilities via an API.
 - **Event Bus**: Internal event system for inter-component communication.
 - **Events**: Stream `SystemEvent` payloads to clients (including `PermissionRequest`) via the SSE endpoint.
+- **Unified Chat Service**: All chat requests and command effects are handled by a single core application service to ensure consistent state transitions across all transports.
 - **Permission Approvals API**: Provide an endpoint to submit approve/deny decisions for Ask-gated tool calls.
 - **Security**: Basic authentication and permission management for privileged operations.
 
@@ -109,8 +110,8 @@ The scope includes the migration and generalization of the core business logic, 
 ### 4.3 Headless Architecture
 The system follows a **Headless Agent** design, decoupling the "Brain" (Rust Core) from the "Presentation" (UI).
 - **Rust Native World**:
-  - `crates/core`: Contains the Agent, Memory, and Logic. Pure Rust, no UI dependencies.
-  - `crates/server`: Exposes the core via HTTP/WebSocket and broadcasts `SystemEvents` (JSON).
+  - `crates/core`: Contains the Agent, Memory, Logic, and a unified `ChatService` for command processing and effect application.
+  - `crates/server`: A thin transport adapter that exposes core capabilities via HTTP/WebSocket.
 - **UI Clients**:
   - **VS Code Plugin**: TypeScript extension communicating via WebSocket.
   - **Dioxus TUI/Web**: Rust-based frontends (WASM or Native) connecting to the server.

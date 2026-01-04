@@ -31,22 +31,35 @@ And a `MessageReceived` event is published on the internal bus
 Then the client should receive this event via the stream.
 
 ### Requirement: Chat Session Lifecycle Signaling
-The server SHALL return enough information from the chat endpoint for clients to handle command-driven session lifecycle changes.
+The server SHALL return enough information from the chat endpoint for clients to handle command-driven session lifecycle and UX changes deterministically.
 
-#### Scenario: Chat Response Includes Effective Session ID
-Given a running server
-And an existing session with id `S1`
-When a client sends a chat request to `/api/v1/sessions/S1/chat`
-Then the server SHALL return a successful response containing the assistant response
-And it SHALL include the effective session id for subsequent requests
+The chat response MUST include:
+- The assistant response content
+- The effective session id to use for subsequent requests
+- The command effect (if any) produced by executing slash commands for that request
 
-#### Scenario: New Session Command Returns New Session ID
-Given a running server
-And an existing session with id `S1`
-When a client sends "/new" to `/api/v1/sessions/S1/chat`
-Then the server SHALL create a new session with id `S2`
-And it SHALL return `S2` in the chat response
-And `S2` SHALL have an empty message history
+#### Scenario: Chat response includes effective session id
+- **GIVEN** a running server
+- **AND** an existing session with id `S1`
+- **WHEN** a client sends a chat request to `/api/v1/sessions/S1/chat`
+- **THEN** the server SHALL return a successful response containing the assistant response
+- **AND** it SHALL include the effective session id for subsequent requests
+
+#### Scenario: New session command returns new session id
+- **GIVEN** a running server
+- **AND** an existing session with id `S1`
+- **WHEN** a client sends "/new" to `/api/v1/sessions/S1/chat`
+- **THEN** the server SHALL create a new session with id `S2`
+- **AND** it SHALL return `S2` as the effective session id in the chat response
+- **AND** `S2` SHALL have an empty message history
+- **AND** it SHALL return a command effect indicating a new session was created
+
+#### Scenario: Command effect is returned for client UX
+- **GIVEN** a running server
+- **AND** an existing session with id `S1`
+- **WHEN** a client sends a slash command that produces a command effect to `/api/v1/sessions/S1/chat`
+- **THEN** the server SHALL return the command effect in the chat response
+- **AND** the command effect value MUST be deterministic for that command
 
 ### Requirement: Efficient Session Listing
 The system SHALL provide a lightweight representation of sessions for listing endpoints to optimize performance.
@@ -99,4 +112,18 @@ The server SHALL provide an endpoint to submit approval decisions for Ask-gated 
 - **GIVEN** a running server
 - **WHEN** the client submits an approval decision for a `(session_id, call_id)` pair with no pending request
 - **THEN** the server MUST return a deterministic client error response
+
+### Requirement: HTTP Handlers Delegate Command Handling
+The server HTTP layer MUST NOT interpret or apply slash command effects directly.
+
+Instead, it MUST delegate chat request handling to a single core application service that:
+- Executes slash commands via the core command system
+- Applies the resulting command effects to session state
+- Produces the response DTO returned by the HTTP handler
+
+#### Scenario: Server handlers are thin adapters
+- **GIVEN** a running server
+- **WHEN** a chat request is handled
+- **THEN** the HTTP handler MUST delegate command handling and effect application to the core service
+- **AND** the HTTP handler MUST NOT independently mutate session state based on command effects
 

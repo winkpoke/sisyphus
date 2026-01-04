@@ -108,6 +108,11 @@ And locking this session should not block access to other sessions in the map
 ### Requirement: Start a new session via command
 The system SHALL clear the current session context when a new session command is executed.
 
+The command-driven session lifecycle transition MUST be applied by a single core chat-handling entrypoint so that:
+- Session context is cleared exactly once
+- The effective session id returned to clients is deterministic
+- No HTTP-layer handler duplicates effect application
+
 For this change, “session context” is defined as:
 - The conversation history used to build completion requests (user and assistant messages)
 - The tool-result history used to build completion requests
@@ -123,6 +128,10 @@ Clearing context MUST be externally observable:
 
 ### Requirement: Clear history via command
 The system SHALL clear the current session context when a clear-history command is executed.
+
+The clear-history effect MUST be applied by a single core chat-handling entrypoint so that:
+- Session context is cleared exactly once
+- No HTTP-layer handler duplicates effect application
 
 #### Scenario: Clear history command clears context
 - **GIVEN** an existing session with prior context

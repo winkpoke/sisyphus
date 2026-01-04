@@ -31,6 +31,8 @@ The chat response MUST include:
 - **THEN** the server SHALL return the command effect in the chat response
 - **AND** the command effect value MUST be deterministic for that command
 
+## ADDED Requirements
+
 ### Requirement: HTTP Handlers Delegate Command Handling
 The server HTTP layer MUST NOT interpret or apply slash command effects directly.
 

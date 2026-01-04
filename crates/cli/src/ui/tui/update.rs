@@ -35,27 +35,10 @@ pub fn update(app: &mut App, action: Action) -> TuiInstruction {
             app.state.add_message(TranscriptItemKind::Error, err);
         }
         Action::CommandResult(outcome) => {
-             if let Some(output) = &outcome.output {
-                 app.state.add_message(TranscriptItemKind::System, output.clone());
-             }
-             match outcome.effect {
-                 CommandEffect::ToggleDebug => {
-                     app.state.debug_mode = !app.state.debug_mode;
-                     let status = if app.state.debug_mode { "enabled" } else { "disabled" };
-                     app.state.add_message(TranscriptItemKind::System, format!("Debug mode {}", status));
-                 }
-                 CommandEffect::Exit => {
-                     app.quit();
-                     return TuiInstruction::Quit;
-                 }
-                 CommandEffect::ClearHistory => {
-                     app.state.transcript.clear();
-                 }
-                 CommandEffect::NewSession => {
-                     // TODO: Implement new session
-                 }
-                 CommandEffect::None => {}
-             }
+            if let Some(output) = &outcome.output {
+                app.state.add_message(TranscriptItemKind::System, output.clone());
+            }
+            return handle_command_effect(app, outcome.effect);
         }
         Action::MessageSent(msg) => {
             app.state.status = AppStatus::Processing;
@@ -73,6 +56,10 @@ pub fn update(app: &mut App, action: Action) -> TuiInstruction {
                 app.state.active_model = model;
             }
             app.state.add_message(TranscriptItemKind::Assistant, resp.response);
+
+            if let Some(effect) = resp.effect {
+                return handle_command_effect(app, effect);
+            }
         }
         Action::SystemEvent(event) => {
             handle_system_event(app, event);
@@ -80,6 +67,28 @@ pub fn update(app: &mut App, action: Action) -> TuiInstruction {
         Action::Key(key) => {
             return handle_key_event(app, key);
         }
+    }
+    TuiInstruction::None
+}
+
+fn handle_command_effect(app: &mut App, effect: CommandEffect) -> TuiInstruction {
+    match effect {
+        CommandEffect::ToggleDebug => {
+            app.state.debug_mode = !app.state.debug_mode;
+            let status = if app.state.debug_mode { "enabled" } else { "disabled" };
+            app.state.add_message(TranscriptItemKind::System, format!("Debug mode {}", status));
+        }
+        CommandEffect::Exit => {
+            app.quit();
+            return TuiInstruction::Quit;
+        }
+        CommandEffect::ClearHistory => {
+            app.state.transcript.clear();
+        }
+        CommandEffect::NewSession => {
+            // New session ID is handled in Action::ResponseReceived via sid update
+        }
+        CommandEffect::None => {}
     }
     TuiInstruction::None
 }
@@ -296,7 +305,7 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
                     }
 
                     if input == "/quit" || input == "/exit" {
-                        return TuiInstruction::Quit;
+                        // We send the command to the server and handle the Exit effect in ResponseReceived
                     }
 
                     app.state.transcript.stick_to_bottom = true;

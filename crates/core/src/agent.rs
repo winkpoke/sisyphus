@@ -11,7 +11,6 @@ use crate::command::{
 use crate::session::context::DefaultTokenEstimator;
 use crate::session::{PendingApproval, Session, SessionStatus};
 use anyhow::{anyhow, Result};
-use chrono::Utc;
 use common::bus::{EventBus, SystemEvent};
 use common::llm::{
     CompletionRequest, LLMProvider, Message, Role, ToolCall, ToolDefinition, ToolFunctionDefinition,
@@ -183,22 +182,6 @@ impl Agent {
                             registry: &self.commands,
                         };
                         let res = cmd.execute(&ctx, parts).await;
-
-                        // Handle command effects
-                        if let Ok(outcome) = &res {
-                            match outcome.effect {
-                                CommandEffect::ClearHistory => {
-                                    session.clear_context();
-                                }
-                                CommandEffect::NewSession => {
-                                    session.clear_context();
-                                    session.id = uuid::Uuid::new_v4().to_string();
-                                    session.created_at = Utc::now();
-                                }
-                                _ => {}
-                            }
-                        }
-
                         session.status = SessionStatus::Idle;
                         return res;
                     }

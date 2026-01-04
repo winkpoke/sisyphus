@@ -26,7 +26,8 @@ Key runtime behavior (normative in OpenSpec):
 - Tool calls in a single assistant message are processed in order; later calls are held until the blocking call resolves.
 - Deny appends a deterministic Tool result: `Permission denied: user rejected tool execution.`
 - Clients render permission prompts (operation/tool_name/call_id), queue multiple requests FIFO, and submit approve/deny decisions.
-- LLM Providers must use the shared `SSEParser` (`crates/provider/src/sse.rs`) for streaming to ensure correct handling of split network chunks and multi-byte characters.
+- **Command Handling**: Slash commands and their effects (e.g., `/new`, `/exit`) are processed by the core `ChatService` to ensure deterministic session state management across all clients.
+- **LLM Providers must use the shared `SSEParser` (`crates/provider/src/sse.rs`) for streaming to ensure correct handling of split network chunks and multi-byte characters.
 
 CLI TUI requirements (see `spec/cli-tui` in OpenSpec):
 - **Architecture**: Follow the Model-View-Update (MVU) pattern with a pure `update` function and centralized `Action` enum.

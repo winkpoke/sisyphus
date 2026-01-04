@@ -9,6 +9,7 @@ use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};
 use sisyphus_core::agent::Agent;
 use sisyphus_core::command::{CommandEffect, CommandInfo};
+use sisyphus_core::service::ChatService;
 use sisyphus_core::session::manager::SessionManager;
 use sisyphus_core::session::{Session, SessionSummary};
 use std::sync::Arc;
@@ -20,6 +21,7 @@ pub struct AppState {
     pub agent: Arc<Agent>,
     pub session_manager: Arc<SessionManager>,
     pub bus: Arc<EventBus>,
+    pub chat_service: Arc<ChatService>,
 }
 
 pub struct Server {
@@ -35,10 +37,15 @@ impl Server {
         session_manager: Arc<SessionManager>,
         bus: Arc<EventBus>,
     ) -> Self {
+        let chat_service = Arc::new(ChatService::new(
+            agent.clone(),
+            session_manager.clone(),
+        ));
         let state = AppState {
             agent,
             session_manager,
             bus: bus.clone(),
+            chat_service,
         };
 
         let router = Router::new()
@@ -164,6 +171,8 @@ struct ChatResponse {
     session_id: Option<String>,
     usage: Option<String>,
     model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    effect: Option<CommandEffect>,
 }
 
 async fn chat(
@@ -172,49 +181,22 @@ async fn chat(
     Json(req): Json<ChatRequest>,
 ) -> Result<Json<ChatResponse>, (axum::http::StatusCode, String)> {
     tracing::info!("Handling chat request for session {}", id);
-    let session_lock = state.session_manager.get_session(&id).ok_or((
-        axum::http::StatusCode::NOT_FOUND,
-        "Session not found".to_string(),
-    ))?;
-
-    let mut session = session_lock.write().await;
 
     let outcome = state
-        .agent
-        .chat(&mut *session, req.message)
+        .chat_service
+        .chat(&id, req.message)
         .await
         .map_err(|e| {
-            tracing::error!("Agent chat error: {:?}", e);
+            tracing::error!("ChatService error: {:?}", e);
             (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
         })?;
 
-    let mut new_session_id = None;
-
-    match outcome.effect {
-        CommandEffect::NewSession => {
-            let new_session_lock = state.session_manager.create_session();
-            let new_session = new_session_lock.read().await;
-            new_session_id = Some(new_session.id.clone());
-        }
-        CommandEffect::ClearHistory => {
-            session.clear_context();
-        }
-        CommandEffect::Exit => {
-            state.bus.publish(SystemEvent::Shutdown);
-        }
-        CommandEffect::ToggleDebug => {}
-        CommandEffect::None => {}
-    }
-
-    let tokens = session.estimate_tokens();
-    let usage = format!("{} tokens", tokens);
-    let model = state.agent.model_name();
-
     Ok(Json(ChatResponse {
-        response: outcome.output.unwrap_or_default(),
-        session_id: new_session_id,
-        usage: Some(usage),
-        model: Some(model),
+        response: outcome.response,
+        session_id: Some(outcome.session_id),
+        usage: Some(outcome.usage),
+        model: Some(outcome.model),
+        effect: Some(outcome.effect),
     }))
 }
 
@@ -244,12 +226,6 @@ async fn submit_approval(
     Json(req): Json<ApprovalRequest>,
 ) -> Result<Json<ChatResponse>, (axum::http::StatusCode, String)> {
     tracing::info!("Handling approval for session {}, call {}", id, call_id);
-    let session_lock = state.session_manager.get_session(&id).ok_or((
-        axum::http::StatusCode::NOT_FOUND,
-        "Session not found".to_string(),
-    ))?;
-
-    let mut session = session_lock.write().await;
     let approved = match req.decision.as_str() {
         "approve" => true,
         "deny" => false,
@@ -261,20 +237,21 @@ async fn submit_approval(
         }
     };
 
-    let response = state
-        .agent
-        .resolve_approval(&mut session, &call_id, approved)
+    let outcome = state
+        .chat_service
+        .resolve_approval(&id, &call_id, approved)
         .await
         .map_err(|e| {
-            tracing::error!("Agent resolve_approval error: {:?}", e);
+            tracing::error!("ChatService resolve_approval error: {:?}", e);
             (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string())
         })?;
 
     Ok(Json(ChatResponse {
-        response,
-        session_id: None,
-        usage: None,
-        model: None,
+        response: outcome.response,
+        session_id: Some(outcome.session_id),
+        usage: Some(outcome.usage),
+        model: Some(outcome.model),
+        effect: Some(outcome.effect),
     }))
 }
 

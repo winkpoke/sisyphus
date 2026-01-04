@@ -53,7 +53,7 @@ impl Command for QuitCommand {
         "/quit"
     }
     fn description(&self) -> &str {
-        "End the session"
+        "End the session (alias of /exit)"
     }
     async fn execute(&self, _ctx: &CommandContext, _args: CommandArgs) -> Result<CommandOutcome> {
         Ok(CommandOutcome {
