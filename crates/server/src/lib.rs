@@ -71,7 +71,7 @@ impl Server {
         // Use 127.0.0.1 explicitly to avoid issues with some environments preferring IPv6
         let listener = tokio::net::TcpListener::bind(format!("127.0.0.1:{}", self.port)).await?;
 
-        let mut rx = self.bus.subscribe();
+        let mut rx = self.bus.subscribe_raw();
 
         self.run_on_listener(listener, async move {
             tokio::select! {
@@ -258,7 +258,7 @@ async fn submit_approval(
 async fn events(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
-    let rx = state.bus.subscribe();
+    let rx = state.bus.subscribe_raw();
 
     let stream = stream::unfold(rx, |mut rx| async move {
         loop {

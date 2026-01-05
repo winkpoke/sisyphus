@@ -118,7 +118,7 @@ async fn test_permission_enforcement_deny() {
 #[tokio::test]
 async fn test_permission_enforcement_ask() {
     let bus = Arc::new(EventBus::new(10));
-    let mut rx = bus.subscribe();
+    let mut rx = bus.subscribe_raw();
     let mut config = AgentConfig::default();
     config.permissions.edit = PermissionLevel::Ask;
 

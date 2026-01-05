@@ -20,7 +20,7 @@ pub fn init() {
 }
 
 pub async fn start_event_logger(bus: &EventBus) {
-    let mut rx = bus.subscribe();
+    let mut rx = bus.subscribe_raw();
 
     tokio::spawn(async move {
         while let Ok(event) = rx.recv().await {

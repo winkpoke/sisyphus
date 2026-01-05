@@ -27,6 +27,7 @@ Key runtime behavior (normative in OpenSpec):
 - Deny appends a deterministic Tool result: `Permission denied: user rejected tool execution.`
 - Clients render permission prompts (operation/tool_name/call_id), queue multiple requests FIFO, and submit approve/deny decisions.
 - **Command Handling**: Slash commands and their effects (e.g., `/new`, `/exit`) are processed by the core `ChatService` to ensure deterministic session state management across all clients.
+- **Event Bus**: Uses a typed, topic-based distribution system. Components must subscribe using `subscribe_raw()` for global auditing or specific topics for efficiency.
 - **LLM Providers must use the shared `SSEParser` (`crates/provider/src/sse.rs`) for streaming to ensure correct handling of split network chunks and multi-byte characters.
 
 CLI TUI requirements (see `spec/cli-tui` in OpenSpec):
