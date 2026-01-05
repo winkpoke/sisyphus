@@ -108,7 +108,7 @@ async fn test_deny_tool_execution() {
         name: "ask_tool".to_string(),
     }));
 
-    let mut session = Session::new();
+    let mut session = Session::new(None);
 
     // 1. Start chat
     let result = agent.chat(&mut session, "Do it".to_string()).await.unwrap();
@@ -146,7 +146,7 @@ async fn test_resolve_approval_error_resets_session_status() {
     let config = AgentConfig::default();
     let agent = Agent::new(provider, bus, config, PathBuf::from("."));
     
-    let mut session = Session::new();
+    let mut session = Session::new(None);
     
     // Ensure initial status is Idle
     assert_eq!(session.status, SessionStatus::Idle);

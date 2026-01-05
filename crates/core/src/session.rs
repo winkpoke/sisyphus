@@ -26,6 +26,7 @@ pub enum SessionStatus {
 pub struct Session {
     pub id: String,
     pub created_at: DateTime<Utc>,
+    pub agent_id: Option<String>,
     context: Context,
     pub status: SessionStatus,
     #[serde(default)]
@@ -38,21 +39,23 @@ pub struct Session {
 pub struct SessionSummary {
     pub id: String,
     pub created_at: DateTime<Utc>,
+    pub agent_id: Option<String>,
     pub message_count: usize,
     pub status: SessionStatus,
 }
 
 impl Default for Session {
     fn default() -> Self {
-        Self::new()
+        Self::new(None)
     }
 }
 
 impl Session {
-    pub fn new() -> Self {
+    pub fn new(agent_id: Option<String>) -> Self {
         Self {
             id: uuid::Uuid::new_v4().to_string(),
             created_at: Utc::now(),
+            agent_id,
             context: Context::new(),
             status: SessionStatus::Idle,
             pending_approvals: HashMap::new(),
@@ -64,6 +67,7 @@ impl Session {
         SessionSummary {
             id: self.id.clone(),
             created_at: self.created_at,
+            agent_id: self.agent_id.clone(),
             message_count: self.context.message_count(),
             status: self.status.clone(),
         }

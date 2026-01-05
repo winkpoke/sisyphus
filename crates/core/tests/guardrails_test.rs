@@ -6,6 +6,7 @@ use common::tool::Tool;
 use futures::Stream;
 use serde_json::{json, Value};
 use sisyphus_core::agent::config::{AgentConfig, PermissionLevel};
+use sisyphus_core::agent::registry::AgentRegistry;
 use sisyphus_core::agent::Agent;
 use sisyphus_core::command::CommandEffect;
 use sisyphus_core::service::ChatService;
@@ -99,7 +100,7 @@ async fn test_permission_enforcement_deny() {
         name: "write_file".to_string(),
     }));
 
-    let mut session = Session::new();
+    let mut session = Session::new(None);
     let result = agent.chat(&mut session, "test".to_string()).await;
     assert!(result.is_ok());
 
@@ -141,7 +142,7 @@ async fn test_permission_enforcement_ask() {
         name: "write_file".to_string(),
     }));
 
-    let mut session = Session::new();
+    let mut session = Session::new(None);
     let result = agent.chat(&mut session, "test".to_string()).await;
     assert!(result.is_ok());
     assert_eq!(
@@ -186,10 +187,11 @@ async fn test_command_effect_clear() {
         config,
         std::path::PathBuf::from("."),
     ));
+    let registry = Arc::new(AgentRegistry::new(agent));
     let session_manager = Arc::new(SessionManager::new());
-    let service = ChatService::new(agent, session_manager.clone());
+    let service = ChatService::new(registry, session_manager.clone());
 
-    let session_lock = session_manager.create_session();
+    let session_lock = session_manager.create_session(None);
     let session_id = {
         let mut session = session_lock.write().await;
         let s: &mut Session = &mut *session;
@@ -230,10 +232,11 @@ async fn test_command_effect_new_session() {
         config,
         std::path::PathBuf::from("."),
     ));
+    let registry = Arc::new(AgentRegistry::new(agent));
     let session_manager = Arc::new(SessionManager::new());
-    let service = ChatService::new(agent, session_manager.clone());
+    let service = ChatService::new(registry, session_manager.clone());
 
-    let session_lock = session_manager.create_session();
+    let session_lock = session_manager.create_session(None);
     let session_id = {
         let mut session = session_lock.write().await;
         let s: &mut Session = &mut *session;
@@ -299,7 +302,7 @@ async fn test_permission_ask_stops_turn() {
         name: "write_file".to_string(),
     }));
 
-    let mut session = Session::new();
+    let mut session = Session::new(None);
     let result = agent.chat(&mut session, "test".to_string()).await.unwrap();
 
     // 1. Check return value

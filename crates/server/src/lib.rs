@@ -1,12 +1,13 @@
 use axum::{
     extract::{Path, State},
     response::sse::{Event, Sse},
-    routing::{get, post},
+    routing::{get, post, put},
     Json, Router,
 };
 use common::bus::{EventBus, SystemEvent};
 use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};
+use sisyphus_core::agent::registry::AgentRegistry;
 use sisyphus_core::agent::Agent;
 use sisyphus_core::command::{CommandEffect, CommandInfo};
 use sisyphus_core::service::ChatService;
@@ -18,7 +19,7 @@ use tower_http::trace::TraceLayer;
 
 #[derive(Clone)]
 pub struct AppState {
-    pub agent: Arc<Agent>,
+    pub registry: Arc<AgentRegistry>,
     pub session_manager: Arc<SessionManager>,
     pub bus: Arc<EventBus>,
     pub chat_service: Arc<ChatService>,
@@ -33,16 +34,16 @@ pub struct Server {
 impl Server {
     pub fn new(
         port: u16,
-        agent: Arc<Agent>,
+        registry: Arc<AgentRegistry>,
         session_manager: Arc<SessionManager>,
         bus: Arc<EventBus>,
     ) -> Self {
         let chat_service = Arc::new(ChatService::new(
-            agent.clone(),
+            registry.clone(),
             session_manager.clone(),
         ));
         let state = AppState {
-            agent,
+            registry,
             session_manager,
             bus: bus.clone(),
             chat_service,
@@ -52,11 +53,14 @@ impl Server {
             .route("/health", get(health_check))
             .route("/api/v1/sessions", get(list_sessions).post(create_session))
             .route("/api/v1/sessions/:id", get(get_session))
+            .route("/api/v1/sessions/:id/agent", put(update_session_agent))
             .route("/api/v1/sessions/:id/chat", post(chat))
             .route(
                 "/api/v1/sessions/:id/approvals/:call_id",
                 post(submit_approval),
             )
+            .route("/api/v1/agents", get(list_agents))
+            .route("/api/v1/agents/:id", get(get_agent))
             .route("/api/v1/commands", get(list_commands))
             .route("/api/v1/model", get(get_model))
             .route("/api/v1/events", get(events))
@@ -138,10 +142,113 @@ async fn list_sessions(State(state): State<AppState>) -> Json<Vec<SessionSummary
     Json(sessions)
 }
 
-async fn create_session(State(state): State<AppState>) -> Json<Session> {
-    let session_lock = state.session_manager.create_session();
+#[derive(Deserialize)]
+struct CreateSessionRequest {
+    agent_id: Option<String>,
+}
+
+async fn create_session(
+    State(state): State<AppState>,
+    json: Option<Json<CreateSessionRequest>>,
+) -> Result<Json<Session>, (axum::http::StatusCode, String)> {
+    let agent_id = json.and_then(|j| j.agent_id.clone());
+
+    // Validate agent_id if provided
+    if let Some(ref aid) = agent_id {
+        if state.registry.get_agent(aid).is_none() {
+            return Err((
+                axum::http::StatusCode::BAD_REQUEST,
+                format!("Agent not found: {}", aid),
+            ));
+        }
+    }
+
+    let session_lock = state.session_manager.create_session(agent_id);
     let session = session_lock.read().await.clone();
-    Json(session)
+    Ok(Json(session))
+}
+
+#[derive(Deserialize)]
+struct UpdateSessionAgentRequest {
+    agent_id: String,
+}
+
+async fn update_session_agent(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(req): Json<UpdateSessionAgentRequest>,
+) -> Result<Json<Session>, (axum::http::StatusCode, String)> {
+    if state.registry.get_agent(&req.agent_id).is_none() {
+        return Err((
+            axum::http::StatusCode::BAD_REQUEST,
+            format!("Agent not found: {}", req.agent_id),
+        ));
+    }
+
+    let session_lock = state.session_manager.get_session(&id).ok_or_else(|| {
+        (
+            axum::http::StatusCode::NOT_FOUND,
+            "Session not found".to_string(),
+        )
+    })?;
+
+    let mut session = session_lock.write().await;
+    if session.status == sisyphus_core::session::SessionStatus::Busy {
+        return Err((
+            axum::http::StatusCode::CONFLICT,
+            "Session is busy".to_string(),
+        ));
+    }
+
+    session.agent_id = Some(req.agent_id);
+    Ok(Json(session.clone()))
+}
+
+#[derive(Serialize)]
+struct AgentResponse {
+    id: String,
+    model: String,
+    name: String,
+    description: String,
+}
+
+async fn list_agents(State(state): State<AppState>) -> Json<Vec<AgentResponse>> {
+    let agents = state.registry.list_agents();
+    let mut responses: Vec<AgentResponse> = agents
+        .into_iter()
+        .map(|(id, agent)| {
+            let config = agent.config();
+            AgentResponse {
+                id,
+                model: agent.model_name(),
+                name: config.name.clone(),
+                description: config.description.clone(),
+            }
+        })
+        .collect();
+    // Sort by ID for stable output
+    responses.sort_by(|a, b| a.id.cmp(&b.id));
+    Json(responses)
+}
+
+async fn get_agent(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<AgentResponse>, (axum::http::StatusCode, String)> {
+    if let Some(agent) = state.registry.get_agent(&id) {
+        let config = agent.config();
+        Ok(Json(AgentResponse {
+            id,
+            model: agent.model_name(),
+            name: config.name.clone(),
+            description: config.description.clone(),
+        }))
+    } else {
+        Err((
+            axum::http::StatusCode::NOT_FOUND,
+            "Agent not found".to_string(),
+        ))
+    }
 }
 
 async fn get_session(
@@ -173,6 +280,8 @@ struct ChatResponse {
     model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     effect: Option<CommandEffect>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    agent_id: Option<String>,
 }
 
 async fn chat(
@@ -197,6 +306,7 @@ async fn chat(
         usage: Some(outcome.usage),
         model: Some(outcome.model),
         effect: Some(outcome.effect),
+        agent_id: Some(outcome.agent_id),
     }))
 }
 
@@ -207,12 +317,12 @@ struct ModelInfo {
 
 async fn get_model(State(state): State<AppState>) -> Json<ModelInfo> {
     Json(ModelInfo {
-        model: state.agent.model_name(),
+        model: state.registry.get_default_agent().model_name(),
     })
 }
 
 async fn list_commands(State(state): State<AppState>) -> Json<Vec<CommandInfo>> {
-    Json(state.agent.list_commands())
+    Json(state.registry.get_default_agent().list_commands())
 }
 
 #[derive(Deserialize)]
@@ -252,6 +362,7 @@ async fn submit_approval(
         usage: Some(outcome.usage),
         model: Some(outcome.model),
         effect: Some(outcome.effect),
+        agent_id: Some(outcome.agent_id),
     }))
 }
 

@@ -138,7 +138,7 @@ async fn test_sequential_tool_execution() {
         name: "allow_tool_2".to_string(),
     }));
 
-    let mut session = Session::new();
+    let mut session = Session::new(None);
 
     // 1. Start chat
     let result = agent.chat(&mut session, "Do it".to_string()).await.unwrap();

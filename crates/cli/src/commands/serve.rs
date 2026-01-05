@@ -11,7 +11,10 @@ pub async fn run(config: Config, port: u16) -> anyhow::Result<()> {
 
     let session_manager = Arc::new(SessionManager::new());
 
-    server::Server::new(port, components.agent, session_manager, components.bus)
+    let registry = sisyphus_core::agent::registry::AgentRegistry::new(components.agent);
+    let registry = Arc::new(registry);
+
+    server::Server::new(port, registry, session_manager, components.bus)
         .run()
         .await?;
 

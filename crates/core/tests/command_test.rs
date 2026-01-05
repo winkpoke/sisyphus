@@ -70,7 +70,7 @@ Hello {{args}}, how are you?"#;
         config,
         std::path::PathBuf::from("."),
     );
-    let mut session = Session::new();
+    let mut session = Session::new(None);
 
     // Execute command
     // Input: "/greet world"
@@ -96,7 +96,7 @@ async fn test_builtin_command_new() -> Result<()> {
         config,
         std::path::PathBuf::from("."),
     );
-    let mut session = Session::new();
+    let mut session = Session::new(None);
 
     session.add_message(Message {
         role: Role::User,
@@ -141,7 +141,7 @@ async fn test_resilient_loading() -> Result<()> {
 
     // Should not crash
     assert!(agent
-        .chat(&mut Session::new(), "/help".to_string())
+        .chat(&mut Session::new(None), "/help".to_string())
         .await
         .is_ok());
 
@@ -160,7 +160,7 @@ async fn test_builtin_command_quit() -> Result<()> {
         config,
         std::path::PathBuf::from("."),
     );
-    let mut session = Session::new();
+    let mut session = Session::new(None);
 
     let outcome = agent.chat(&mut session, "/quit".to_string()).await?;
 
@@ -181,7 +181,7 @@ async fn test_builtin_command_exit() -> Result<()> {
         config,
         std::path::PathBuf::from("."),
     );
-    let mut session = Session::new();
+    let mut session = Session::new(None);
 
     let outcome = agent.chat(&mut session, "/exit".to_string()).await?;
 

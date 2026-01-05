@@ -15,8 +15,8 @@ impl SessionManager {
         }
     }
 
-    pub fn create_session(&self) -> Arc<RwLock<Session>> {
-        let session = Session::new();
+    pub fn create_session(&self, agent_id: Option<String>) -> Arc<RwLock<Session>> {
+        let session = Session::new(agent_id);
         let id = session.id.clone();
         let session = Arc::new(RwLock::new(session));
         self.sessions.insert(id.clone(), session.clone());

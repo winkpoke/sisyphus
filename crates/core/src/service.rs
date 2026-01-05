@@ -1,11 +1,12 @@
 use anyhow::Result;
 use std::sync::Arc;
+use crate::agent::registry::AgentRegistry;
 use crate::agent::Agent;
 use crate::session::manager::SessionManager;
 use crate::command::CommandEffect;
 
 pub struct ChatService {
-    agent: Arc<Agent>,
+    registry: Arc<AgentRegistry>,
     session_manager: Arc<SessionManager>,
 }
 
@@ -15,15 +16,16 @@ pub struct ChatServiceResponse {
     pub effect: CommandEffect,
     pub usage: String,
     pub model: String,
+    pub agent_id: String,
 }
 
 impl ChatService {
     pub fn new(
-        agent: Arc<Agent>,
+        registry: Arc<AgentRegistry>,
         session_manager: Arc<SessionManager>,
     ) -> Self {
         Self {
-            agent,
+            registry,
             session_manager,
         }
     }
@@ -34,11 +36,16 @@ impl ChatService {
         })?;
 
         let mut session = session_lock.write().await;
-        let outcome = self.agent.chat(&mut *session, message).await?;
+        let agent_id = session.agent_id.clone().unwrap_or_else(|| self.registry.default_agent_id().to_string());
+        let agent = self.registry.get_agent(&agent_id).ok_or_else(|| {
+            anyhow::anyhow!("Agent not found: {}", agent_id)
+        })?;
+
+        let outcome = agent.chat(&mut *session, message).await?;
 
         let (effective_session_id, tokens) = match outcome.effect {
             CommandEffect::NewSession => {
-                let new_session_lock = self.session_manager.create_session();
+                let new_session_lock = self.session_manager.create_session(Some(agent_id.clone()));
                 let new_session = new_session_lock.read().await;
                 (new_session.id.clone(), new_session.estimate_tokens())
             }
@@ -57,7 +64,7 @@ impl ChatService {
         };
 
         let usage = format!("{} tokens", tokens);
-        let model = self.agent.model_name();
+        let model = agent.model_name();
 
         Ok(ChatServiceResponse {
             response: outcome.output.unwrap_or_default(),
@@ -65,6 +72,7 @@ impl ChatService {
             effect: outcome.effect,
             usage,
             model,
+            agent_id,
         })
     }
 
@@ -79,11 +87,16 @@ impl ChatService {
         })?;
 
         let mut session = session_lock.write().await;
-        let response = self.agent.resolve_approval(&mut *session, call_id, approved).await?;
+        let agent_id = session.agent_id.clone().unwrap_or_else(|| self.registry.default_agent_id().to_string());
+        let agent = self.registry.get_agent(&agent_id).ok_or_else(|| {
+            anyhow::anyhow!("Agent not found: {}", agent_id)
+        })?;
+
+        let response = agent.resolve_approval(&mut *session, call_id, approved).await?;
 
         let tokens = session.estimate_tokens();
         let usage = format!("{} tokens", tokens);
-        let model = self.agent.model_name();
+        let model = agent.model_name();
 
         Ok(ChatServiceResponse {
             response,
@@ -91,6 +104,7 @@ impl ChatService {
             effect: CommandEffect::None, // Approvals don't trigger effects currently
             usage,
             model,
+            agent_id,
         })
     }
 }
@@ -129,11 +143,12 @@ mod tests {
         let bus = Arc::new(common::bus::EventBus::new(100));
         let config = AgentConfig::default();
         let agent = Arc::new(Agent::new(provider, bus, config, PathBuf::from(".")));
+        let registry = Arc::new(AgentRegistry::new(agent));
         let session_manager = Arc::new(SessionManager::new());
-        let service = ChatService::new(agent, session_manager.clone());
+        let service = ChatService::new(registry, session_manager.clone());
 
         // Create a session
-        let session_lock = session_manager.create_session();
+        let session_lock = session_manager.create_session(None);
         let session_id = session_lock.read().await.id.clone();
         drop(session_lock);
 
@@ -166,11 +181,12 @@ mod tests {
         let bus = Arc::new(common::bus::EventBus::new(100));
         let config = AgentConfig::default();
         let agent = Arc::new(Agent::new(provider, bus, config, PathBuf::from(".")));
+        let registry = Arc::new(AgentRegistry::new(agent));
         let session_manager = Arc::new(SessionManager::new());
-        let service = ChatService::new(agent, session_manager.clone());
+        let service = ChatService::new(registry, session_manager.clone());
 
         // Create a session
-        let session_lock = session_manager.create_session();
+        let session_lock = session_manager.create_session(None);
         let session_id = session_lock.read().await.id.clone();
         drop(session_lock);
 

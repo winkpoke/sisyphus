@@ -1,5 +1,6 @@
 pub mod config;
 pub mod prompt;
+pub mod registry;
 
 use self::config::{AgentConfig, PermissionLevel};
 use self::prompt::SystemPromptBuilder;
@@ -78,6 +79,10 @@ impl Agent {
 
     pub fn list_commands(&self) -> Vec<crate::command::CommandInfo> {
         self.commands.list()
+    }
+
+    pub fn config(&self) -> &AgentConfig {
+        &self.config
     }
 
     pub fn model_name(&self) -> String {

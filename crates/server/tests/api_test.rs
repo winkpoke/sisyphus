@@ -4,6 +4,7 @@ use common::llm::{CompletionRequest, FunctionCall, LLMProvider, Message, Role, T
 use common::tool::Tool;
 use futures::Stream;
 use server::Server;
+use sisyphus_core::agent::registry::AgentRegistry;
 use sisyphus_core::agent::{
     config::{AgentConfig, PermissionLevel},
     Agent,
@@ -126,11 +127,12 @@ async fn test_approval_flow() {
     let mut agent = Agent::new(provider, bus.clone(), config, std::path::PathBuf::from("."));
     agent.register_tool(Box::new(MockTool));
     let agent = Arc::new(agent);
+    let registry = Arc::new(AgentRegistry::new(agent));
 
     let session_manager = Arc::new(SessionManager::new());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let server = Server::new(port, agent, session_manager, bus);
+    let server = Server::new(port, registry, session_manager, bus);
 
     tokio::spawn(async move {
         if let Err(e) = server
@@ -251,11 +253,12 @@ async fn test_denial_flow() {
     let mut agent = Agent::new(provider, bus.clone(), config, std::path::PathBuf::from("."));
     agent.register_tool(Box::new(MockTool));
     let agent = Arc::new(agent);
+    let registry = Arc::new(AgentRegistry::new(agent));
 
     let session_manager = Arc::new(SessionManager::new());
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let port = listener.local_addr().unwrap().port();
-    let server = Server::new(port, agent, session_manager, bus);
+    let server = Server::new(port, registry, session_manager, bus);
 
     tokio::spawn(async move {
         if let Err(e) = server
