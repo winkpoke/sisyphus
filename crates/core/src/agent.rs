@@ -159,11 +159,23 @@ impl Agent {
         }
     }
 
+    fn update_session_status(&self, session: &mut Session, status: SessionStatus) {
+        let state_str = match status {
+            SessionStatus::Idle => "Idle",
+            SessionStatus::Busy => "Busy",
+        };
+        session.status = status;
+        self.bus.publish(SystemEvent::AgentStateChanged {
+            session_id: session.id.clone(),
+            state: state_str.to_string(),
+        });
+    }
+
     pub async fn chat(&self, session: &mut Session, input: String) -> Result<CommandOutcome> {
         if session.status == SessionStatus::Busy {
             return Err(anyhow!("Session is busy"));
         }
-        session.status = SessionStatus::Busy;
+        self.update_session_status(session, SessionStatus::Busy);
 
         let mut input = input;
         let mut depth = 0;
@@ -173,7 +185,7 @@ impl Agent {
             let (cmd_name, parts, raw_args) = match parse_command(&input) {
                 Ok((name, args, raw)) => (name, args, raw),
                 Err(e) => {
-                    session.status = SessionStatus::Idle;
+                    self.update_session_status(session, SessionStatus::Idle);
                     return Err(e);
                 }
             };
@@ -187,13 +199,13 @@ impl Agent {
                             registry: &self.commands,
                         };
                         let res = cmd.execute(&ctx, parts).await;
-                        session.status = SessionStatus::Idle;
+                        self.update_session_status(session, SessionStatus::Idle);
                         return res;
                     }
                     CommandType::Custom(config) => {
                         depth += 1;
                         if depth > MAX_DEPTH {
-                            session.status = SessionStatus::Idle;
+                            self.update_session_status(session, SessionStatus::Idle);
                             return Err(anyhow!(t!("command_recursion_limit")));
                         }
                         // For custom commands, we use the raw_args directly.
@@ -206,14 +218,14 @@ impl Agent {
                     }
                 }
             } else {
-                session.status = SessionStatus::Idle;
+                self.update_session_status(session, SessionStatus::Idle);
                 return Err(anyhow!(t!("command_not_found", name = cmd_name)));
             }
         }
 
         let result = self.process_turn(session, input).await;
 
-        session.status = SessionStatus::Idle;
+        self.update_session_status(session, SessionStatus::Idle);
         match result {
             Ok(output) => Ok(CommandOutcome {
                 output: Some(output),
@@ -232,13 +244,13 @@ impl Agent {
         if session.status == SessionStatus::Busy {
             return Err(anyhow!("Session is busy"));
         }
-        session.status = SessionStatus::Busy;
+        self.update_session_status(session, SessionStatus::Busy);
 
         let result = self
             .resolve_approval_inner(session, call_id, approved)
             .await;
 
-        session.status = SessionStatus::Idle;
+        self.update_session_status(session, SessionStatus::Idle);
         result
     }
 
