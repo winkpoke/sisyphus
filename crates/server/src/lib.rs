@@ -8,7 +8,6 @@ use common::bus::{EventBus, SystemEvent};
 use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};
 use sisyphus_core::agent::registry::AgentRegistry;
-use sisyphus_core::agent::Agent;
 use sisyphus_core::command::{CommandEffect, CommandInfo};
 use sisyphus_core::service::ChatService;
 use sisyphus_core::session::manager::SessionManager;
@@ -55,6 +54,7 @@ impl Server {
             .route("/api/v1/sessions/:id", get(get_session))
             .route("/api/v1/sessions/:id/agent", put(update_session_agent))
             .route("/api/v1/sessions/:id/chat", post(chat))
+            .route("/api/v1/sessions/:id/clear", post(clear_session))
             .route(
                 "/api/v1/sessions/:id/approvals/:call_id",
                 post(submit_approval),
@@ -249,6 +249,22 @@ async fn get_agent(
             "Agent not found".to_string(),
         ))
     }
+}
+
+async fn clear_session(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<Session>, (axum::http::StatusCode, String)> {
+    let session_lock = state.session_manager.get_session(&id).ok_or_else(|| {
+        (
+            axum::http::StatusCode::NOT_FOUND,
+            "Session not found".to_string(),
+        )
+    })?;
+
+    let mut session = session_lock.write().await;
+    session.clear_context();
+    Ok(Json(session.clone()))
 }
 
 async fn get_session(

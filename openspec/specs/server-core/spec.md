@@ -31,35 +31,20 @@ And a `MessageReceived` event is published on the internal bus
 Then the client should receive this event via the stream.
 
 ### Requirement: Chat Session Lifecycle Signaling
-The server SHALL return enough information from the chat endpoint for clients to handle command-driven session lifecycle and UX changes deterministically.
+The server SHALL return enough information from the chat endpoint for clients to render responses deterministically.
 
 The chat response MUST include:
 - The assistant response content
-- The effective session id to use for subsequent requests
-- The command effect (if any) produced by executing slash commands for that request
+- The session id to use for subsequent requests
 
-#### Scenario: Chat response includes effective session id
+Chat responses MUST NOT be used to apply UiCommand-driven lifecycle changes.
+
+#### Scenario: Chat response is stable for normal turns
 - **GIVEN** a running server
 - **AND** an existing session with id `S1`
 - **WHEN** a client sends a chat request to `/api/v1/sessions/S1/chat`
 - **THEN** the server SHALL return a successful response containing the assistant response
-- **AND** it SHALL include the effective session id for subsequent requests
-
-#### Scenario: New session command returns new session id
-- **GIVEN** a running server
-- **AND** an existing session with id `S1`
-- **WHEN** a client sends "/new" to `/api/v1/sessions/S1/chat`
-- **THEN** the server SHALL create a new session with id `S2`
-- **AND** it SHALL return `S2` as the effective session id in the chat response
-- **AND** `S2` SHALL have an empty message history
-- **AND** it SHALL return a command effect indicating a new session was created
-
-#### Scenario: Command effect is returned for client UX
-- **GIVEN** a running server
-- **AND** an existing session with id `S1`
-- **WHEN** a client sends a slash command that produces a command effect to `/api/v1/sessions/S1/chat`
-- **THEN** the server SHALL return the command effect in the chat response
-- **AND** the command effect value MUST be deterministic for that command
+- **AND** it SHALL include `S1` as the session id for subsequent requests
 
 ### Requirement: Efficient Session Listing
 The system SHALL provide a lightweight representation of sessions for listing endpoints to optimize performance.
@@ -187,4 +172,28 @@ The chat response SHALL include the effective Agent identity used for the turn.
 - **WHEN** a client sends `POST /api/v1/sessions/S1/chat`
 - **THEN** the response MUST include the `agent_id` `A1`
 - **AND** the `model` field in the response MUST reflect the model configured for `A1`.
+
+### Requirement: SlashCommand discovery API
+The server SHALL provide an endpoint to list discoverable SlashCommands available for the running server configuration.
+
+The response MUST include, per command:
+- `name` (including the leading `/`)
+- `description`
+- `source` with values `builtin` or `custom`
+
+#### Scenario: List SlashCommands
+- **GIVEN** a running server
+- **WHEN** a client requests `GET /api/v1/slash-commands`
+- **THEN** the server MUST return a JSON array of SlashCommand metadata
+- **AND** command names MUST be unique within the response
+
+### Requirement: Clear session history API
+The server SHALL provide an endpoint to clear the message and tool-result history for a session.
+
+#### Scenario: Clear session history
+- **GIVEN** a running server
+- **AND** an existing session `S1` with prior context
+- **WHEN** a client sends `POST /api/v1/sessions/S1/clear`
+- **THEN** the server MUST clear the session context
+- **AND** a subsequent chat request for `S1` MUST NOT include prior context
 

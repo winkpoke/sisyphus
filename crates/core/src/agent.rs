@@ -4,10 +4,13 @@ pub mod registry;
 
 use self::config::{AgentConfig, PermissionLevel};
 use self::prompt::SystemPromptBuilder;
+use crate::command::builtins::{
+    ClearHistoryCommand, DebugCommand, ExitCommand, HelpCommand, NewSessionCommand, QuitCommand,
+};
 use crate::command::loader::CommandLoader;
 use crate::command::parser::parse_command;
 use crate::command::{
-    builtins, CommandContext, CommandEffect, CommandOutcome, CommandRegistry, CommandType,
+    CommandContext, CommandEffect, CommandOutcome, CommandRegistry, CommandType,
 };
 use crate::session::context::DefaultTokenEstimator;
 use crate::session::{PendingApproval, Session, SessionStatus};
@@ -65,16 +68,12 @@ impl Agent {
     }
 
     fn register_builtins(&mut self) {
-        self.commands
-            .register_builtin(Box::new(builtins::HelpCommand));
-        self.commands
-            .register_builtin(Box::new(builtins::ExitCommand));
-        self.commands
-            .register_builtin(Box::new(builtins::QuitCommand));
-        self.commands
-            .register_builtin(Box::new(builtins::NewSessionCommand));
-        self.commands
-            .register_builtin(Box::new(builtins::ClearHistoryCommand));
+        self.commands.register_builtin(Box::new(HelpCommand));
+        self.commands.register_builtin(Box::new(ExitCommand));
+        self.commands.register_builtin(Box::new(QuitCommand));
+        self.commands.register_builtin(Box::new(ClearHistoryCommand));
+        self.commands.register_builtin(Box::new(NewSessionCommand));
+        self.commands.register_builtin(Box::new(DebugCommand));
     }
 
     pub fn list_commands(&self) -> Vec<crate::command::CommandInfo> {
@@ -190,7 +189,8 @@ impl Agent {
                 }
             };
 
-            if let Some(command) = self.commands.get(&cmd_name) {
+            let lookup_name = cmd_name.strip_prefix('/').unwrap_or(&cmd_name);
+            if let Some(command) = self.commands.get(lookup_name) {
                 match command {
                     CommandType::Builtin(cmd) => {
                         let ctx = CommandContext {
@@ -215,6 +215,10 @@ impl Agent {
                             input = config.template.clone();
                         }
                         continue;
+                    }
+                    CommandType::Remote(_) => {
+                        self.update_session_status(session, SessionStatus::Idle);
+                        return Err(anyhow!("Remote commands cannot be executed directly"));
                     }
                 }
             } else {

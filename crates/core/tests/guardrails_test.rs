@@ -6,11 +6,7 @@ use common::tool::Tool;
 use futures::Stream;
 use serde_json::{json, Value};
 use sisyphus_core::agent::config::{AgentConfig, PermissionLevel};
-use sisyphus_core::agent::registry::AgentRegistry;
 use sisyphus_core::agent::Agent;
-use sisyphus_core::command::CommandEffect;
-use sisyphus_core::service::ChatService;
-use sisyphus_core::session::manager::SessionManager;
 use sisyphus_core::session::Session;
 use std::pin::Pin;
 use std::sync::Arc;
@@ -176,90 +172,7 @@ async fn test_permission_enforcement_ask() {
     }
 }
 
-#[tokio::test]
-async fn test_command_effect_clear() {
-    let bus = Arc::new(EventBus::new(10));
-    let config = AgentConfig::default();
-    let provider = Box::new(MockProvider::new(vec![]));
-    let agent = Arc::new(Agent::new(
-        provider,
-        bus.clone(),
-        config,
-        std::path::PathBuf::from("."),
-    ));
-    let registry = Arc::new(AgentRegistry::new(agent));
-    let session_manager = Arc::new(SessionManager::new());
-    let service = ChatService::new(registry, session_manager.clone());
 
-    let session_lock = session_manager.create_session(None);
-    let session_id = {
-        let mut session = session_lock.write().await;
-        let s: &mut Session = &mut *session;
-        s.add_message(Message {
-            role: Role::User,
-            content: Some("Hi".into()),
-            tool_calls: None,
-            tool_call_id: None,
-        })
-        .unwrap();
-        s.id.clone()
-    };
-
-    {
-        let session = session_lock.read().await;
-        let s: &Session = &*session;
-        assert_eq!(s.history().len(), 1);
-    }
-
-    let res = service.chat(&session_id, "/clear".to_string()).await.unwrap();
-    assert_eq!(res.effect, CommandEffect::ClearHistory);
-
-    {
-        let session = session_lock.read().await;
-        let s: &Session = &*session;
-        assert_eq!(s.history().len(), 0);
-    }
-}
-
-#[tokio::test]
-async fn test_command_effect_new_session() {
-    let bus = Arc::new(EventBus::new(10));
-    let config = AgentConfig::default();
-    let provider = Box::new(MockProvider::new(vec![]));
-    let agent = Arc::new(Agent::new(
-        provider,
-        bus.clone(),
-        config,
-        std::path::PathBuf::from("."),
-    ));
-    let registry = Arc::new(AgentRegistry::new(agent));
-    let session_manager = Arc::new(SessionManager::new());
-    let service = ChatService::new(registry, session_manager.clone());
-
-    let session_lock = session_manager.create_session(None);
-    let session_id = {
-        let mut session = session_lock.write().await;
-        let s: &mut Session = &mut *session;
-        s.add_message(Message {
-            role: Role::User,
-            content: Some("Hi".into()),
-            tool_calls: None,
-            tool_call_id: None,
-        })
-        .unwrap();
-        s.id.clone()
-    };
-
-    let res = service.chat(&session_id, "/new".to_string()).await.unwrap();
-    assert_eq!(res.effect, CommandEffect::NewSession);
-    assert_ne!(res.session_id, session_id);
-
-    // Verify the new session exists and is empty
-    let new_session_lock = session_manager.get_session(&res.session_id).unwrap();
-    let new_session = new_session_lock.read().await;
-    let s: &Session = &*new_session;
-    assert_eq!(s.history().len(), 0);
-}
 
 #[test]
 fn test_prompt_snapshot() {

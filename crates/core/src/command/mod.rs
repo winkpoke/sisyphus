@@ -42,14 +42,14 @@ pub trait Command: Send + Sync {
 pub enum CommandType {
     Builtin(Box<dyn Command>),
     Custom(CommandConfig),
+    Remote(CommandInfo),
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CommandInfo {
     pub name: String,
     pub description: String,
-    #[serde(rename = "type")]
-    pub command_type: String,
+    pub source: String, // "builtin" | "custom"
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -81,8 +81,20 @@ impl CommandRegistry {
     }
 
     pub fn register_custom(&mut self, name: &str, config: CommandConfig) {
+        // Enforce reserved UiCommand names
+        match name {
+            "help" | "quit" | "exit" | "clear" | "debug" | "new" => {
+                tracing::warn!("Ignoring attempt to overwrite reserved UiCommand: {}", name);
+                return;
+            }
+            _ => {}
+        }
         self.commands
             .insert(name.to_string(), CommandType::Custom(config));
+    }
+
+    pub fn register_remote(&mut self, info: CommandInfo) {
+        self.commands.insert(info.name.clone(), CommandType::Remote(info));
     }
 
     pub fn get(&self, name: &str) -> Option<&CommandType> {
@@ -94,16 +106,17 @@ impl CommandRegistry {
             .commands
             .iter()
             .map(|(name, cmd)| {
-                let (desc, type_) = match cmd {
+                let (desc, source) = match cmd {
                     CommandType::Builtin(c) => (c.description().to_string(), "builtin"),
                     CommandType::Custom(config) => {
                         (config.description.clone().unwrap_or_default(), "custom")
                     }
+                    CommandType::Remote(info) => (info.description.clone(), "slash"),
                 };
                 CommandInfo {
                     name: name.clone(),
                     description: desc,
-                    command_type: type_.to_string(),
+                    source: source.to_string(),
                 }
             })
             .collect::<Vec<_>>();

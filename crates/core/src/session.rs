@@ -9,7 +9,7 @@ pub mod manager;
 
 use context::{Context, ContextError, ContextLimits, RenderedContext, TokenEstimator};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct PendingApproval {
     pub call_id: String,
     pub tool_name: String,
@@ -22,7 +22,7 @@ pub enum SessionStatus {
     Busy,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Session {
     pub id: String,
     pub created_at: DateTime<Utc>,

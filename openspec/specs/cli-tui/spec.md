@@ -68,14 +68,20 @@ The TUI MUST reflow wrapped transcript content when the terminal width changes.
 - **And** the transcript MUST remain readable without truncated mid-grapheme output
 
 ### Requirement: Command Palette
-The TUI SHALL provide a command palette for slash commands with keyboard navigation.
+The TUI SHALL provide a command palette for both UiCommands and SlashCommands with keyboard navigation.
 
 #### Scenario: Palette opens on slash
 - **Given** the user is focused on the input composer
-- **When** the user types `/`
+- **When** the user types `/` as the first character
+- **And** the next character typed is not `/`
 - **Then** the TUI SHALL display a palette of available commands
-- **And** the user SHALL be able to navigate the list with arrow keys
+- **And** the palette MUST include UiCommands and SlashCommands
 - **And** selecting a command SHALL insert it into the composer
+
+#### Scenario: Double slash does not open the palette
+- **Given** the user is focused on the input composer
+- **When** the user types `//` as the first two characters
+- **Then** the TUI MUST NOT open the command palette
 
 #### Scenario: Palette filters commands
 - **Given** the palette is open
@@ -262,4 +268,23 @@ The TUI MUST be implemented using the Model-View-Update (MVU) architectural patt
 #### Scenario: Component-based UI
 - **Given** the TUI rendering logic
 - **Then** distinct UI elements (Transcript, Input, Overlays) MUST be implemented as separate, reusable components
+
+### Requirement: UiCommands may call server endpoints
+The TUI SHALL execute UiCommands locally and MAY call server endpoints when server state must change.
+
+#### Scenario: /clear clears history via endpoint
+- **GIVEN** an active session `S1`
+- **WHEN** the user runs the UiCommand `/clear`
+- **THEN** the TUI MUST call the server clear endpoint for `S1`
+- **AND** the transcript MUST be cleared locally after the server acknowledges success
+
+### Requirement: /help uses merged command discovery
+The TUI SHALL render help from a merged view of UiCommands and SlashCommands.
+
+#### Scenario: Help shows both command kinds
+- **GIVEN** the server reports at least one custom SlashCommand
+- **AND** the TUI provides at least one UiCommand
+- **WHEN** the user requests help
+- **THEN** the help content MUST include both UiCommands and SlashCommands
+- **AND** each entry MUST indicate whether it is a UiCommand or SlashCommand
 

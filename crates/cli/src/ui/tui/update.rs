@@ -13,6 +13,8 @@ pub enum TuiInstruction {
     SubmitApproval { session_id: String, call_id: String, decision: String },
     Quit,
     DispatchCommand(String),
+    NewSession,
+    ClearSession,
 }
 
 pub fn update(app: &mut App, action: Action) -> TuiInstruction {
@@ -67,6 +69,19 @@ pub fn update(app: &mut App, action: Action) -> TuiInstruction {
         Action::Key(key) => {
             return handle_key_event(app, key);
         }
+        Action::SessionCreated(session) => {
+            app.state.update_session_id(session.id);
+            app.state.transcript.clear();
+            app.state.add_message(TranscriptItemKind::System, "Started new session".to_string());
+        }
+        Action::ToggleDebug => {
+            app.state.debug_mode = !app.state.debug_mode;
+            let status = if app.state.debug_mode { "enabled" } else { "disabled" };
+            app.state.add_message(TranscriptItemKind::System, format!("Debug mode {}", status));
+        }
+        Action::ClearHistory => {
+            app.state.transcript.clear();
+        }
     }
     TuiInstruction::None
 }
@@ -84,9 +99,10 @@ fn handle_command_effect(app: &mut App, effect: CommandEffect) -> TuiInstruction
         }
         CommandEffect::ClearHistory => {
             app.state.transcript.clear();
+            return TuiInstruction::ClearSession;
         }
         CommandEffect::NewSession => {
-            // New session ID is handled in Action::ResponseReceived via sid update
+            return TuiInstruction::NewSession;
         }
         CommandEffect::None => {}
     }
@@ -249,14 +265,24 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
                     app.state.mode = InputMode::Normal;
                     app.state.command_palette.reset();
                     
-                    if cmd == "/clear" || cmd == "/new" {
-                        return TuiInstruction::Chat {
-                            session_id: app.state.session_id.clone(),
-                            input: cmd,
-                        };
+                    // Check if it is a Builtin command
+                    let cmd_type = app.registry.get(&cmd).or_else(|| {
+                        if cmd.starts_with('/') {
+                            app.registry.get(&cmd[1..])
+                        } else {
+                            None
+                        }
+                    });
+
+                    if let Some(sisyphus_core::command::CommandType::Builtin(_)) = cmd_type {
+                         return TuiInstruction::DispatchCommand(cmd);
                     }
                     
-                    return TuiInstruction::DispatchCommand(cmd);
+                    // For Remote commands or anything else, send as Chat
+                    return TuiInstruction::Chat {
+                        session_id: app.state.session_id.clone(),
+                        input: cmd,
+                    };
                 } else {
                     app.state.mode = InputMode::Normal;
                     app.state.command_palette.reset();
@@ -305,19 +331,32 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
             }
             KeyCode::Enter => {
                 if let Some(input) = app.state.get_input_and_clear() {
+                    // Handle escape sequence // for literal /
+                    if input.starts_with("//") {
+                        let content = input[1..].to_string();
+                        app.state.transcript.stick_to_bottom = true;
+                        return TuiInstruction::Chat {
+                            session_id: app.state.session_id.clone(),
+                            input: content,
+                        };
+                    }
+
                     if input.starts_with('/') {
                         let cmd_name = input.split_whitespace().next().unwrap_or("");
                         
-                        // Force these commands to be sent to server even if they are in registry
-                        if cmd_name != "/clear" && cmd_name != "/new" {
-                            if app.registry.get(cmd_name).is_some() {
+                        // Check if it is a UiCommand (registered locally)
+                        // Try exact match or match without leading slash
+                        let cmd_type = app.registry.get(cmd_name).or_else(|| {
+                            app.registry.get(&cmd_name[1..])
+                        });
+
+                        if let Some(cmd_type) = cmd_type {
+                            if let sisyphus_core::command::CommandType::Builtin(_) = cmd_type {
                                 return TuiInstruction::DispatchCommand(input);
                             }
                         }
-                    }
-
-                    if input == "/quit" || input == "/exit" {
-                        // We send the command to the server and handle the Exit effect in ResponseReceived
+                        
+                        // If not a UiCommand, treat as SlashCommand and send to server
                     }
 
                     app.state.transcript.stick_to_bottom = true;

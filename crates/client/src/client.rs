@@ -3,7 +3,7 @@ use reqwest::{Client as ReqwestClient, Url};
 use reqwest_eventsource::EventSource;
 use serde::{Deserialize, Serialize};
 use sisyphus_core::command::{CommandEffect, CommandInfo};
-use sisyphus_core::session::Session;
+use sisyphus_core::session::{Session, SessionSummary};
 
 #[derive(Debug, Serialize)]
 struct ChatRequest {
@@ -129,7 +129,7 @@ impl Client {
         Ok(es)
     }
 
-    pub async fn list_sessions(&self) -> Result<Vec<Session>> {
+    pub async fn list_sessions(&self) -> Result<Vec<SessionSummary>> {
         let url = self.base_url.join("/api/v1/sessions")?;
         let resp = self.http.get(url).send().await?;
 
@@ -138,8 +138,23 @@ impl Client {
             return Err(anyhow::anyhow!("Failed to list sessions: {}", error_text));
         }
 
-        let sessions = resp.json::<Vec<Session>>().await?;
+        let sessions = resp.json::<Vec<SessionSummary>>().await?;
         Ok(sessions)
+    }
+
+    pub async fn clear_session(&self, session_id: &str) -> Result<Session> {
+        let url = self
+            .base_url
+            .join(&format!("/api/v1/sessions/{}/clear", session_id))?;
+        let resp = self.http.post(url).send().await?;
+
+        if !resp.status().is_success() {
+            let error_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Failed to clear session: {}", error_text));
+        }
+
+        let session = resp.json::<Session>().await?;
+        Ok(session)
     }
 
     pub async fn get_session(&self, session_id: &str) -> Result<Session> {

@@ -1,7 +1,6 @@
 use anyhow::Result;
 use std::sync::Arc;
 use crate::agent::registry::AgentRegistry;
-use crate::agent::Agent;
 use crate::session::manager::SessionManager;
 use crate::command::CommandEffect;
 
@@ -112,6 +111,7 @@ impl ChatService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::agent::Agent;
     use crate::agent::config::AgentConfig;
     use crate::session::manager::SessionManager;
     use common::llm::{LLMProvider, CompletionRequest, Message, Role};

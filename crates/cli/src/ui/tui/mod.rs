@@ -16,6 +16,7 @@ use futures::StreamExt;
 use sisyphus_core::command::{CommandContext, CommandType};
 use std::time::Duration;
 use tokio::sync::mpsc;
+use std::sync::Arc;
 
 use action::Action;
 use app::App;
@@ -56,6 +57,45 @@ impl Tui {
         if let Ok(model) = self.client.get_model().await {
             app.state.active_model = model;
         }
+
+        // Fetch commands from server and merge with local builtins
+        let mut commands = app
+            .registry
+            .list()
+            .iter()
+            .map(|c| {
+                if c.name.starts_with('/') {
+                    c.name.clone()
+                } else {
+                    format!("/{}", c.name)
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if let Ok(server_commands) = self.client.get_commands().await {
+            // We can safely get mutable access here as we haven't spawned tasks yet
+            if let Some(registry) = Arc::get_mut(&mut app.registry) {
+                for cmd in server_commands {
+                    // Prepend / to name if not present (SlashCommand convention)
+                    let name = if cmd.name.starts_with('/') {
+                        cmd.name.clone()
+                    } else {
+                        format!("/{}", cmd.name)
+                    };
+                    
+                    // Register as Remote so HelpCommand can see it
+                    let mut info = cmd.clone();
+                    info.name = name.clone();
+                    registry.register_remote(info);
+
+                    if !commands.contains(&name) {
+                        commands.push(name);
+                    }
+                }
+            }
+        }
+        commands.sort();
+        app.state.update_commands(commands);
 
         // Spawn System Event Listener
         let mut backend_events = self.client.subscribe_events()?;
@@ -116,10 +156,18 @@ impl Tui {
                                  let args: Vec<String> = input.split_whitespace().map(|s| s.to_string()).collect();
                                  if args.is_empty() { return; }
                                  let cmd_name = &args[0];
-                                 
-                                 if let Some(cmd_type) = registry.get(cmd_name) {
-                                     match cmd_type {
-                                         CommandType::Builtin(cmd) => {
+                                
+                                let cmd_type = registry.get(cmd_name).or_else(|| {
+                                    if cmd_name.starts_with('/') {
+                                        registry.get(&cmd_name[1..])
+                                    } else {
+                                        None
+                                    }
+                                });
+
+                                if let Some(cmd_type) = cmd_type {
+                                    match cmd_type {
+                                        CommandType::Builtin(cmd) => {
                                              let ctx = CommandContext {
                                                  session_id,
                                                  event_bus,
@@ -136,7 +184,33 @@ impl Tui {
                                              }
                                          }
                                          CommandType::Custom(_) => {}
+                                         CommandType::Remote(_) => {}
                                      }
+                                 }
+                             });
+                        }
+                        TuiInstruction::NewSession => {
+                             let client = self.client.clone();
+                             let tx = action_tx.clone();
+                             tokio::spawn(async move {
+                                 match client.create_session().await {
+                                     Ok(session) => {
+                                         let _ = tx.send(Action::SessionCreated(session));
+                                     }
+                                     Err(e) => { let _ = tx.send(Action::Error(e.to_string())); }
+                                 }
+                             });
+                        }
+                        TuiInstruction::ClearSession => {
+                             let client = self.client.clone();
+                             let session_id = app.state.session_id.clone();
+                             let tx = action_tx.clone();
+                             tokio::spawn(async move {
+                                 match client.clear_session(&session_id).await {
+                                     Ok(_) => {
+                                         // Transcript is already cleared locally
+                                     }
+                                     Err(e) => { let _ = tx.send(Action::Error(e.to_string())); }
                                  }
                              });
                         }

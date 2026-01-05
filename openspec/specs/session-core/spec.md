@@ -106,41 +106,23 @@ Then the returned reference should be an `Arc<RwLock<Session>>`
 And locking this session should not block access to other sessions in the map
 
 ### Requirement: Start a new session via command
-The system SHALL clear the current session context when a new session command is executed.
+The system SHALL support starting a new session via an explicit session-creation API.
 
-The command-driven session lifecycle transition MUST be applied by a single core chat-handling entrypoint so that:
-- Session context is cleared exactly once
-- The effective session id returned to clients is deterministic
-- No HTTP-layer handler duplicates effect application
+Session creation MUST produce a new session id and an empty session context.
 
-For this change, “session context” is defined as:
-- The conversation history used to build completion requests (user and assistant messages)
-- The tool-result history used to build completion requests
-
-#### Scenario: New session command clears context
-- **GIVEN** an existing session with prior context
-- **WHEN** the user executes the new session slash command
-- **THEN** the session context MUST be cleared before the next completion request
-
-Clearing context MUST be externally observable:
-- The next completion request MUST NOT include any prior messages from the previous session
-- The next completion request MUST NOT include any prior tool results from the previous session
+#### Scenario: Create new session produces empty context
+- **GIVEN** an existing session `S1` with prior context
+- **WHEN** a new session is created via the session manager
+- **THEN** the new session `S2` MUST have an empty message history
+- **AND** the new session `S2` MUST have an empty tool-result history
 
 ### Requirement: Clear history via command
-The system SHALL clear the current session context when a clear-history command is executed.
+The system SHALL support clearing an existing session context via a dedicated clear operation.
 
-The clear-history effect MUST be applied by a single core chat-handling entrypoint so that:
-- Session context is cleared exactly once
-- No HTTP-layer handler duplicates effect application
-
-#### Scenario: Clear history command clears context
+#### Scenario: Clear operation clears context
 - **GIVEN** an existing session with prior context
-- **WHEN** the user executes the clear-history slash command
+- **WHEN** the clear operation is executed for that session
 - **THEN** the session context MUST be cleared before the next completion request
-
-Clearing context MUST be externally observable:
-- The next completion request MUST NOT include any prior messages
-- The next completion request MUST NOT include any prior tool results
 
 ### Requirement: Session Tracks Current Agent
 The Session entity SHALL track the identity of the Agent responsible for executing its chat turns.
@@ -155,4 +137,12 @@ The Session entity SHALL track the identity of the Agent responsible for executi
 - **WHEN** the Agent begins processing a chat turn for `S1`
 - **THEN** the `agent_id` used for that turn MUST remain `A1` for the duration of the turn
 - **AND** any concurrent request to change `S1`'s `agent_id` MUST be rejected according to the server API.
+
+### Requirement: Session context mutations are not driven by SlashCommands
+The system SHALL NOT require SlashCommands to mutate session lifecycle state.
+
+#### Scenario: SlashCommand expansion does not clear context
+- **GIVEN** a session with prior context
+- **WHEN** the user executes a SlashCommand that expands to prompt text
+- **THEN** the session context MUST remain intact unless an explicit session operation is invoked
 

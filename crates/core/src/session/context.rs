@@ -114,19 +114,19 @@ impl std::fmt::Display for ContextError {
 
 impl std::error::Error for ContextError {}
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
 pub struct Context {
     entries: Vec<Entry>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum Entry {
     Pinned { message: Message },
     UserTurn { user: Message, steps: Vec<Step> },
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 enum Step {
     Assistant {

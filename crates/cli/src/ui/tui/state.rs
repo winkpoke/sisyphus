@@ -5,6 +5,7 @@ use std::time::Instant;
 #[derive(Debug, Clone, PartialEq)]
 pub enum ToastKind {
     Success,
+    #[allow(dead_code)]
     Info,
     Error,
 }
@@ -37,6 +38,7 @@ pub enum InputMode {
 #[derive(Debug, Clone, PartialEq)]
 pub enum AppStatus {
     Connected,
+    #[allow(dead_code)]
     Disconnected,
     Processing,
 }
@@ -176,6 +178,11 @@ impl CommandPaletteState {
             }
         }
     }
+
+    pub fn update_commands(&mut self, commands: Vec<String>) {
+        self.commands = commands;
+        self.update_filter();
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -207,13 +214,17 @@ impl TuiState {
             overlay: OverlayState::new(),
             selection: SelectionState::new(),
             debug_mode: false,
-            status: AppStatus::Connected,
+            status: AppStatus::default(),
             spinner_frame: 0,
-            active_model: "claude-3-5-sonnet".to_string(), // Default or load from config
-            token_usage: "0 tokens".to_string(),
-            context_title: "Transcript".to_string(),
+            active_model: String::new(),
+            token_usage: String::new(),
+            context_title: String::new(),
             toast: None,
         }
+    }
+
+    pub fn update_commands(&mut self, commands: Vec<String>) {
+        self.command_palette.update_commands(commands);
     }
 
     pub fn handle_char(&mut self, c: char) {

@@ -87,11 +87,13 @@ The scope includes the migration and generalization of the core business logic, 
 - **Debug Mode**: `/debug` toggles raw backend event payload visibility; raw payloads are redacted and truncated when shown.
 - **Startup Banner**: Display a branded ASCII banner with version and configuration info on startup.
 
-### 3.8 Slash Command System
-- **Interception Layer**: Parses user input starting with `/` before reaching the LLM.
-- **Registry**: Supports both built-in Rust functions and custom template-based commands.
-- **Command Palette Integration**: Commands shall be discoverable and executable via the TUI's command palette.
-- **Extensibility**: Automatically loads custom commands from `.sisyphus/command/*.md`.
+### 3.8 Command System
+- **Dual Command Kinds**:
+  - **SlashCommand**: Server-side prompt templates expanded by the agent (e.g., custom prompts).
+  - **UiCommand**: Client-side UI actions (e.g., `/clear`, `/quit`) handled locally or via specific API calls.
+- **Routing**: Clients MUST route UiCommands locally (taking precedence) and forward SlashCommands to the chat endpoint.
+- **Discovery**: Server exposes SlashCommand metadata; clients merge this with local UiCommands for a unified Command Palette experience.
+- **Extensibility**: Automatically loads custom SlashCommands from `.sisyphus/command/*.md` as prompt templates.
 - **Templating**: Expands custom command arguments into prompt templates.
 
 ## 4. Technical Architecture
