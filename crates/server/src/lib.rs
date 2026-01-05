@@ -258,22 +258,21 @@ async fn submit_approval(
 async fn events(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
-    let rx = state.bus.subscribe_raw();
-
-    let stream = stream::unfold(rx, |mut rx| async move {
-        loop {
-            match rx.recv().await {
-                Ok(event) => {
-                    let data = serde_json::to_string(&event).unwrap_or_default();
-                    return Some((Ok(Event::default().data(data)), rx));
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {
-                    continue;
-                }
-                Err(tokio::sync::broadcast::error::RecvError::Closed) => {
-                    return None;
-                }
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    
+    // Subscribe to all events and forward them to the channel
+    let sub = state.bus.subscribe_all(move |event| {
+        let _ = tx.send(event);
+    });
+    
+    // Convert receiver into a stream
+    let stream = stream::unfold((rx, sub), |(mut rx, _sub)| async move {
+        match rx.recv().await {
+            Some(event) => {
+                let data = serde_json::to_string(&event).unwrap_or_default();
+                Some((Ok(Event::default().data(data)), (rx, _sub)))
             }
+            None => None,
         }
     });
 
