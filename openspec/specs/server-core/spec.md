@@ -30,22 +30,6 @@ When a client connects to `/api/v1/events`
 And a `MessageReceived` event is published on the internal bus
 Then the client should receive this event via the stream.
 
-### Requirement: Chat Session Lifecycle Signaling
-The server SHALL return enough information from the chat endpoint for clients to render responses deterministically.
-
-The chat response MUST include:
-- The assistant response content
-- The session id to use for subsequent requests
-
-Chat responses MUST NOT be used to apply UiCommand-driven lifecycle changes.
-
-#### Scenario: Chat response is stable for normal turns
-- **GIVEN** a running server
-- **AND** an existing session with id `S1`
-- **WHEN** a client sends a chat request to `/api/v1/sessions/S1/chat`
-- **THEN** the server SHALL return a successful response containing the assistant response
-- **AND** it SHALL include `S1` as the session id for subsequent requests
-
 ### Requirement: Efficient Session Listing
 The system SHALL provide a lightweight representation of sessions for listing endpoints to optimize performance.
 
@@ -102,15 +86,15 @@ The server SHALL provide an endpoint to submit approval decisions for Ask-gated 
 The server HTTP layer MUST NOT interpret or apply slash command effects directly.
 
 Instead, it MUST delegate chat request handling to a single core application service that:
-- Executes slash commands via the core command system
-- Applies the resulting command effects to session state
+- Executes SlashCommand parsing and expansion
+- Executes normal chat turns for expanded or non-command input
 - Produces the response DTO returned by the HTTP handler
 
 #### Scenario: Server handlers are thin adapters
 - **GIVEN** a running server
 - **WHEN** a chat request is handled
-- **THEN** the HTTP handler MUST delegate command handling and effect application to the core service
-- **AND** the HTTP handler MUST NOT independently mutate session state based on command effects
+- **THEN** the HTTP handler MUST delegate chat handling to the core service
+- **AND** the HTTP handler MUST NOT independently mutate session state based on parsed command input
 
 ### Requirement: Agent Discovery API
 The server SHALL provide endpoints to discover available Agents and their model settings.
@@ -196,4 +180,30 @@ The server SHALL provide an endpoint to clear the message and tool-result histor
 - **WHEN** a client sends `POST /api/v1/sessions/S1/clear`
 - **THEN** the server MUST clear the session context
 - **AND** a subsequent chat request for `S1` MUST NOT include prior context
+
+### Requirement: Chat responses do not include command effects
+The server chat response MUST NOT include any command-effect metadata.
+
+#### Scenario: Chat response omits effect metadata
+- **GIVEN** a running server
+- **AND** an existing session with id `S1`
+- **WHEN** a client sends a chat request to `/api/v1/sessions/S1/chat`
+- **THEN** the server MUST return a successful response containing the assistant response
+- **AND** the response MUST NOT include an `effect` field
+
+### Requirement: Chat Response Session Context
+The server SHALL return the session context identifier from the chat endpoint for clients to maintain conversation continuity.
+
+The chat response MUST include:
+- The assistant response content
+- The session id to use for subsequent requests
+
+The chat response MUST NOT include command execution effects or lifecycle signaling.
+
+#### Scenario: Chat response provides session continuity
+- **GIVEN** a running server
+- **AND** an existing session with id `S1`
+- **WHEN** a client sends a chat request to `/api/v1/sessions/S1/chat`
+- **THEN** the server SHALL return a successful response containing the assistant response
+- **AND** it SHALL include `S1` as the session id for subsequent requests
 

@@ -27,6 +27,7 @@ Key runtime behavior (normative in OpenSpec):
 - Deny appends a deterministic Tool result: `Permission denied: user rejected tool execution.`
 - Clients render permission prompts (operation/tool_name/call_id), queue multiple requests FIFO, and submit approve/deny decisions.
 - **Command Handling**: Commands are split into **SlashCommand** (server-side prompt templates) and **UiCommand** (client-side actions like `/clear`, `/debug`). Clients route UiCommands locally and SlashCommands to the server.
+- **No Command Effects**: Chat responses MUST NOT carry UI/session lifecycle effects (no `effect` field); use UiCommands + explicit APIs.
 - **Multi-Agent Routing**: Server supports agent discovery (`/api/v1/agents`) and per-session agent assignment (`POST/PUT /api/v1/sessions`). Chat requests are routed to the session's active agent.
 - **Event Bus**: Uses a typed, topic-based distribution system. Components must subscribe using `subscribe_raw()` for global auditing or specific topics for efficiency.
 - **LLM Providers must use the shared `SSEParser` (`crates/provider/src/sse.rs`) for streaming to ensure correct handling of split network chunks and multi-byte characters.
@@ -36,5 +37,6 @@ CLI TUI requirements (see `spec/cli-tui` in OpenSpec):
 - **Visuals**: Use the centralized `Theme` struct for semantic colors; avoid hardcoded ANSI values.
 - **Feedback**: Use `Toast` overlays for transient user feedback (e.g., clipboard success) and spinners for active states.
 - **Events**: Render backend SSE `SystemEvent`s as concise, end-user-readable transcript entries by default; unparseable events must not crash the UI.
+- **UI Commands**: Route UiCommands to local MVU actions/instructions; do not emit UI-only `SystemEvent`s.
 - **Debug**: Provide a `/debug` toggle (discoverable in the command palette) to show redacted + truncated raw event payloads.
 - **Layout**: Provide a structured status bar and improve transcript readability (dynamic header + padding).

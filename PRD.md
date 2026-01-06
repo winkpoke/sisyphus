@@ -92,6 +92,7 @@ The scope includes the migration and generalization of the core business logic, 
   - **SlashCommand**: Server-side prompt templates expanded by the agent (e.g., custom prompts).
   - **UiCommand**: Client-side UI actions (e.g., `/clear`, `/quit`) handled locally or via specific API calls.
 - **Routing**: Clients MUST route UiCommands locally (taking precedence) and forward SlashCommands to the chat endpoint.
+- **No Command Effects**: Chat endpoint responses MUST NOT carry UI/session lifecycle effects (no `effect` field); clients use UiCommands + explicit APIs.
 - **Discovery**: Server exposes SlashCommand metadata; clients merge this with local UiCommands for a unified Command Palette experience.
 - **Extensibility**: Automatically loads custom SlashCommands from `.sisyphus/command/*.md` as prompt templates.
 - **Templating**: Expands custom command arguments into prompt templates.
