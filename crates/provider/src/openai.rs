@@ -116,31 +116,30 @@ impl LLMProvider for OpenAIProvider {
         let parser = crate::sse::SSEParser::new(stream);
 
         // Use unfold to allow terminating the stream early when [DONE] is received
-        let stream = futures::stream::unfold((parser, false), |(mut parser, finished)| async move {
-            if finished {
-                return None;
-            }
+        let stream =
+            futures::stream::unfold((parser, false), |(mut parser, finished)| async move {
+                if finished {
+                    return None;
+                }
 
-            match parser.next().await {
-                Some(Ok(event)) => {
-                    if event.data == "[DONE]" {
-                        return Some((None, (parser, true)));
-                    }
-
-                    if let Ok(json) = serde_json::from_str::<Value>(&event.data) {
-                        if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
-                            return Some((Some(Ok(content.to_string())), (parser, false)));
+                match parser.next().await {
+                    Some(Ok(event)) => {
+                        if event.data == "[DONE]" {
+                            return Some((None, (parser, true)));
                         }
+
+                        if let Ok(json) = serde_json::from_str::<Value>(&event.data) {
+                            if let Some(content) = json["choices"][0]["delta"]["content"].as_str() {
+                                return Some((Some(Ok(content.to_string())), (parser, false)));
+                            }
+                        }
+                        Some((None, (parser, false)))
                     }
-                    Some((None, (parser, false)))
+                    Some(Err(e)) => Some((Some(Err(e)), (parser, true))),
+                    None => None,
                 }
-                Some(Err(e)) => {
-                    Some((Some(Err(e)), (parser, true)))
-                }
-                None => None,
-            }
-        })
-        .filter_map(|opt| async { opt });
+            })
+            .filter_map(|opt| async { opt });
 
         Ok(Box::pin(stream))
     }

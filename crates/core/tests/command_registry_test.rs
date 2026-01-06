@@ -3,7 +3,7 @@ use sisyphus_core::command::{CommandConfig, CommandRegistry};
 #[test]
 fn test_reserved_names() {
     let mut registry = CommandRegistry::new();
-    
+
     let config = CommandConfig {
         description: Some("test".to_string()),
         template: "test".to_string(),

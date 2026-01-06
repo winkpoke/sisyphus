@@ -76,16 +76,14 @@ impl Tool for MockTool {
 
 #[tokio::test]
 async fn test_deny_tool_execution() {
-    let tool_calls = vec![
-        ToolCall {
-            id: "call_1".to_string(),
-            function: FunctionCall {
-                name: "ask_tool".to_string(),
-                arguments: "{}".to_string(),
-            },
-            kind: "function".to_string(),
+    let tool_calls = vec![ToolCall {
+        id: "call_1".to_string(),
+        function: FunctionCall {
+            name: "ask_tool".to_string(),
+            arguments: "{}".to_string(),
         },
-    ];
+        kind: "function".to_string(),
+    }];
 
     let initial_response = Message {
         role: Role::Assistant,
@@ -131,7 +129,7 @@ async fn test_deny_tool_execution() {
         .unwrap();
 
     println!("Result after deny: {}", res);
-    
+
     let history = session.history();
     for msg in history {
         println!("{:?}: {:?}", msg.role, msg.content);
@@ -145,22 +143,31 @@ async fn test_resolve_approval_error_resets_session_status() {
     let bus = Arc::new(EventBus::new(100));
     let config = AgentConfig::default();
     let agent = Agent::new(provider, bus, config, PathBuf::from("."));
-    
+
     let mut session = Session::new(None);
-    
+
     // Ensure initial status is Idle
     assert_eq!(session.status, SessionStatus::Idle);
-    
+
     // Call resolve_approval with an invalid call_id to force an error
-    let result = agent.resolve_approval(&mut session, "invalid_id", true).await;
-    
+    let result = agent
+        .resolve_approval(&mut session, "invalid_id", true)
+        .await;
+
     // Expect an error
     assert!(result.is_err());
-    assert_eq!(result.unwrap_err().to_string(), "No pending approval found for call_id: invalid_id");
-    
+    assert_eq!(
+        result.unwrap_err().to_string(),
+        "No pending approval found for call_id: invalid_id"
+    );
+
     // CRITICAL ASSERTION: Status must be Idle after error
-    assert_eq!(session.status, SessionStatus::Idle, "Session status should be Idle after error");
-    
+    assert_eq!(
+        session.status,
+        SessionStatus::Idle,
+        "Session status should be Idle after error"
+    );
+
     // Ensure we can still use the session
     let chat_result = agent.chat(&mut session, "Hello".to_string()).await;
     assert!(chat_result.is_ok(), "Should be able to chat after error");

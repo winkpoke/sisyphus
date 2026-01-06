@@ -102,6 +102,10 @@ impl Repl {
                         continue;
                     }
 
+                    if input.eq_ignore_ascii_case("/exit") || input.eq_ignore_ascii_case("/quit") {
+                        break;
+                    }
+
                     match self.client.chat(&self.session_id, input.to_string()).await {
                         Ok(chat_resp) => {
                             if let Some(new_id) = chat_resp.session_id {
@@ -109,9 +113,6 @@ impl Repl {
                             }
                             if !chat_resp.response.is_empty() {
                                 println!("{}", t!("assistant_prefix", msg = chat_resp.response));
-                            }
-                            if let Some(sisyphus_core::command::CommandEffect::Exit) = chat_resp.effect {
-                                break;
                             }
                         }
                         Err(e) => {

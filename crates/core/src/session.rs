@@ -96,7 +96,7 @@ impl Session {
 
     pub fn estimate_tokens(&self) -> u32 {
         // Use default estimator and no limits to get total tokens
-        let estimator = context::DefaultTokenEstimator::default();
+        let estimator = context::DefaultTokenEstimator;
         if let Ok(rendered) = self.context.render(&[], None, &estimator) {
             rendered.estimated_prompt_tokens
         } else {

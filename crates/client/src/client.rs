@@ -2,7 +2,7 @@ use anyhow::Result;
 use reqwest::{Client as ReqwestClient, Url};
 use reqwest_eventsource::EventSource;
 use serde::{Deserialize, Serialize};
-use sisyphus_core::command::{CommandEffect, CommandInfo};
+use sisyphus_core::command::CommandInfo;
 use sisyphus_core::session::{Session, SessionSummary};
 
 #[derive(Debug, Serialize)]
@@ -21,7 +21,6 @@ pub struct ChatResponse {
     pub session_id: Option<String>,
     pub usage: Option<String>,
     pub model: Option<String>,
-    pub effect: Option<CommandEffect>,
 }
 
 #[derive(Debug, Deserialize)]

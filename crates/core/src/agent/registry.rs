@@ -12,7 +12,7 @@ impl AgentRegistry {
         let default_id = default_agent.config().name.clone();
         let mut agents = HashMap::new();
         agents.insert(default_id.clone(), default_agent);
-        
+
         Self {
             agents: RwLock::new(agents),
             default_agent_id: default_id,
@@ -31,7 +31,10 @@ impl AgentRegistry {
 
     pub fn get_default_agent(&self) -> Arc<Agent> {
         let agents = self.agents.read().expect("Failed to acquire read lock");
-        agents.get(&self.default_agent_id).expect("Default agent must exist").clone()
+        agents
+            .get(&self.default_agent_id)
+            .expect("Default agent must exist")
+            .clone()
     }
 
     pub fn list_agents(&self) -> Vec<(String, Arc<Agent>)> {
@@ -41,7 +44,7 @@ impl AgentRegistry {
             .map(|(id, agent)| (id.clone(), agent.clone()))
             .collect()
     }
-    
+
     pub fn default_agent_id(&self) -> &str {
         &self.default_agent_id
     }

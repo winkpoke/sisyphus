@@ -5,5 +5,5 @@ i18n!("../common/locales");
 
 pub mod agent;
 pub mod command;
-pub mod session;
 pub mod service;
+pub mod session;

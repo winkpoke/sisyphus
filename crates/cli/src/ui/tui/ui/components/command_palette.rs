@@ -1,11 +1,11 @@
+use crate::ui::tui::app::App;
+use crate::ui::tui::ui::utils::centered_rect;
 use ratatui::{
     style::{Modifier, Style},
     text::Line,
     widgets::{Block, Borders, Clear, List, ListItem, ListState},
     Frame,
 };
-use crate::ui::tui::app::App;
-use crate::ui::tui::ui::utils::centered_rect;
 
 pub fn draw(f: &mut Frame, app: &App) {
     let area = centered_rect(60, 40, f.size());
@@ -25,7 +25,11 @@ pub fn draw(f: &mut Frame, app: &App) {
     );
     let list = List::new(items)
         .block(Block::default().title(title).borders(Borders::ALL))
-        .highlight_style(Style::default().fg(app.theme.highlight).add_modifier(Modifier::REVERSED))
+        .highlight_style(
+            Style::default()
+                .fg(app.theme.highlight)
+                .add_modifier(Modifier::REVERSED),
+        )
         .highlight_symbol("> ");
 
     let mut state = ListState::default();

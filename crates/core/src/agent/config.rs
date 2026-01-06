@@ -2,17 +2,12 @@ use crate::session::context::ContextLimits;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum AgentMode {
+    #[default]
     Primary,
     SubAgent,
     All,
-}
-
-impl Default for AgentMode {
-    fn default() -> Self {
-        Self::Primary
-    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

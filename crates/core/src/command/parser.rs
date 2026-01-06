@@ -50,17 +50,15 @@ fn parse_args(input: &str) -> Result<Vec<String>> {
             } else {
                 current.push(c);
             }
-        } else {
-            if c == '"' {
-                in_quote = true;
-            } else if c.is_whitespace() {
-                if !current.is_empty() {
-                    args.push(current.clone());
-                    current.clear();
-                }
-            } else {
-                current.push(c);
+        } else if c == '"' {
+            in_quote = true;
+        } else if c.is_whitespace() {
+            if !current.is_empty() {
+                args.push(current.clone());
+                current.clear();
             }
+        } else {
+            current.push(c);
         }
     }
 

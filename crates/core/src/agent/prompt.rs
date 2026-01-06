@@ -14,6 +14,12 @@ pub struct PromptSnapshot {
 
 pub struct SystemPromptBuilder;
 
+impl Default for SystemPromptBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SystemPromptBuilder {
     pub fn new() -> Self {
         Self

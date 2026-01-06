@@ -1,6 +1,6 @@
 use client::ChatResponse;
-use crossterm::event::KeyEvent;
 use common::bus::SystemEvent;
+use crossterm::event::KeyEvent;
 use sisyphus_core::command::CommandOutcome;
 use sisyphus_core::session::Session;
 

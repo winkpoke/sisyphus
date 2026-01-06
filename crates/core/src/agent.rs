@@ -4,14 +4,10 @@ pub mod registry;
 
 use self::config::{AgentConfig, PermissionLevel};
 use self::prompt::SystemPromptBuilder;
-use crate::command::builtins::{
-    ClearHistoryCommand, DebugCommand, ExitCommand, HelpCommand, NewSessionCommand, QuitCommand,
-};
+use crate::command::builtins::HelpCommand;
 use crate::command::loader::CommandLoader;
 use crate::command::parser::parse_command;
-use crate::command::{
-    CommandContext, CommandEffect, CommandOutcome, CommandRegistry, CommandType,
-};
+use crate::command::{CommandContext, CommandOutcome, CommandRegistry, CommandType};
 use crate::session::context::DefaultTokenEstimator;
 use crate::session::{PendingApproval, Session, SessionStatus};
 use anyhow::{anyhow, Result};
@@ -69,11 +65,6 @@ impl Agent {
 
     fn register_builtins(&mut self) {
         self.commands.register_builtin(Box::new(HelpCommand));
-        self.commands.register_builtin(Box::new(ExitCommand));
-        self.commands.register_builtin(Box::new(QuitCommand));
-        self.commands.register_builtin(Box::new(ClearHistoryCommand));
-        self.commands.register_builtin(Box::new(NewSessionCommand));
-        self.commands.register_builtin(Box::new(DebugCommand));
     }
 
     pub fn list_commands(&self) -> Vec<crate::command::CommandInfo> {
@@ -233,7 +224,6 @@ impl Agent {
         match result {
             Ok(output) => Ok(CommandOutcome {
                 output: Some(output),
-                effect: CommandEffect::None,
             }),
             Err(e) => Err(e),
         }

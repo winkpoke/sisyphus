@@ -35,18 +35,13 @@ pub enum InputMode {
     Selection,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum AppStatus {
+    #[default]
     Connected,
     #[allow(dead_code)]
     Disconnected,
     Processing,
-}
-
-impl Default for AppStatus {
-    fn default() -> Self {
-        Self::Connected
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -342,7 +337,11 @@ mod tests {
 
     #[test]
     fn test_toast() {
-        let toast = Toast::new("test".to_string(), ToastKind::Info, std::time::Duration::from_secs(1));
+        let toast = Toast::new(
+            "test".to_string(),
+            ToastKind::Info,
+            std::time::Duration::from_secs(1),
+        );
         assert_eq!(toast.message, "test");
         assert_eq!(toast.kind, ToastKind::Info);
         assert!(toast.expires_at > Instant::now());

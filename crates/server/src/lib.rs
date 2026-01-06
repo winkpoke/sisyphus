@@ -8,7 +8,7 @@ use common::bus::{EventBus, SystemEvent};
 use futures::stream::{self, Stream};
 use serde::{Deserialize, Serialize};
 use sisyphus_core::agent::registry::AgentRegistry;
-use sisyphus_core::command::{CommandEffect, CommandInfo};
+use sisyphus_core::command::CommandInfo;
 use sisyphus_core::service::ChatService;
 use sisyphus_core::session::manager::SessionManager;
 use sisyphus_core::session::{Session, SessionSummary};
@@ -37,10 +37,7 @@ impl Server {
         session_manager: Arc<SessionManager>,
         bus: Arc<EventBus>,
     ) -> Self {
-        let chat_service = Arc::new(ChatService::new(
-            registry.clone(),
-            session_manager.clone(),
-        ));
+        let chat_service = Arc::new(ChatService::new(registry.clone(), session_manager.clone()));
         let state = AppState {
             registry,
             session_manager,
@@ -295,8 +292,6 @@ struct ChatResponse {
     usage: Option<String>,
     model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
-    effect: Option<CommandEffect>,
-    #[serde(skip_serializing_if = "Option::is_none")]
     agent_id: Option<String>,
 }
 
@@ -321,7 +316,6 @@ async fn chat(
         session_id: Some(outcome.session_id),
         usage: Some(outcome.usage),
         model: Some(outcome.model),
-        effect: Some(outcome.effect),
         agent_id: Some(outcome.agent_id),
     }))
 }
@@ -377,7 +371,6 @@ async fn submit_approval(
         session_id: Some(outcome.session_id),
         usage: Some(outcome.usage),
         model: Some(outcome.model),
-        effect: Some(outcome.effect),
         agent_id: Some(outcome.agent_id),
     }))
 }
@@ -386,12 +379,12 @@ async fn events(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
     let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-    
+
     // Subscribe to all events and forward them to the channel
     let sub = state.bus.subscribe_all(move |event| {
         let _ = tx.send(event);
     });
-    
+
     // Convert receiver into a stream
     let stream = stream::unfold((rx, sub), |(mut rx, _sub)| async move {
         match rx.recv().await {

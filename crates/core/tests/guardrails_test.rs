@@ -172,8 +172,6 @@ async fn test_permission_enforcement_ask() {
     }
 }
 
-
-
 #[test]
 fn test_prompt_snapshot() {
     // This requires inspecting internals or relying on SystemPromptBuilder tests.

@@ -12,6 +12,12 @@ impl MockProvider {
     }
 }
 
+impl Default for MockProvider {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[async_trait]
 impl LLMProvider for MockProvider {
     async fn complete(&self, request: CompletionRequest) -> Result<Message> {

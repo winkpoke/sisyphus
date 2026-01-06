@@ -1,13 +1,11 @@
+use super::commands::{
+    ClearHistoryCommand, DebugCommand, ExitCommand, NewSessionCommand, QuitCommand,
+};
 use super::state::TuiState;
 use super::theme::Theme;
 use arboard::Clipboard;
 use common::bus::EventBus;
-use sisyphus_core::command::{
-    builtins::{
-        ClearHistoryCommand, DebugCommand, ExitCommand, HelpCommand, NewSessionCommand, QuitCommand,
-    },
-    CommandRegistry,
-};
+use sisyphus_core::command::{builtins::HelpCommand, CommandRegistry};
 use std::sync::Arc;
 
 pub struct App {

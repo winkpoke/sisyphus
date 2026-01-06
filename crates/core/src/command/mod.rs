@@ -9,19 +9,9 @@ use serde::Deserialize;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
-pub enum CommandEffect {
-    None,
-    ClearHistory,
-    NewSession,
-    Exit,
-    ToggleDebug,
-}
-
 #[derive(Debug, Clone, PartialEq)]
 pub struct CommandOutcome {
     pub output: Option<String>,
-    pub effect: CommandEffect,
 }
 
 pub struct CommandContext<'a> {
@@ -94,7 +84,8 @@ impl CommandRegistry {
     }
 
     pub fn register_remote(&mut self, info: CommandInfo) {
-        self.commands.insert(info.name.clone(), CommandType::Remote(info));
+        self.commands
+            .insert(info.name.clone(), CommandType::Remote(info));
     }
 
     pub fn get(&self, name: &str) -> Option<&CommandType> {

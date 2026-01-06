@@ -26,6 +26,7 @@ reedline = "0.28"
 ratatui = "0.26"
 crossterm = { version = "0.27", features = ["event-stream"] }
 arboard = "3.6.1"
+async-trait.workspace = true
 
 [dev-dependencies]
 assert_cmd = "2.0"

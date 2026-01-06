@@ -1,3 +1,5 @@
+use crate::ui::tui::app::App;
+use crate::ui::tui::state::{InputMode, TranscriptItemKind};
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},
@@ -5,8 +7,6 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
-use crate::ui::tui::app::App;
-use crate::ui::tui::state::{InputMode, TranscriptItemKind};
 
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let transcript_block = Block::default()
@@ -14,7 +14,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         .borders(Borders::ALL)
         .border_style(Style::default().fg(app.theme.border))
         .padding(ratatui::widgets::Padding::new(2, 2, 1, 1));
-    
+
     let inner_area = transcript_block.inner(area);
     let width = inner_area.width as usize;
 
@@ -41,7 +41,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
 
         let content = item.content.clone();
         let sub_lines: Vec<&str> = content.split('\n').collect();
-        
+
         for (j, sub_line) in sub_lines.iter().enumerate() {
             let mut line_text = String::new();
             if j == 0 {
@@ -54,7 +54,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
                 let frame = app.state.spinner_frame % spinner_chars.len();
                 line_text.push_str(spinner_chars[frame]);
             }
-            
+
             lines.push(Line::from(Span::styled(line_text, style)));
         }
     }

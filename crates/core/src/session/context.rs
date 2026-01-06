@@ -215,10 +215,10 @@ impl Context {
                 got: assistant.role,
             });
         }
-        if !assistant
+        if assistant
             .tool_calls
             .as_ref()
-            .is_some_and(|calls| !calls.is_empty())
+            .is_none_or(|calls| calls.is_empty())
         {
             return Err(ContextError::AssistantToolCallsMustUseBeginExchange);
         }

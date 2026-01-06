@@ -51,13 +51,13 @@ impl<S> SSEParser<S> {
 
                 // Extract line
                 let mut line_bytes = self.buffer.split_to(pos + 1); // includes \n
-                
+
                 // Remove trailing \n
                 line_bytes.truncate(line_bytes.len() - 1);
-                
+
                 // Remove optional \r
                 if line_bytes.ends_with(b"\r") {
-                     line_bytes.truncate(line_bytes.len() - 1);
+                    line_bytes.truncate(line_bytes.len() - 1);
                 }
 
                 // Decode UTF-8
@@ -74,7 +74,7 @@ impl<S> SSEParser<S> {
                         continue;
                     }
                 }
-                
+
                 // Check for comment
                 if line_str.starts_with(':') {
                     continue;
@@ -95,22 +95,22 @@ impl<S> SSEParser<S> {
                         _ => {} // Ignore other fields
                     }
                 } else {
-                     // Field without value
-                     let field = line_str;
-                     match field {
+                    // Field without value
+                    let field = line_str;
+                    match field {
                         "event" => self.current_event.event = "".to_string(),
                         "data" => {
-                             if !self.current_event.data.is_empty() {
+                            if !self.current_event.data.is_empty() {
                                 self.current_event.data.push('\n');
                             }
                         }
                         "id" => self.current_event.id = Some("".to_string()),
-                         _ => {}
+                        _ => {}
                     }
                 }
             } else {
-                 // No newline found
-                 if self.buffer.len() > MAX_LINE_LENGTH {
+                // No newline found
+                if self.buffer.len() > MAX_LINE_LENGTH {
                     return Err(anyhow!("Line too long"));
                 }
                 return Ok(None);
@@ -131,7 +131,7 @@ where
             // 1. Process existing buffer
             match self.parse_buffer() {
                 Ok(Some(event)) => return Poll::Ready(Some(Ok(event))),
-                Ok(None) => {}, // Need more data
+                Ok(None) => {} // Need more data
                 Err(e) => return Poll::Ready(Some(Err(e))),
             }
 
@@ -181,16 +181,14 @@ mod tests {
 
         let event2 = parser.next().await.unwrap().unwrap();
         assert_eq!(event2.data, "world");
-        
+
         assert!(parser.next().await.is_none());
     }
 
     #[tokio::test]
     async fn test_split_packets() {
-        let input: Vec<Result<Bytes, std::io::Error>> = vec![
-            Ok(Bytes::from("data: hel")),
-            Ok(Bytes::from("lo\n\n")),
-        ];
+        let input: Vec<Result<Bytes, std::io::Error>> =
+            vec![Ok(Bytes::from("data: hel")), Ok(Bytes::from("lo\n\n"))];
         let stream = stream::iter(input);
         let mut parser = SSEParser::new(stream);
 
@@ -200,9 +198,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_multiline_data() {
-        let input: Vec<Result<Bytes, std::io::Error>> = vec![
-            Ok(Bytes::from("data: line1\ndata: line2\n\n")),
-        ];
+        let input: Vec<Result<Bytes, std::io::Error>> =
+            vec![Ok(Bytes::from("data: line1\ndata: line2\n\n"))];
         let stream = stream::iter(input);
         let mut parser = SSEParser::new(stream);
 
@@ -219,22 +216,21 @@ mod tests {
             Ok(Bytes::from(vec![0x83])),
             Ok(Bytes::from_static(b"\n\n")),
         ];
-        
+
         let stream = stream::iter(chunks);
         let mut parser = SSEParser::new(stream);
-        
+
         let event = parser.next().await.unwrap().unwrap();
         assert_eq!(event.data, "☃");
     }
 
     #[tokio::test]
     async fn test_dos_protection() {
-         let input: Vec<Result<Bytes, std::io::Error>> = vec![
-            Ok(Bytes::from("a".repeat(MAX_LINE_LENGTH + 1))),
-        ];
+        let input: Vec<Result<Bytes, std::io::Error>> =
+            vec![Ok(Bytes::from("a".repeat(MAX_LINE_LENGTH + 1)))];
         let stream = stream::iter(input);
         let mut parser = SSEParser::new(stream);
-        
+
         let result = parser.next().await.unwrap();
         assert!(result.is_err());
         assert_eq!(result.unwrap_err().to_string(), "Line too long");
@@ -242,9 +238,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_ignore_comments() {
-        let input: Vec<Result<Bytes, std::io::Error>> = vec![
-            Ok(Bytes::from(": comment\ndata: hello\n\n")),
-        ];
+        let input: Vec<Result<Bytes, std::io::Error>> =
+            vec![Ok(Bytes::from(": comment\ndata: hello\n\n"))];
         let stream = stream::iter(input);
         let mut parser = SSEParser::new(stream);
 

@@ -1,12 +1,13 @@
 pub mod action;
 pub mod app;
+pub mod commands;
 pub mod event;
 pub mod state;
 pub mod terminal;
 pub mod theme;
 pub mod transcript;
-pub mod update;
 pub mod ui;
+pub mod update;
 
 use anyhow::Result;
 use client::Client;
@@ -14,9 +15,9 @@ use common::bus::SystemEvent;
 use event::EventHandler;
 use futures::StreamExt;
 use sisyphus_core::command::{CommandContext, CommandType};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use std::sync::Arc;
 
 use action::Action;
 use app::App;
@@ -47,7 +48,7 @@ impl Tui {
 
         // Init terminal
         let mut terminal = terminal::init()?;
-        
+
         // Init App and Event System
         let mut app = App::new(self.session_id.clone());
         let mut events = EventHandler::new(Duration::from_millis(250));
@@ -82,7 +83,7 @@ impl Tui {
                     } else {
                         format!("/{}", cmd.name)
                     };
-                    
+
                     // Register as Remote so HelpCommand can see it
                     let mut info = cmd.clone();
                     info.name = name.clone();
@@ -102,17 +103,17 @@ impl Tui {
         let tx_clone = action_tx.clone();
         tokio::spawn(async move {
             while let Some(event) = backend_events.next().await {
-                 match event {
-                     Ok(reqwest_eventsource::Event::Open) => continue,
-                     Ok(reqwest_eventsource::Event::Message(msg)) => {
-                         if let Ok(sys_event) = serde_json::from_str::<SystemEvent>(&msg.data) {
-                             let _ = tx_clone.send(Action::SystemEvent(sys_event));
-                         }
-                     }
-                     Err(_) => {
-                         // Ignore transient errors
-                     }
-                 }
+                match event {
+                    Ok(reqwest_eventsource::Event::Open) => continue,
+                    Ok(reqwest_eventsource::Event::Message(msg)) => {
+                        if let Ok(sys_event) = serde_json::from_str::<SystemEvent>(&msg.data) {
+                            let _ = tx_clone.send(Action::SystemEvent(sys_event));
+                        }
+                    }
+                    Err(_) => {
+                        // Ignore transient errors
+                    }
+                }
             }
         });
 
@@ -151,18 +152,14 @@ impl Tui {
                              let event_bus = app.event_bus.clone();
                              let session_id = app.state.session_id.clone();
                              let tx = action_tx.clone();
-                             
+
                              tokio::spawn(async move {
                                  let args: Vec<String> = input.split_whitespace().map(|s| s.to_string()).collect();
                                  if args.is_empty() { return; }
                                  let cmd_name = &args[0];
-                                
+
                                 let cmd_type = registry.get(cmd_name).or_else(|| {
-                                    if cmd_name.starts_with('/') {
-                                        registry.get(&cmd_name[1..])
-                                    } else {
-                                        None
-                                    }
+                                    cmd_name.strip_prefix('/').and_then(|s| registry.get(s))
                                 });
 
                                 if let Some(cmd_type) = cmd_type {
@@ -173,7 +170,7 @@ impl Tui {
                                                  event_bus,
                                                  registry: &registry,
                                              };
-                                             
+
                                              match cmd.execute(&ctx, args).await {
                                                  Ok(outcome) => {
                                                       let _ = tx.send(Action::CommandResult(Box::new(outcome)));
@@ -197,22 +194,29 @@ impl Tui {
                                      Ok(session) => {
                                          let _ = tx.send(Action::SessionCreated(session));
                                      }
-                                     Err(e) => { let _ = tx.send(Action::Error(e.to_string())); }
+                                     Err(e) => {
+                                         let _ = tx.send(Action::Error(e.to_string()));
+                                     }
                                  }
                              });
                         }
                         TuiInstruction::ClearSession => {
                              let client = self.client.clone();
-                             let session_id = app.state.session_id.clone();
                              let tx = action_tx.clone();
+                             let session_id = app.state.session_id.clone();
                              tokio::spawn(async move {
                                  match client.clear_session(&session_id).await {
                                      Ok(_) => {
-                                         // Transcript is already cleared locally
+                                         let _ = tx.send(Action::ClearHistory);
                                      }
-                                     Err(e) => { let _ = tx.send(Action::Error(e.to_string())); }
+                                     Err(e) => {
+                                         let _ = tx.send(Action::Error(e.to_string()));
+                                     }
                                  }
                              });
+                        }
+                        TuiInstruction::ToggleDebug => {
+                            let _ = action_tx.send(Action::ToggleDebug);
                         }
                         TuiInstruction::None => {}
                     }

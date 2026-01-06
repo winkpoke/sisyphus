@@ -1,9 +1,9 @@
+use crate::ui::tui::app::App;
 use ratatui::{
     layout::Rect,
     widgets::{Block, Borders, Paragraph},
     Frame,
 };
-use crate::ui::tui::app::App;
 
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let input_block = Block::default().title("Input").borders(Borders::ALL);

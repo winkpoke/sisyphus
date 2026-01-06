@@ -1,5 +1,5 @@
 use super::action::Action;
-use crossterm::event::{Event as CrosstermEvent};
+use crossterm::event::Event as CrosstermEvent;
 use futures::{FutureExt, StreamExt};
 use tokio::sync::mpsc;
 
@@ -32,10 +32,10 @@ impl EventHandler {
                     Some(Ok(evt)) = crossterm_event => {
                         match evt {
                             CrosstermEvent::Key(key) => {
-                                if key.kind == crossterm::event::KeyEventKind::Press {
-                                    if _sender.send(Action::Key(key)).is_err() {
-                                        break;
-                                    }
+                                if key.kind == crossterm::event::KeyEventKind::Press
+                                    && _sender.send(Action::Key(key)).is_err()
+                                {
+                                    break;
                                 }
                             }
                             CrosstermEvent::Resize(w, h) => {

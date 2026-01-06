@@ -1,10 +1,10 @@
-use ratatui::{
-    style::Style,
-    widgets::{Block, Borders, Paragraph, Wrap, Clear},
-    Frame,
-};
 use crate::ui::tui::app::App;
 use crate::ui::tui::ui::utils::centered_rect;
+use ratatui::{
+    style::Style,
+    widgets::{Block, Borders, Clear, Paragraph, Wrap},
+    Frame,
+};
 
 pub fn draw(f: &mut Frame, app: &App) {
     let area = centered_rect(60, 40, f.size());

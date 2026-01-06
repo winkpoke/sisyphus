@@ -44,7 +44,7 @@ pub async fn start_event_logger(bus: &EventBus) {
             info!(target: "bus", event = "shutdown");
         }
     });
-    
+
     // Leak the subscription to keep the logger running in the background
     std::mem::forget(sub);
 }
