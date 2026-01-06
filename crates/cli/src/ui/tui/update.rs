@@ -3,6 +3,7 @@ use super::app::App;
 use super::state::{AppStatus, InputMode, Toast, ToastKind, TranscriptItemKind};
 use common::bus::SystemEvent;
 use crossterm::event::{KeyCode, KeyModifiers};
+use sisyphus_core::command::parser::parse_command;
 use std::time::Duration;
 
 #[derive(Debug, PartialEq)]
@@ -76,6 +77,7 @@ pub fn update(app: &mut App, action: Action) -> TuiInstruction {
         Action::SessionCreated(session) => {
             app.state.update_session_id(session.id);
             app.state.transcript.clear();
+            app.state.token_usage = String::new();
             app.state.add_message(
                 TranscriptItemKind::System,
                 "Started new session".to_string(),
@@ -93,6 +95,7 @@ pub fn update(app: &mut App, action: Action) -> TuiInstruction {
         }
         Action::ClearHistory => {
             app.state.transcript.clear();
+            app.state.token_usage = String::new();
         }
     }
     TuiInstruction::None
@@ -376,30 +379,46 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
                     }
 
                     if input.starts_with('/') {
-                        let cmd_name = input.split_whitespace().next().unwrap_or("");
+                        match parse_command(&input) {
+                            Ok((cmd_name, _, _)) => {
+                                // Check if it is a UiCommand (registered locally)
+                                // Try exact match or match without leading slash
+                                let cmd_type = app.registry.get(&cmd_name).or_else(|| {
+                                    cmd_name.strip_prefix('/').and_then(|s| app.registry.get(s))
+                                });
 
-                        // Check if it is a UiCommand (registered locally)
-                        // Try exact match or match without leading slash
-                        let cmd_type = app.registry.get(cmd_name).or_else(|| {
-                            cmd_name.strip_prefix('/').and_then(|s| app.registry.get(s))
-                        });
-
-                        if let Some(sisyphus_core::command::CommandType::Builtin(cmd)) = cmd_type {
-                            match cmd.name() {
-                                "exit" | "quit" => {
-                                    app.quit();
-                                    return TuiInstruction::Quit;
+                                if let Some(sisyphus_core::command::CommandType::Builtin(cmd)) =
+                                    cmd_type
+                                {
+                                    match cmd.name() {
+                                        "exit" | "quit" => {
+                                            app.quit();
+                                            return TuiInstruction::Quit;
+                                        }
+                                        "debug" => return TuiInstruction::ToggleDebug,
+                                        "clear" => return TuiInstruction::ClearSession,
+                                        "new" => return TuiInstruction::NewSession,
+                                        _ => return TuiInstruction::DispatchCommand(input),
+                                    }
                                 }
-                                "debug" => return TuiInstruction::ToggleDebug,
-                                "clear" => return TuiInstruction::ClearSession,
-                                "new" => return TuiInstruction::NewSession,
-                                _ => {} // Not a UI command
+                                // For Remote commands or unrecognized commands, send as Chat
+                                app.state.transcript.stick_to_bottom = true;
+                                return TuiInstruction::Chat {
+                                    session_id: app.state.session_id.clone(),
+                                    input,
+                                };
+                            }
+                            Err(e) => {
+                                app.state.add_message(
+                                    TranscriptItemKind::Error,
+                                    format!("Command parse error: {}", e),
+                                );
+                                return TuiInstruction::None;
                             }
                         }
-
-                        // If not a UiCommand, treat as SlashCommand and send to server
                     }
 
+                    // Not a command (no leading slash), treat as Chat
                     app.state.transcript.stick_to_bottom = true;
                     return TuiInstruction::Chat {
                         session_id: app.state.session_id.clone(),
@@ -419,5 +438,134 @@ fn truncate_payload(s: &str, max_len: usize) -> String {
         format!("{}... (truncated)", truncated)
     } else {
         s.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_routing_ui_commands() {
+        let mut app = App::new("test-session".to_string());
+
+        // Test /new
+        app.state.input_buffer = "/new".to_string();
+        let action = Action::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::empty(),
+        ));
+        let instruction = update(&mut app, action);
+        assert_eq!(instruction, TuiInstruction::NewSession);
+
+        // Test /clear
+        app.state.input_buffer = "/clear".to_string();
+        let action = Action::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::empty(),
+        ));
+        let instruction = update(&mut app, action);
+        assert_eq!(instruction, TuiInstruction::ClearSession);
+
+        // Test /debug
+        app.state.input_buffer = "/debug".to_string();
+        let action = Action::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::empty(),
+        ));
+        let instruction = update(&mut app, action);
+        assert_eq!(instruction, TuiInstruction::ToggleDebug);
+
+        // Test /quit
+        app.state.input_buffer = "/quit".to_string();
+        let action = Action::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::empty(),
+        ));
+        let instruction = update(&mut app, action);
+        assert_eq!(instruction, TuiInstruction::Quit);
+        assert!(app.should_quit);
+    }
+
+    #[test]
+    fn test_routing_unknown_command() {
+        let mut app = App::new("test-session".to_string());
+        app.state.input_buffer = "/unknown".to_string();
+        let action = Action::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::empty(),
+        ));
+        let instruction = update(&mut app, action);
+
+        // Should be sent as chat/slash command to server
+        match instruction {
+            TuiInstruction::Chat { session_id, input } => {
+                assert_eq!(session_id, "test-session");
+                assert_eq!(input, "/unknown");
+            }
+            _ => panic!("Expected Chat instruction for unknown command"),
+        }
+    }
+
+    #[test]
+    fn test_routing_chat() {
+        let mut app = App::new("test-session".to_string());
+        app.state.input_buffer = "hello world".to_string();
+        let action = Action::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::empty(),
+        ));
+        let instruction = update(&mut app, action);
+
+        match instruction {
+            TuiInstruction::Chat { session_id, input } => {
+                assert_eq!(session_id, "test-session");
+                assert_eq!(input, "hello world");
+            }
+            _ => panic!("Expected Chat instruction"),
+        }
+    }
+
+    #[test]
+    fn test_routing_help() {
+        let mut app = App::new("test-session".to_string());
+        app.state.input_buffer = "/help".to_string();
+        let action = Action::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::empty(),
+        ));
+        let instruction = update(&mut app, action);
+
+        match instruction {
+            TuiInstruction::DispatchCommand(cmd) => {
+                assert_eq!(cmd, "/help");
+            }
+            _ => panic!("Expected DispatchCommand for help"),
+        }
+    }
+
+    #[test]
+    fn test_clear_token_usage() {
+        let mut app = App::new("test-session".to_string());
+        app.state.token_usage = "100 tokens".to_string();
+
+        let _ = update(&mut app, Action::ClearHistory);
+
+        assert_eq!(app.state.token_usage, "");
+        assert!(app.state.transcript.items.is_empty());
+    }
+
+    #[test]
+    fn test_new_session_clears_token_usage() {
+        let mut app = App::new("test-session".to_string());
+        app.state.token_usage = "100 tokens".to_string();
+
+        let mut session = sisyphus_core::session::Session::new(None);
+        session.id = "new-session".to_string();
+
+        let _ = update(&mut app, Action::SessionCreated(session));
+
+        assert_eq!(app.state.token_usage, "");
+        assert_eq!(app.state.session_id, "new-session");
     }
 }

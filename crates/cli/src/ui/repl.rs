@@ -1,5 +1,6 @@
 use anyhow::Result;
 use client::Client;
+use sisyphus_core::command::parser::parse_command;
 use std::borrow::Cow;
 
 use reedline::{
@@ -102,8 +103,30 @@ impl Repl {
                         continue;
                     }
 
-                    if input.eq_ignore_ascii_case("/exit") || input.eq_ignore_ascii_case("/quit") {
-                        break;
+                    if input.starts_with('/') {
+                        if let Ok((cmd, _args, _raw)) = parse_command(input) {
+                            match cmd.as_str() {
+                                "/exit" | "/quit" => break,
+                                "/new" => {
+                                    match self.client.create_session().await {
+                                        Ok(session) => {
+                                            self.session_id = session.id;
+                                            println!("New session created: {}", self.session_id);
+                                        }
+                                        Err(e) => eprintln!("{}", t!("error_prefix", err = e)),
+                                    }
+                                    continue;
+                                }
+                                "/clear" => {
+                                    match self.client.clear_session(&self.session_id).await {
+                                        Ok(_) => println!("Session cleared."),
+                                        Err(e) => eprintln!("{}", t!("error_prefix", err = e)),
+                                    }
+                                    continue;
+                                }
+                                _ => {}
+                            }
+                        }
                     }
 
                     match self.client.chat(&self.session_id, input.to_string()).await {

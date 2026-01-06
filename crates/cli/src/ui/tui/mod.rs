@@ -154,11 +154,15 @@ impl Tui {
                              let tx = action_tx.clone();
 
                              tokio::spawn(async move {
-                                 let args: Vec<String> = input.split_whitespace().map(|s| s.to_string()).collect();
-                                 if args.is_empty() { return; }
-                                 let cmd_name = &args[0];
+                                 let (cmd_name, args) = match sisyphus_core::command::parser::parse_command(&input) {
+                                     Ok((cmd, args, _)) => (cmd, args),
+                                     Err(e) => {
+                                         let _ = tx.send(Action::Error(format!("Command parse error: {}", e)));
+                                         return;
+                                     }
+                                 };
 
-                                let cmd_type = registry.get(cmd_name).or_else(|| {
+                                let cmd_type = registry.get(&cmd_name).or_else(|| {
                                     cmd_name.strip_prefix('/').and_then(|s| registry.get(s))
                                 });
 
