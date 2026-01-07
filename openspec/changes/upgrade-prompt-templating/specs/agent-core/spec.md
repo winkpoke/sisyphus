@@ -1,31 +1,33 @@
 ## MODIFIED Requirements
 
 ### Requirement: Dynamic System Prompt
-The system SHALL generate system prompts dynamically at the start of a user chat turn using Jinja2 templating with XML-structured semantic sections, including current environment context and custom project rules.
+The system SHALL generate system prompts dynamically at the start of a user chat turn using tagged semantic sections, including current environment context and custom project rules.
 
 #### Scenario: Environment injection uses XML tags
 - **WHEN** a system prompt is generated
 - **THEN** it includes current Working Directory, Platform (OS), and Today's Date in an `<environment>` XML tag
 
 The `<environment>` tag MUST contain these labels exactly:
-- `Operating system:`
-- `Working directory:`
-- `Today's date:`
+- `OS:`
+- `CWD:`
+- `Date:`
 
 #### Scenario: System prompt uses semantic XML structure
 - **WHEN** a system prompt is generated
 - **THEN** it MUST use the following XML tags for semantic chunking:
-  - `<role>`: Agent description/persona
-  - `<task>`: Task description derived from AgentConfig
   - `<instructions>`: Core instructions from AgentConfig
   - `<environment>`: Environment context (OS, CWD, Date)
   - `<project_rules>`: AGENTS.md content if present
-  - `<output_format>`: Response format guidelines
 
 #### Scenario: Custom rules injection from `AGENTS.md`
 - **GIVEN** `AGENTS.md` exists in the workspace root
 - **WHEN** a system prompt is generated
 - **THEN** its content is wrapped in a `<project_rules>` XML tag and appended to the system prompt
+
+#### Scenario: Project rules content is escaped
+- **GIVEN** `AGENTS.md` contains XML-special characters (`<`, `>`, `&`)
+- **WHEN** its content is embedded into `<project_rules>`
+- **THEN** XML-special characters are escaped so they cannot create new tags
 
 #### Scenario: Prompt is stable within a user turn
 - **GIVEN** a single user input triggers multiple completion requests due to tool calls
@@ -37,47 +39,23 @@ This stability requirement includes:
 - The `<project_rules>` tag content, which is snapshotted at the start of the user chat turn
 - All other XML tag content, which must not change during the turn
 
-#### Scenario: XML tag escaping in code blocks
-- **GIVEN** system prompt content contains XML special characters (e.g., `<`, `>`, `&`)
-- **WHEN** the system prompt is generated
-- **THEN** XML special characters within code blocks or instruction sections MUST be escaped to prevent tag confusion
-- **AND** the system prompt MUST render correctly when sent to LLM providers
+#### Scenario: Tags are treated as markers
+- **GIVEN** the system prompt contains tagged sections
+- **WHEN** it is sent to an LLM provider
+- **THEN** the tags are treated as plain text markers (the system does not require strict XML well-formedness)
 
 ### Requirement: System Prompt Construction
-The system prompt builder MUST use Jinja2 templating for all variable interpolation and MUST NOT block the execution thread when reading environment context or external files.
-
-#### Scenario: Template engine supports variable interpolation
-- **GIVEN** a system prompt template containing variables (e.g., `{{os}}`, `{{cwd}}`, `{{date}}`)
-- **WHEN** the system prompt is built
-- **THEN** all template variables are replaced with their corresponding values
-- **AND** undefined variables cause a clear error to be returned
-
-#### Scenario: Template engine supports advanced features
-- **GIVEN** a system prompt template using Jinja2 features:
-  - Conditionals: `{% if has_project_rules %}...{% endif %}`
-  - Loops: `{% for rule in custom_rules %}...{% endfor %}`
-  - Filters: `{{date|date('YYYY-MM-DD')}}`
-- **WHEN** the system prompt is built
-- **THEN** all Jinja2 features are rendered correctly
-- **AND** invalid Jinja2 syntax causes a clear error with line number and context
+The system prompt builder MUST NOT block the execution thread when reading environment context or external files.
 
 #### Scenario: Reading custom rules
 - **GIVEN** a large `AGENTS.md` file
 - **WHEN** the agent builds the system prompt for a new user turn
 - **THEN** it reads the file asynchronously without blocking the agent runtime
-- **AND** the file content is available as a template variable (e.g., `{{custom_rules}}`)
-
-#### Scenario: Template compilation happens at load time
-- **GIVEN** system prompt templates are loaded from configuration
-- **WHEN** the agent starts
-- **THEN** templates are compiled and validated immediately
-- **AND** invalid template syntax causes startup failure with clear error message
-- **AND** valid templates are cached for fast rendering
 
 ## ADDED Requirements
 
 ### Requirement: Jinja2 Template Engine
-The system SHALL use the minijinja crate for Jinja2-compatible template processing in both system prompts and command templates.
+The system SHALL use the minijinja crate for Jinja2-compatible template processing in SlashCommand templates.
 
 #### Scenario: Jinja2 variable interpolation works
 - **GIVEN** a template string `Hello {{name}}!`
@@ -123,7 +101,7 @@ The system MUST maintain backward compatibility with existing `{{args}}` syntax 
 - **AND** no migration or modification is required
 
 #### Scenario: Mix of old and new syntax works
-- **GIVEN** a custom SlashCommand with template `Hello {{args}}, {{upper(args)}}`
+- **GIVEN** a custom SlashCommand with template `Hello {{args}}, {{args|upper}}`
 - **AND** user executes `/command World`
 - **WHEN** the template is rendered
 - **THEN** both `{{args}}` and the Jinja2 filter work correctly

@@ -31,17 +31,17 @@ Industry best practices (2024-2025) have evolved:
 ## Goals / Non-Goals
 
 ### Goals
-1. **Enable rich templating** - Support variables, loops, conditionals, and template inheritance
-2. **Add semantic structure** - Use XML tags for clear prompt sections
-3. **Maintain backward compatibility** - Existing templates continue to work
-4. **Improve developer experience** - Clear error messages, validation, and documentation
-5. **Follow 2025 best practices** - Align with Anthropic, Microsoft, and production systems
+1. **Improve SlashCommand templating** - Support Jinja2 variables/filters for custom commands.
+2. **Add semantic structure** - Use lightweight XML-like tags for system prompt sections.
+3. **Maintain backward compatibility** - Existing templates using `{{args}}` continue to work.
+4. **Keep scope small** - Avoid large refactors (no async rewrite of command loading).
+5. **Improve developer experience** - Clear, contextual template errors.
 
 ### Non-Goals
 1. **Prompt versioning** - Out of scope (suggested in medium priority roadmap)
 2. **Prompt caching** - Out of scope (suggested in medium priority roadmap)
 3. **Dynamic middleware** - Out of scope (suggested in medium priority roadmap)
-4. **Full POML implementation** - XML tags only, not CSS-like styling
+4. **Strict XML semantics** - Tags are markers; output is not required to be well-formed XML.
 5. **Web-based prompt editor** - Out of scope (suggested in low priority roadmap)
 
 ## Decisions
@@ -68,7 +68,7 @@ Industry best practices (2024-2025) have evolved:
 - Learning curve for template syntax (mitigated by examples and documentation)
 
 ### Decision 2: XML Structure Over Markdown Headers
-**What**: Use XML tags (`<role>`, `<task>`, etc.) instead of Markdown headers (`## Role`, `## Task`)
+**What**: Use lightweight XML-like section tags (e.g., `<instructions>`, `<environment>`) instead of Markdown headers.
 
 **Why**:
 - **Semantic nesting**: XML supports nested structure better than flat Markdown
@@ -84,8 +84,7 @@ Industry best practices (2024-2025) have evolved:
 
 **Trade-offs**:
 - Slightly more verbose than Markdown
-- Requires escaping `<` and `>` in code blocks
-- Learning curve for XML structure
+- We treat tags as markers (not strict XML), so escaping rules must be explicit for injected content
 
 ### Decision 3: Backward Compatibility Layer
 **What**: Existing `{{args}}` syntax continues to work via Jinja2 compatibility
@@ -105,7 +104,7 @@ Industry best practices (2024-2025) have evolved:
 - Mix of old and new template styles in wild
 
 ### Decision 4: Template Validation at Load Time
-**What**: Parse and validate templates when loading from disk, not at runtime
+**What**: Validate SlashCommand templates for syntax at load time; validate variables at render time.
 
 **Why**:
 - Early error detection (fail-fast)
@@ -114,13 +113,13 @@ Industry best practices (2024-2025) have evolved:
 - Clearer debugging experience
 
 **Implementation**:
-- `CommandLoader` parses templates with Jinja2 during `load_from_dir()`
-- Invalid templates reject with clear error: `Failed to parse command.md: undefined variable 'foo'`
-- Valid templates cached for runtime use
+- `CommandLoader` compiles templates to catch syntax errors early (per-file).
+- Invalid templates are skipped with a warning that includes file name and error summary.
+- Undefined variables are treated as a render-time error (load time does not know render context).
 
 **Trade-offs**:
-- Slightly slower startup time (negligible)
-- Cannot validate runtime variables (e.g., session context)
+- Slightly slower startup time (acceptable)
+- Startup remains resilient (bad custom command does not prevent agent start)
 
 ## Risks / Trade-offs
 
@@ -154,10 +153,9 @@ Industry best practices (2024-2025) have evolved:
 **Risk**: Malicious templates could access unintended variables or execute logic
 
 **Mitigation**:
-- Jinja2 sandboxing (limit available filters and functions)
 - Whitelist allowed variables (not expose entire session state)
-- Validate template output length (prevent DoS via loops)
-- Restrict recursion depth (prevent infinite loops)
+- Cap rendered output length for SlashCommands
+- Keep runtime recursion limit for chained SlashCommands
 
 ### Risk 5: Performance Regression
 **Risk**: Template parsing and rendering could slow down prompt construction
@@ -172,9 +170,8 @@ Industry best practices (2024-2025) have evolved:
 
 ### Phase 1: Foundation (Week 1)
 1. Add `minijinja` dependency to `crates/core/Cargo.toml`
-2. Create `TemplateEngine` wrapper in `crates/core/src/template/engine.rs`
-3. Implement basic variable interpolation (`{{args}}` compatibility)
-4. Add unit tests for template parsing and rendering
+2. Add a small template helper to compile/render templates with an allowlisted context
+3. Add unit tests for template parsing and rendering
 
 ### Phase 2: System Prompts (Week 2)
 1. Modify `SystemPromptBuilder` to generate XML structure
@@ -189,10 +186,7 @@ Industry best practices (2024-2025) have evolved:
 4. Update slash-commands tests for Jinja2 syntax
 
 ### Phase 4: Documentation (Week 4)
-1. Write template syntax guide (variables, loops, conditionals, filters)
-2. Provide migration examples for existing templates
-3. Document XML tag structure and best practices
-4. Add troubleshooting section for common template errors
+No new documentation files in this change. Keep examples in proposal/design text.
 
 ### Rollback Plan
 If issues arise:

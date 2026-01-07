@@ -1,26 +1,18 @@
-# Change: Upgrade Prompt Templating with Jinja2 and XML Structure
+# Change: Upgrade SlashCommand templating and structure system prompts
 
 ## Why
 
-The current prompt system uses simple string replacement (`{{args}}`) which limits template flexibility and maintainability. Additionally, system prompts lack semantic structure, making them harder to understand, parse, and optimize.
+The current custom SlashCommand expansion is limited to a single `{{args}}` string replacement, which makes templates hard to reuse and extend. Separately, system prompts are a flat concatenation, which makes prompt sections harder to visually scan.
 
-Modern best practices (2024-2025) recommend:
-1. **Jinja2-style templating** for rich variable interpolation, loops, and conditionals
-2. **XML-tagged structure** (Anthropic-recommended) for semantic chunking that improves model understanding
-
-This upgrade will:
-- Enable maintainable, reusable templates (DRY principles)
-- Support complex template logic (loops, conditionals, nested objects)
-- Align with industry best practices for prompt engineering
-- Improve prompt clarity through semantic structure
+This change keeps scope tight and aligned with current Sisyphus implementation.
 
 ## What Changes
 
-- **Add Jinja2 template engine** (`minijinja` crate) for SlashCommand and system prompt templates
-- **Introduce XML-structured system prompts** with semantic tags (`<role>`, `<task>`, `<instructions>`, `<environment>`, `<project_rules>`, `<output_format>`)
-- **Maintain backward compatibility** with existing `{{args}}` syntax for custom commands
-- **Extend template variables** beyond `{{args}}` to include session context, environment, and user metadata
-- **Improve error handling** with clear template parsing and validation errors
+- **Use Jinja2 templating for SlashCommands** via `minijinja`, replacing ad-hoc `str::replace("{{args}}")`.
+- **Maintain backward compatibility**: existing templates using `{{args}}` keep working.
+- **Add a small, explicit template context allowlist** for SlashCommands (e.g., `args`, `argv`, `command`, `cwd`, `workspace_root`).
+- **Add tagged system prompt sections** (lightweight XML-like markers) to make the prompt easier to scan.
+- **Improve error handling**: template syntax errors are reported with file/name context; runtime render errors do not crash the agent.
 
 ## Impact
 
@@ -32,12 +24,12 @@ This upgrade will:
 - `crates/core/src/agent/prompt.rs` - SystemPromptBuilder to generate XML structure
 - `crates/core/src/agent.rs` - Template expansion logic (replace `str::replace` with minijinja)
 - `crates/core/src/command/loader.rs` - Command template loading with Jinja2 validation
-- `crates/cli/src/Cargo.toml` - Add `minijinja` dependency
+- `crates/core/Cargo.toml` - Add `minijinja` dependency
 
 ### Breaking Changes
-None. Existing `{{args}}` syntax will continue to work; new Jinja2 features are opt-in.
+None. Existing `{{args}}` syntax will continue to work; new features are opt-in.
 
 ### Migration Path
 - No migration required for existing commands (backward compatible)
 - New templates can leverage Jinja2 features immediately
-- Documentation will provide migration examples for templates
+- Migration examples will be included in this change’s proposal/design text (no new docs in this change).
