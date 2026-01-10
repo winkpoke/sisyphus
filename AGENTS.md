@@ -29,6 +29,7 @@ Key runtime behavior (normative in OpenSpec):
 - **Command Handling**: Commands are split into **SlashCommand** (server-side prompt templates) and **UiCommand** (client-side actions like `/clear`, `/debug`). Clients route UiCommands locally and SlashCommands to the server.
 - **No Command Effects**: Chat responses MUST NOT carry UI/session lifecycle effects (no `effect` field); use UiCommands + explicit APIs.
 - **Multi-Agent Routing**: Server supports agent discovery (`/api/v1/agents`) and per-session agent assignment (`POST/PUT /api/v1/sessions`). Chat requests are routed to the session's active agent.
+- **System Prompts**: Supports `minijinja` templating for dynamic system prompt generation, configurable via `system_prompt_template`.
 - **Event Bus**: Uses a typed, topic-based distribution system. Components must subscribe using `subscribe_raw()` for global auditing or specific topics for efficiency.
 - **LLM Providers must use the shared `SSEParser` (`crates/provider/src/sse.rs`) for streaming to ensure correct handling of split network chunks and multi-byte characters.
 

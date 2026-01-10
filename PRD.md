@@ -31,7 +31,7 @@ The scope includes the migration and generalization of the core business logic, 
   - **Executor Agent** (Evolution of "Builder"): Full access agent capable of executing commands, editing files, and interacting with external tools to complete tasks.
   - **Planner Agent**: Read-only agent for analysis, strategy formulation, and research without making state-changing modifications.
 - **Sub-agents**: Support for specialized sub-agents (e.g., Triage, Researcher, Data Analyst).
-- **Prompt Engineering**: Dynamic prompt generation adaptable to the task domain (coding, writing, analysis).
+- **Prompt Engineering**: Dynamic prompt generation adaptable to the task domain (coding, writing, analysis) using `minijinja` templates for system prompts and slash commands.
 - **Agent Permissions**: Enforce Allow/Ask/Deny gating for tool execution; Ask emits a `PermissionRequest` and pauses the current assistant turn until an explicit approve/deny decision. Tool-call batches resume in order after each decision.
 
 ### 3.2 Session & Context Management
