@@ -166,7 +166,7 @@ impl TemplateEngine {
             .custom_rules
             .as_ref()
             .map(|s| Self::escape_xml(s))
-            .unwrap_or_else(|| String::new());
+            .unwrap_or(String::new());
 
         let ctx = context! {
             instructions => Self::escape_xml(&context.instructions),

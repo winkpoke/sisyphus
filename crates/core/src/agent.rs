@@ -95,6 +95,24 @@ impl Agent {
         self.tools.insert(tool.name().to_string(), tool);
     }
 
+    pub fn register_read_only_tools(&mut self, tools: Vec<Box<dyn Tool>>) -> anyhow::Result<()> {
+        const ALLOWED_TOOLS: &[&str] = &["read_file", "glob", "grep"];
+
+        for tool in &tools {
+            if !ALLOWED_TOOLS.contains(&tool.name()) {
+                return Err(anyhow!(
+                    "Tool '{}' not allowed in read-only agent",
+                    tool.name()
+                ));
+            }
+        }
+
+        for tool in tools {
+            self.register_tool(tool);
+        }
+        Ok(())
+    }
+
     fn get_tool_definitions(&self) -> Option<Vec<ToolDefinition>> {
         if self.tools.is_empty() {
             None
@@ -115,15 +133,15 @@ impl Agent {
         }
     }
 
-    fn get_permission_level(&self, tool_name: &str) -> &PermissionLevel {
+    fn get_permission_level(&self, tool_name: &str) -> PermissionLevel {
         if let Some(level) = self.config.permissions.overrides.get(tool_name) {
-            return level;
+            return *level;
         }
 
         match tool_name {
-            "run_command" => &self.config.permissions.bash,
-            "write_file" | "replace_in_file" | "delete_file" => &self.config.permissions.edit,
-            _ => &self.config.permissions.skill,
+            "run_command" => self.config.permissions.bash,
+            "write_file" | "replace_in_file" | "delete_file" => self.config.permissions.edit,
+            _ => self.config.permissions.skill,
         }
     }
 

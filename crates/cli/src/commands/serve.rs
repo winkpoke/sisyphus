@@ -7,14 +7,14 @@ use std::sync::Arc;
 pub async fn run(config: Config, port: u16) -> anyhow::Result<()> {
     println!("{}", t!("starting_server", port = port));
 
-    let components = bootstrap::build_agent(&config).await?;
+    let agents = bootstrap::build_builtins(&config).await?;
 
     let session_manager = Arc::new(SessionManager::new());
+    let bus = agents.bus.clone();
 
-    let registry = sisyphus_core::agent::registry::AgentRegistry::new(components.agent);
-    let registry = Arc::new(registry);
+    let registry = Arc::new(bootstrap::build_agent_registry(agents));
 
-    server::Server::new(port, registry, session_manager, components.bus)
+    server::Server::new(port, registry, session_manager, bus)
         .run()
         .await?;
 

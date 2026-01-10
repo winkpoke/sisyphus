@@ -10,7 +10,7 @@ pub enum AgentMode {
     All,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq)]
 pub enum PermissionLevel {
     Allow,
     Deny,
@@ -63,8 +63,25 @@ impl Default for AgentPermissions {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+impl Default for AgentConfig {
+    fn default() -> Self {
+        Self {
+            id: "default".to_string(),
+            name: "Default Agent".to_string(),
+            description: "Default Sisyphus Agent".to_string(),
+            instructions: "You are a helpful AI assistant.".to_string(),
+            mode: AgentMode::Primary,
+            permissions: AgentPermissions::default(),
+            command_path: None,
+            context_limits: None,
+            system_prompt_template: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentConfig {
+    pub id: String,
     pub name: String,
     pub description: String,
     pub instructions: String,
@@ -90,6 +107,7 @@ mod tests {
     #[test]
     fn test_config_serialization() {
         let config = AgentConfig {
+            id: "test-agent".to_string(),
             name: "Test Agent".to_string(),
             description: "A test agent".to_string(),
             instructions: "Be helpful".to_string(),
@@ -103,6 +121,7 @@ mod tests {
         let json = serde_json::to_string(&config).unwrap();
         let deserialized: AgentConfig = serde_json::from_str(&json).unwrap();
 
+        assert_eq!(config.id, deserialized.id);
         assert_eq!(config.name, deserialized.name);
         assert_eq!(config.mode, deserialized.mode);
         assert_eq!(config.permissions.edit, deserialized.permissions.edit);
