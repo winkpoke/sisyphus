@@ -17,6 +17,16 @@ pub enum PermissionLevel {
     Ask,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+pub enum PermissionMode {
+    #[default]
+    Default, // Standard permission checking with prompts
+    AcceptEdits,       // Auto-accept Write/Edit tools
+    DontAsk,           // Auto-deny prompts, explicitly allowed still work
+    BypassPermissions, // Skip all permission checks (use with caution)
+    Plan,              // Read-only exploration mode
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentPermissions {
     pub edit: PermissionLevel,
@@ -24,6 +34,18 @@ pub struct AgentPermissions {
     pub skill: PermissionLevel,
     #[serde(default)]
     pub overrides: HashMap<String, PermissionLevel>,
+
+    #[serde(default)]
+    pub mode: PermissionMode,
+
+    #[serde(default)]
+    pub allow: Vec<String>,
+
+    #[serde(default)]
+    pub ask: Vec<String>,
+
+    #[serde(default)]
+    pub deny: Vec<String>,
 }
 
 impl Default for AgentPermissions {
@@ -33,6 +55,10 @@ impl Default for AgentPermissions {
             bash: PermissionLevel::Ask,
             skill: PermissionLevel::Ask,
             overrides: HashMap::new(),
+            mode: PermissionMode::Default,
+            allow: Vec::new(),
+            ask: Vec::new(),
+            deny: Vec::new(),
         }
     }
 }

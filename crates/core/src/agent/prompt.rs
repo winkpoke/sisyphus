@@ -77,11 +77,8 @@ impl SystemPromptBuilder {
         };
         let custom_rules = std::fs::read_to_string(agents_file).ok();
 
-        let context = SystemPromptContext::capture(
-            workspace_root,
-            config.instructions.clone(),
-            custom_rules,
-        );
+        let context =
+            SystemPromptContext::capture(workspace_root, config.instructions.clone(), custom_rules);
 
         self.engine.render_system_prompt(&self.template, &context)
     }
