@@ -46,6 +46,7 @@ pub struct AgentConfig {
     pub permissions: AgentPermissions,
     pub command_path: Option<String>,
     pub context_limits: Option<ContextLimits>,
+    pub system_prompt_template: Option<String>,
 }
 
 impl AgentConfig {
@@ -70,6 +71,7 @@ mod tests {
             permissions: AgentPermissions::default(),
             command_path: None,
             context_limits: None,
+            system_prompt_template: None,
         };
 
         let json = serde_json::to_string(&config).unwrap();

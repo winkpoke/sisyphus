@@ -1,0 +1,16 @@
+<instructions>
+{{instructions}}
+</instructions>
+
+<environment>
+- OS: {{os}}
+- CWD: {{cwd}}
+- Date: {{date}}
+- Workspace: {{workspace_root}}
+</environment>
+
+{% if custom_rules %}
+<project_rules>
+{{custom_rules}}
+</project_rules>
+{% endif %}

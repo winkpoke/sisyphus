@@ -1,4 +1,5 @@
 use super::CommandConfig;
+use crate::template::TemplateEngine;
 use anyhow::Result;
 use gray_matter::{engine::YAML, Matter, Pod};
 use serde::Deserialize;
@@ -44,8 +45,7 @@ impl CommandLoader {
                     continue;
                 }
 
-                // Load file content
-                let content = match std::fs::read_to_string(&path) {
+                let raw_content = match std::fs::read_to_string(&path) {
                     Ok(c) => c,
                     Err(e) => {
                         warn!("Failed to read command file {:?}: {}", path, e);
@@ -53,15 +53,23 @@ impl CommandLoader {
                     }
                 };
 
-                // Parse frontmatter
                 let matter = Matter::<YAML>::new();
-                let parsed: gray_matter::ParsedEntity<Pod> = match matter.parse(&content) {
+                let parsed: gray_matter::ParsedEntity<Pod> = match matter.parse(&raw_content) {
                     Ok(p) => p,
                     Err(e) => {
                         warn!("Failed to parse markdown {:?}: {}", path, e);
                         continue;
                     }
                 };
+
+                let engine = TemplateEngine::new();
+                if let Err(e) = engine.validate(&parsed.content) {
+                    warn!(
+                        "Skipping command file with invalid template body {:?}: {}",
+                        path, e
+                    );
+                    continue;
+                }
 
                 if let Some(data) = parsed.data {
                     #[derive(Deserialize)]

@@ -10,6 +10,7 @@ use crate::command::parser::parse_command;
 use crate::command::{CommandContext, CommandOutcome, CommandRegistry, CommandType};
 use crate::session::context::DefaultTokenEstimator;
 use crate::session::{PendingApproval, Session, SessionStatus};
+use crate::template::{SystemPromptContext, TemplateContext, TemplateEngine};
 use anyhow::{anyhow, Result};
 use common::bus::{EventBus, SystemEvent};
 use common::llm::{
@@ -30,6 +31,7 @@ pub struct Agent {
     config: AgentConfig,
     commands: CommandRegistry,
     workspace_root: PathBuf,
+    prompt_builder: SystemPromptBuilder,
 }
 
 enum ToolExecResult {
@@ -48,16 +50,26 @@ impl Agent {
             provider,
             bus,
             tools: HashMap::new(),
-            config,
+            config: config.clone(),
             commands: CommandRegistry::new(),
-            workspace_root,
+            workspace_root: workspace_root.clone(),
+            prompt_builder: SystemPromptBuilder::new(),
         };
         agent.register_builtins();
-        // Load custom commands from .sisyphus/command or config
         let cmd_path = agent.config.get_command_path();
         if let Ok(commands) = CommandLoader::load_from_dir(cmd_path) {
             for (name, config) in commands {
                 agent.commands.register_custom(&name, config);
+            }
+        }
+        match SystemPromptBuilder::from_config(&agent.workspace_root, &agent.config) {
+            Ok(builder) => agent.prompt_builder = builder,
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to load system prompt template: {}. Using default.",
+                    e
+                );
+                agent.prompt_builder = SystemPromptBuilder::new();
             }
         }
         agent
@@ -199,11 +211,27 @@ impl Agent {
                             self.update_session_status(session, SessionStatus::Idle);
                             return Err(anyhow!(t!("command_recursion_limit")));
                         }
-                        // For custom commands, we use the raw_args directly.
-                        if config.template.contains("{{args}}") {
-                            input = config.template.replace("{{args}}", &raw_args);
-                        } else {
-                            input = config.template.clone();
+
+                        let cwd = std::env::current_dir()
+                            .map(|p| p.to_string_lossy().to_string())
+                            .unwrap_or_else(|_| "Unknown".to_string());
+                        let workspace_root = self.workspace_root.to_string_lossy().to_string();
+
+                        let template_context = TemplateContext::new(
+                            raw_args.clone(),
+                            parts.clone(),
+                            cmd_name.clone(),
+                            cwd,
+                            workspace_root,
+                        );
+
+                        let engine = TemplateEngine::new();
+                        match engine.render(&config.template, &template_context) {
+                            Ok(rendered) => input = rendered,
+                            Err(e) => {
+                                self.update_session_status(session, SessionStatus::Idle);
+                                return Err(e);
+                            }
                         }
                         continue;
                     }
@@ -371,7 +399,15 @@ impl Agent {
 
     async fn run_turn_loop(&self, session: &mut Session, start_turn: u32) -> Result<String> {
         let mut current_turn = start_turn;
-        let snapshot = SystemPromptBuilder::snapshot(Some(&self.workspace_root)).await;
+
+        let agents_file = self.workspace_root.join("AGENTS.md");
+        let custom_rules = tokio::fs::read_to_string(agents_file).await.ok();
+
+        let context = SystemPromptContext::capture(
+            Some(&self.workspace_root),
+            self.config.instructions.clone(),
+            custom_rules,
+        );
 
         loop {
             if current_turn >= MAX_TURNS {
@@ -379,7 +415,10 @@ impl Agent {
             }
             current_turn += 1;
 
-            let system_prompt = SystemPromptBuilder::build(&self.config, &snapshot);
+            let system_prompt = self
+                .prompt_builder
+                .build_from_context(&context)
+                .map_err(|e| anyhow!("Failed to render system prompt: {}", e))?;
             let system_msg = Message {
                 role: Role::System,
                 content: Some(system_prompt),

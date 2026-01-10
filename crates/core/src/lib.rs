@@ -7,3 +7,4 @@ pub mod agent;
 pub mod command;
 pub mod service;
 pub mod session;
+pub mod template;

@@ -1,18 +1,13 @@
 use crate::agent::config::AgentConfig;
-use chrono::Local;
-use std::env;
+use crate::template::{get_default_system_prompt_template, SystemPromptContext, TemplateEngine};
+use anyhow::Result;
 use std::path::Path;
-use tokio::fs;
 
 #[derive(Debug, Clone)]
-pub struct PromptSnapshot {
-    pub os: String,
-    pub cwd: String,
-    pub date: String,
-    pub custom_rules: Option<String>,
+pub struct SystemPromptBuilder {
+    template: String,
+    engine: TemplateEngine,
 }
-
-pub struct SystemPromptBuilder;
 
 impl Default for SystemPromptBuilder {
     fn default() -> Self {
@@ -22,46 +17,77 @@ impl Default for SystemPromptBuilder {
 
 impl SystemPromptBuilder {
     pub fn new() -> Self {
-        Self
+        Self {
+            template: get_default_system_prompt_template().to_string(),
+            engine: TemplateEngine::new(),
+        }
     }
 
-    pub async fn snapshot(workspace_root: Option<&Path>) -> PromptSnapshot {
-        let os = env::consts::OS.to_string();
-        let cwd = env::current_dir()
-            .map(|p| p.to_string_lossy().to_string())
-            .unwrap_or_else(|_| "Unknown".to_string());
-        let date = Local::now().format("%Y-%m-%d").to_string();
+    pub fn new_with_template(template: &str) -> Result<Self> {
+        let engine = TemplateEngine::new();
+        engine.validate(template)?;
+        Ok(Self {
+            template: template.to_string(),
+            engine,
+        })
+    }
 
-        // Try to read AGENTS.md from workspace root or current directory
+    pub fn from_config(workspace_root: &Path, config: &AgentConfig) -> Result<Self> {
+        if let Some(template) = &config.system_prompt_template {
+            return Self::new_with_template(template);
+        }
+
+        let file_path = workspace_root.join(".sisyphus/templates/system_prompt.jinja");
+        if file_path.exists() {
+            match std::fs::read_to_string(&file_path) {
+                Ok(content) => match Self::new_with_template(&content) {
+                    Ok(builder) => {
+                        tracing::info!(
+                            "Loaded custom system prompt template from {}",
+                            file_path.display()
+                        );
+                        return Ok(builder);
+                    }
+                    Err(e) => {
+                        tracing::warn!(
+                            "Failed to load custom template from {}: {}. Using default template.",
+                            file_path.display(),
+                            e
+                        );
+                    }
+                },
+                Err(e) => {
+                    tracing::warn!(
+                        "Failed to read template file {}: {}. Using default template.",
+                        file_path.display(),
+                        e
+                    );
+                }
+            }
+        }
+
+        Ok(Self::new())
+    }
+
+    pub fn build(&self, config: &AgentConfig, workspace_root: Option<&Path>) -> Result<String> {
         let agents_file = if let Some(root) = workspace_root {
             root.join("AGENTS.md")
         } else {
-            Path::new("AGENTS.md").to_path_buf()
+            std::path::PathBuf::from("AGENTS.md")
         };
+        let custom_rules = std::fs::read_to_string(agents_file).ok();
 
-        let custom_rules = fs::read_to_string(agents_file).await.ok();
-
-        PromptSnapshot {
-            os,
-            cwd,
-            date,
+        let context = SystemPromptContext::capture(
+            workspace_root,
+            config.instructions.clone(),
             custom_rules,
-        }
-    }
-
-    pub fn build(config: &AgentConfig, snapshot: &PromptSnapshot) -> String {
-        let env_info = format!(
-            "Environment:\n- OS: {}\n- CWD: {}\n- Date: {}",
-            snapshot.os, snapshot.cwd, snapshot.date
         );
 
-        let mut parts = vec![config.instructions.clone(), env_info];
+        self.engine.render_system_prompt(&self.template, &context)
+    }
 
-        if let Some(rules) = &snapshot.custom_rules {
-            parts.push(rules.clone());
-        }
-
-        parts.join("\n\n")
+    pub fn build_from_context(&self, context: &SystemPromptContext) -> Result<String> {
+        self.engine.render_system_prompt(&self.template, context)
     }
 }
 
@@ -71,25 +97,52 @@ mod tests {
 
     #[test]
     fn test_prompt_generation() {
+        let builder = SystemPromptBuilder::new();
         let config = AgentConfig {
             instructions: "You are a helpful assistant.".to_string(),
             ..Default::default()
         };
 
-        let snapshot = PromptSnapshot {
-            os: "linux".to_string(),
-            cwd: "/tmp".to_string(),
-            date: "2023-01-01".to_string(),
-            custom_rules: Some("Rule 1".to_string()),
+        let prompt = builder.build(&config, None).unwrap();
+        assert!(prompt.contains("You are a helpful assistant."));
+    }
+
+    #[test]
+    fn test_custom_template_override() {
+        let custom_template = "<custom>{{instructions}}</custom>";
+        let builder = SystemPromptBuilder::new_with_template(custom_template).unwrap();
+        let config = AgentConfig {
+            instructions: "Custom instructions".to_string(),
+            ..Default::default()
         };
 
-        let prompt = SystemPromptBuilder::build(&config, &snapshot);
+        let prompt = builder.build(&config, None).unwrap();
+        assert!(prompt.contains("<custom>"));
+        assert!(prompt.contains("Custom instructions"));
+        assert!(!prompt.contains("<environment>"));
+    }
 
-        assert!(prompt.contains("You are a helpful assistant."));
-        assert!(prompt.contains("Environment:"));
-        assert!(prompt.contains("OS: linux"));
-        assert!(prompt.contains("CWD: /tmp"));
-        assert!(prompt.contains("Date: 2023-01-01"));
-        assert!(prompt.contains("Rule 1"));
+    #[test]
+    fn test_template_syntax_error_handling() {
+        let invalid_template = "{{instructions";
+        let result = SystemPromptBuilder::new_with_template(invalid_template);
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Template"));
+    }
+
+    #[test]
+    fn test_xml_style_tags_in_output() {
+        let builder = SystemPromptBuilder::new();
+        let config = AgentConfig {
+            instructions: "You are helpful.".to_string(),
+            ..Default::default()
+        };
+
+        let prompt = builder.build(&config, None).unwrap();
+        assert!(prompt.contains("<instructions>"));
+        assert!(prompt.contains("</instructions>"));
+        assert!(prompt.contains("<environment>"));
+        assert!(prompt.contains("</environment>"));
+        assert!(!prompt.contains("<project_rules>"));
     }
 }
