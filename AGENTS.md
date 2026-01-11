@@ -33,6 +33,24 @@ Key runtime behavior (normative in OpenSpec):
 - **Event Bus**: Uses a typed, topic-based distribution system. Components must subscribe using `subscribe_raw()` for global auditing or specific topics for efficiency.
 - **LLM Providers must use the shared `SSEParser` (`crates/provider/src/sse.rs`) for streaming to ensure correct handling of split network chunks and multi-byte characters.
 
+## Development & Debugging
+
+### Debug Feature (`dev_debug`)
+
+Workspace-level feature for development debugging. When enabled, crates can add debug instrumentation that is excluded from production builds.
+
+**Usage:**
+```bash
+cargo run --release --features dev_debug
+```
+
+**Current Instrumentation:**
+- HTTP request/response logging to `openai_debug.log` (headers, payloads, timestamps) from `crates/provider/src/openai.rs`
+
+**Adding Debug Code:**
+- Wrap debug code with `#[cfg(feature = "dev_debug")]`
+- Define `dev_debug = []` in crate's `Cargo.toml` to participate in workspace feature
+
 CLI TUI requirements (see `spec/cli-tui` in OpenSpec):
 - **Architecture**: Follow the Model-View-Update (MVU) pattern with a pure `update` function and centralized `Action` enum.
 - **Visuals**: Use the centralized `Theme` struct for semantic colors; avoid hardcoded ANSI values.

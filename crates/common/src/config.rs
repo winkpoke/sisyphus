@@ -72,7 +72,13 @@ impl Config {
             let re = Regex::new(r"\{\{([A-Z0-9_]+)\}\}").unwrap();
             let processed_content = re.replace_all(&content, |caps: &regex::Captures| {
                 let var_name = &caps[1];
-                std::env::var(var_name).unwrap_or_else(|_| "".to_string())
+                std::env::var(var_name).unwrap_or_else(|_| {
+                    panic!(
+                        "Environment variable '{}' not found but required in config file '{}'",
+                        var_name,
+                        path.display()
+                    )
+                })
             });
 
             builder = builder.add_source(File::from_str(&processed_content, FileFormat::Toml));

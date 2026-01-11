@@ -51,9 +51,10 @@
   - [x] Change from `build_agent()` to `build_builtins()`
   - [x] Use `build_agent_registry()` instead of direct registry construction
   - [x] Verify server starts with both agents registered
-- [ ] 4.2 Update chat command (optional)
+- [ ] 4.2 Update chat command (optional) - OUT OF SCOPE
   - [ ] Support agent selection in CLI mode
   - [ ] Default to plan agent for interactive sessions
+  - **Note**: Per proposal Non-Goals, "Adding a CLI UX for agent selection beyond existing server/session agent_id selection" is out of scope. Server API already provides full agent selection capability via `agent_id` parameter.
 
 ## 5. Testing
 - [x] 5.1 AgentConfig unit tests
@@ -82,7 +83,7 @@
   - [x] Test `GET /api/v1/agents/build` returns Build agent
   - [x] Test session creation with `agent_id: "plan"` uses Plan agent
   - [x] Test session creation with `agent_id: "build"` uses Build agent
-  - [x] Test session creation without `agent_id` defaults to Build agent
+  - [x] Test session creation without `agent_id` defaults to Plan agent
   - [x] Test agent switching mid-session works correctly
 - [x] 5.6 Permission enforcement tests
   - [x] Test Plan agent permissions deny write operations

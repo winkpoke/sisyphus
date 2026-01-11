@@ -21,3 +21,6 @@ minijinja = { version = "2.0", features = ["builtins"] }
 [dev-dependencies]
 futures.workspace = true
 tempfile = "3.10"
+
+[features]
+dev_debug = []

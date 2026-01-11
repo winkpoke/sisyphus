@@ -6,6 +6,12 @@ use reqwest::Client;
 use serde_json::{json, Value};
 use std::pin::Pin;
 
+#[cfg(feature = "dev_debug")]
+use std::fs::OpenOptions;
+
+#[cfg(feature = "dev_debug")]
+use std::io::Write;
+
 pub struct OpenAIProvider {
     client: Client,
     api_key: String,
@@ -53,12 +59,57 @@ impl LLMProvider for OpenAIProvider {
             .send()
             .await?;
 
+        #[cfg(feature = "dev_debug")]
+        let mut debug_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("openai_debug.log");
+
+        #[cfg(feature = "dev_debug")]
+        if let Ok(ref mut file) = debug_file {
+            let _ = writeln!(file, "\n=== OpenAI Request Debug ===");
+            let _ = writeln!(file, "Timestamp: {:?}", std::time::SystemTime::now());
+            let _ = writeln!(file, "URL: {}", url);
+            let _ = writeln!(file, "Method: POST");
+            let _ = writeln!(file, "Headers:");
+            let _ = writeln!(file, "  Authorization: Bearer {}", self.api_key);
+            let _ = writeln!(file, "  Content-Type: application/json");
+            let _ = writeln!(
+                file,
+                "Payload: {}",
+                serde_json::to_string_pretty(&payload)
+                    .unwrap_or_else(|_| "Failed to serialize".to_string())
+            );
+            let _ = writeln!(file, "Response Status: {}", res.status());
+            let _ = writeln!(file, "Response Headers:");
+            for (key, value) in res.headers().iter() {
+                let _ = writeln!(file, "  {}: {:?}", key, value);
+            }
+        }
+
         if !res.status().is_success() {
             let error = res.text().await?;
+            #[cfg(feature = "dev_debug")]
+            if let Ok(ref mut file) = debug_file {
+                let _ = writeln!(file, "Error Response: {}", error);
+                let _ = writeln!(file, "=== End Debug ===\n");
+                let _ = file.flush();
+            }
             return Err(anyhow!("OpenAI API error: {}", error));
         }
 
         let json: Value = res.json().await?;
+        #[cfg(feature = "dev_debug")]
+        if let Ok(ref mut file) = debug_file {
+            let _ = writeln!(
+                file,
+                "Response Body: {}",
+                serde_json::to_string_pretty(&json)
+                    .unwrap_or_else(|_| "Failed to serialize".to_string())
+            );
+            let _ = writeln!(file, "=== End Debug ===\n");
+            let _ = file.flush();
+        }
         let choice = &json["choices"][0]["message"];
 
         let content = choice["content"].as_str().map(|s| s.to_string());
@@ -107,8 +158,43 @@ impl LLMProvider for OpenAIProvider {
             .send()
             .await?;
 
+        #[cfg(feature = "dev_debug")]
+        let mut debug_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("openai_debug.log");
+
+        #[cfg(feature = "dev_debug")]
+        if let Ok(ref mut file) = debug_file {
+            let _ = writeln!(file, "\n=== OpenAI Stream Request Debug ===");
+            let _ = writeln!(file, "Timestamp: {:?}", std::time::SystemTime::now());
+            let _ = writeln!(file, "URL: {}", url);
+            let _ = writeln!(file, "Method: POST");
+            let _ = writeln!(file, "Headers:");
+            let _ = writeln!(file, "  Authorization: Bearer {}", self.api_key);
+            let _ = writeln!(file, "  Content-Type: application/json");
+            let _ = writeln!(
+                file,
+                "Payload: {}",
+                serde_json::to_string_pretty(&payload)
+                    .unwrap_or_else(|_| "Failed to serialize".to_string())
+            );
+            let _ = writeln!(file, "Response Status: {}", res.status());
+            let _ = writeln!(file, "Response Headers:");
+            for (key, value) in res.headers().iter() {
+                let _ = writeln!(file, "  {}: {:?}", key, value);
+            }
+            let _ = file.flush();
+        }
+
         if !res.status().is_success() {
             let error = res.text().await?;
+            #[cfg(feature = "dev_debug")]
+            if let Ok(ref mut file) = debug_file {
+                let _ = writeln!(file, "Error Response: {}", error);
+                let _ = writeln!(file, "=== End Debug ===\n");
+                let _ = file.flush();
+            }
             return Err(anyhow!("OpenAI API error: {}", error));
         }
 

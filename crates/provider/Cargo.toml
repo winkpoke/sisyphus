@@ -15,3 +15,6 @@ reqwest = { workspace = true }
 futures = { workspace = true }
 url = { workspace = true }
 bytes = { workspace = true }
+
+[features]
+dev_debug = []

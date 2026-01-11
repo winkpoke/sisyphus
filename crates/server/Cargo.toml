@@ -19,6 +19,9 @@ axum = { version = "0.7", features = ["macros"] }
 tower = { version = "0.4", features = ["util"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
 
+[features]
+dev_debug = []
+
 [dev-dependencies]
 async-trait = { workspace = true }
 reqwest = { workspace = true }
