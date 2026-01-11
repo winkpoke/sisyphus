@@ -1,6 +1,10 @@
-# TUI Architecture Spec Delta
+# tui-integration Specification
 
-## ADDED Requirements
+## Purpose
+TBD - created by archiving change add-agents-uicommand. Update Purpose after archive.
+## Requirements
+### Requirement: /agents UiCommand displays available agents in TUI
+The TUI SHALL support the `/agents` command that displays an interactive list of available agents from the server and allows the user to select an agent for the active session.
 
 #### Scenario: User lists available agents in TUI
 - **Given** the user is in the TUI
@@ -26,3 +30,4 @@
 - **Given** the user triggers an agent operation (list or switch)
 - **When** the server request fails
 - **Then** an error notification (toast) is displayed
+
