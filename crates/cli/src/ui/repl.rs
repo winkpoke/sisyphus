@@ -58,6 +58,42 @@ impl Repl {
         }
     }
 
+    async fn handle_agents_list(&self) -> Result<()> {
+        let session = self.client.get_session(&self.session_id).await?;
+        let agents = self.client.list_agents().await?;
+
+        println!("Available Agents:");
+        if agents.is_empty() {
+            println!("  No agents available");
+            return Ok(());
+        }
+
+        let current_agent_id = session.agent_id.as_deref();
+
+        for agent in &agents {
+            let prefix = if current_agent_id == Some(agent.id.as_str()) {
+                "* "
+            } else {
+                "  "
+            };
+            println!("{}{} - {} ({})", prefix, agent.id, agent.name, agent.model);
+            println!("    {}", agent.description);
+        }
+        Ok(())
+    }
+
+    async fn handle_agents_switch(&mut self, agent_id: &str) -> Result<()> {
+        let updated_session = self
+            .client
+            .update_session_agent(&self.session_id, agent_id)
+            .await?;
+        println!(
+            "Agent changed to '{}' for session {}",
+            agent_id, updated_session.id
+        );
+        Ok(())
+    }
+
     pub async fn run(&mut self) -> Result<()> {
         // Fetch commands for completion
         let commands = self.client.get_commands().await.unwrap_or_default();
@@ -123,6 +159,26 @@ impl Repl {
                                         Err(e) => eprintln!("{}", t!("error_prefix", err = e)),
                                     }
                                     continue;
+                                }
+                                "/agents" => {
+                                    if _args.is_empty() {
+                                        match self.handle_agents_list().await {
+                                            Ok(_) => continue,
+                                            Err(e) => {
+                                                eprintln!("{}", t!("error_prefix", err = e));
+                                                continue;
+                                            }
+                                        }
+                                    } else {
+                                        let agent_id = _args[0].as_str();
+                                        match self.handle_agents_switch(agent_id).await {
+                                            Ok(_) => continue,
+                                            Err(e) => {
+                                                eprintln!("{}", t!("error_prefix", err = e));
+                                                continue;
+                                            }
+                                        }
+                                    }
                                 }
                                 _ => {}
                             }

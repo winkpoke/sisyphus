@@ -1,6 +1,6 @@
 use super::action::Action;
 use super::app::App;
-use super::state::{AppStatus, InputMode, Toast, ToastKind, TranscriptItemKind};
+use super::state::{AgentSelectionState, AppStatus, InputMode, Toast, ToastKind, TranscriptItemKind};
 use common::bus::SystemEvent;
 use crossterm::event::{KeyCode, KeyModifiers};
 use sisyphus_core::command::parser::parse_command;
@@ -23,6 +23,8 @@ pub enum TuiInstruction {
     NewSession,
     ClearSession,
     ToggleDebug,
+    ShowAgentList,
+    SwitchAgent(String, String), // agent_id, agent_name
 }
 
 pub fn update(app: &mut App, action: Action) -> TuiInstruction {
@@ -96,6 +98,19 @@ pub fn update(app: &mut App, action: Action) -> TuiInstruction {
         Action::ClearHistory => {
             app.state.transcript.clear();
             app.state.token_usage = String::new();
+        }
+        Action::AgentListReceived(agents) => {
+            app.state.agent_selection = Some(AgentSelectionState::new(agents));
+            app.state.mode = InputMode::AgentSelection;
+        }
+        Action::AgentSwitched(_id, name) => {
+            app.state.toast = Some(Toast::new(
+                format!("Switched to agent: {}", name),
+                ToastKind::Success,
+                Duration::from_secs(2),
+            ));
+            app.state.mode = InputMode::Normal;
+            app.state.agent_selection = None;
         }
     }
     TuiInstruction::None
@@ -214,6 +229,30 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
             }
             _ => {}
         },
+        InputMode::AgentSelection => match key.code {
+            KeyCode::Esc => {
+                app.state.mode = InputMode::Normal;
+                app.state.agent_selection = None;
+            }
+            KeyCode::Up | KeyCode::Char('k') => {
+                if let Some(selection) = &mut app.state.agent_selection {
+                    selection.select_prev();
+                }
+            }
+            KeyCode::Down | KeyCode::Char('j') => {
+                if let Some(selection) = &mut app.state.agent_selection {
+                    selection.select_next();
+                }
+            }
+            KeyCode::Enter => {
+                if let Some(selection) = &app.state.agent_selection {
+                    if let Some(agent) = selection.get_selected() {
+                        return TuiInstruction::SwitchAgent(agent.id.clone(), agent.name.clone());
+                    }
+                }
+            }
+            _ => {}
+        },
         InputMode::Selection => match key.code {
             KeyCode::Esc => {
                 app.state.mode = InputMode::Normal;
@@ -308,6 +347,7 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
                             "debug" => return TuiInstruction::ToggleDebug,
                             "clear" => return TuiInstruction::ClearSession,
                             "new" => return TuiInstruction::NewSession,
+                            "agents" => return TuiInstruction::ShowAgentList,
                             _ => return TuiInstruction::DispatchCommand(cmd),
                         }
                     }
@@ -398,6 +438,7 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
                                         "debug" => return TuiInstruction::ToggleDebug,
                                         "clear" => return TuiInstruction::ClearSession,
                                         "new" => return TuiInstruction::NewSession,
+                                        "agents" => return TuiInstruction::ShowAgentList,
                                         _ => return TuiInstruction::DispatchCommand(input),
                                     }
                                 }
@@ -567,5 +608,68 @@ mod tests {
 
         assert_eq!(app.state.token_usage, "");
         assert_eq!(app.state.session_id, "new-session");
+    }
+
+    #[test]
+    fn test_agent_flow() {
+        use client::AgentResponse;
+        let mut app = App::new("test-session".to_string());
+
+        // 1. Test /agents command
+        app.state.input_buffer = "/agents".to_string();
+        let action = Action::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::empty(),
+        ));
+        let instruction = update(&mut app, action);
+        assert_eq!(instruction, TuiInstruction::ShowAgentList);
+
+        // 2. Test receiving agent list
+        let agents = vec![
+            AgentResponse {
+                id: "agent1".to_string(),
+                name: "Agent 1".to_string(),
+                model: "model1".to_string(),
+                description: "desc1".to_string(),
+            },
+            AgentResponse {
+                id: "agent2".to_string(),
+                name: "Agent 2".to_string(),
+                model: "model2".to_string(),
+                description: "desc2".to_string(),
+            },
+        ];
+        let action = Action::AgentListReceived(agents);
+        let instruction = update(&mut app, action);
+        assert_eq!(instruction, TuiInstruction::None);
+        assert_eq!(app.state.mode, InputMode::AgentSelection);
+        assert!(app.state.agent_selection.is_some());
+        assert_eq!(app.state.agent_selection.as_ref().unwrap().selected_index, 0);
+
+        // 3. Test navigation
+        let action = Action::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Down,
+            KeyModifiers::empty(),
+        ));
+        update(&mut app, action);
+        assert_eq!(app.state.agent_selection.as_ref().unwrap().selected_index, 1);
+
+        // 4. Test selection
+        let action = Action::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::empty(),
+        ));
+        let instruction = update(&mut app, action);
+        assert_eq!(
+            instruction,
+            TuiInstruction::SwitchAgent("agent2".to_string(), "Agent 2".to_string())
+        );
+
+        // 5. Test switch confirmation
+        let action = Action::AgentSwitched("agent2".to_string(), "Agent 2".to_string());
+        update(&mut app, action);
+        assert_eq!(app.state.mode, InputMode::Normal);
+        assert!(app.state.agent_selection.is_none());
+        assert!(app.state.toast.is_some());
     }
 }

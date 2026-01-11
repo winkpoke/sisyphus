@@ -28,6 +28,14 @@ pub struct ModelInfo {
     pub model: String,
 }
 
+#[derive(Debug, Deserialize, Clone, PartialEq)]
+pub struct AgentResponse {
+    pub id: String,
+    pub model: String,
+    pub name: String,
+    pub description: String,
+}
+
 #[derive(Clone)]
 pub struct Client {
     base_url: Url,
@@ -165,6 +173,39 @@ impl Client {
         if !resp.status().is_success() {
             let error_text = resp.text().await.unwrap_or_default();
             return Err(anyhow::anyhow!("Failed to get session: {}", error_text));
+        }
+
+        let session = resp.json::<Session>().await?;
+        Ok(session)
+    }
+
+    pub async fn list_agents(&self) -> Result<Vec<AgentResponse>> {
+        let url = self.base_url.join("/api/v1/agents")?;
+        let resp = self.http.get(url).send().await?;
+
+        if !resp.status().is_success() {
+            let error_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("Failed to list agents: {}", error_text));
+        }
+
+        let agents = resp.json::<Vec<AgentResponse>>().await?;
+        Ok(agents)
+    }
+
+    pub async fn update_session_agent(&self, session_id: &str, agent_id: &str) -> Result<Session> {
+        let url = self
+            .base_url
+            .join(&format!("/api/v1/sessions/{}/agent", session_id))?;
+        let req = serde_json::json!({ "agent_id": agent_id });
+
+        let resp = self.http.put(url).json(&req).send().await?;
+
+        if !resp.status().is_success() {
+            let error_text = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!(
+                "Failed to update session agent: {}",
+                error_text
+            ));
         }
 
         let session = resp.json::<Session>().await?;

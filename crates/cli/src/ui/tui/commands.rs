@@ -86,3 +86,20 @@ impl Command for DebugCommand {
         })
     }
 }
+
+pub struct AgentsCommand;
+
+#[async_trait]
+impl Command for AgentsCommand {
+    fn name(&self) -> &str {
+        "agents"
+    }
+    fn description(&self) -> &str {
+        "List and switch agents"
+    }
+    async fn execute(&self, _ctx: &CommandContext, _args: CommandArgs) -> Result<CommandOutcome> {
+        Ok(CommandOutcome {
+            output: Some("Opening agent selection...".to_string()),
+        })
+    }
+}

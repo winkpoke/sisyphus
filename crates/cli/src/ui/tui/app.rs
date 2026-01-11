@@ -1,5 +1,5 @@
 use super::commands::{
-    ClearHistoryCommand, DebugCommand, ExitCommand, NewSessionCommand, QuitCommand,
+    AgentsCommand, ClearHistoryCommand, DebugCommand, ExitCommand, NewSessionCommand, QuitCommand,
 };
 use super::state::TuiState;
 use super::theme::Theme;
@@ -26,6 +26,7 @@ impl App {
         registry.register_builtin(Box::new(ClearHistoryCommand));
         registry.register_builtin(Box::new(NewSessionCommand));
         registry.register_builtin(Box::new(DebugCommand));
+        registry.register_builtin(Box::new(AgentsCommand));
 
         let commands = registry.list().iter().map(|c| c.name.clone()).collect();
 

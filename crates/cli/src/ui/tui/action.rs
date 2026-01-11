@@ -1,4 +1,4 @@
-use client::ChatResponse;
+use client::{AgentResponse, ChatResponse};
 use common::bus::SystemEvent;
 use crossterm::event::KeyEvent;
 use sisyphus_core::command::CommandOutcome;
@@ -14,6 +14,8 @@ pub enum Action {
     MessageSent(String),
     ResponseReceived(ChatResponse),
     SessionCreated(Session),
+    AgentListReceived(Vec<AgentResponse>),
+    AgentSwitched(String, String), // id, name
     SystemEvent(SystemEvent),
     CommandResult(Box<CommandOutcome>),
     ToggleDebug,

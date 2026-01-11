@@ -219,6 +219,35 @@ impl Tui {
                                  }
                              });
                         }
+                        TuiInstruction::ShowAgentList => {
+                            let client = self.client.clone();
+                            let tx = action_tx.clone();
+                            tokio::spawn(async move {
+                                match client.list_agents().await {
+                                    Ok(agents) => {
+                                        let _ = tx.send(Action::AgentListReceived(agents));
+                                    }
+                                    Err(e) => {
+                                        let _ = tx.send(Action::Error(e.to_string()));
+                                    }
+                                }
+                            });
+                        }
+                        TuiInstruction::SwitchAgent(agent_id, agent_name) => {
+                            let client = self.client.clone();
+                            let tx = action_tx.clone();
+                            let session_id = app.state.session_id.clone();
+                            tokio::spawn(async move {
+                                match client.update_session_agent(&session_id, &agent_id).await {
+                                    Ok(_) => {
+                                        let _ = tx.send(Action::AgentSwitched(agent_id, agent_name));
+                                    }
+                                    Err(e) => {
+                                        let _ = tx.send(Action::Error(e.to_string()));
+                                    }
+                                }
+                            });
+                        }
                         TuiInstruction::ToggleDebug => {
                             let _ = action_tx.send(Action::ToggleDebug);
                         }

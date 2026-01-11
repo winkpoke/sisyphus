@@ -12,7 +12,7 @@ use std::time::Instant;
 pub mod components;
 pub mod utils;
 
-use components::{command_palette, input, overlay, status, transcript};
+use components::{agent_selection, command_palette, input, overlay, status, transcript};
 
 pub fn draw(f: &mut Frame, app: &App) {
     let chunks = Layout::default()
@@ -34,6 +34,10 @@ pub fn draw(f: &mut Frame, app: &App) {
 
     if app.state.mode == InputMode::CommandPalette {
         command_palette::draw(f, app);
+    }
+
+    if app.state.mode == InputMode::AgentSelection {
+        agent_selection::draw(f, app);
     }
 
     if app.state.mode == InputMode::Overlay {

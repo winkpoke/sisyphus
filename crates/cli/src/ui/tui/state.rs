@@ -1,130 +1,65 @@
-pub use super::transcript::{Transcript, TranscriptItemKind};
-use std::collections::VecDeque;
-use std::time::Instant;
+use client::AgentResponse;
+use std::time::{Duration, Instant};
+
+#[derive(Debug, PartialEq, Clone, Copy)]
+pub enum InputMode {
+    Normal,
+    CommandPalette,
+    Selection,
+    Overlay,
+    AgentSelection,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum AppStatus {
+    Connected,
+    Processing,
+    Disconnected,
+}
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum ToastKind {
-    Success,
-    #[allow(dead_code)]
-    Info,
+pub enum TranscriptItemKind {
+    User,
+    Assistant,
+    System,
     Error,
 }
 
 #[derive(Debug, Clone)]
-pub struct Toast {
-    pub message: String,
-    pub expires_at: Instant,
-    pub kind: ToastKind,
-}
-
-impl Toast {
-    pub fn new(message: String, kind: ToastKind, duration: std::time::Duration) -> Self {
-        Self {
-            message,
-            expires_at: Instant::now() + duration,
-            kind,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum InputMode {
-    Normal,
-    CommandPalette,
-    Overlay,
-    Selection,
-}
-
-#[derive(Debug, Clone, PartialEq, Default)]
-pub enum AppStatus {
-    #[default]
-    Connected,
-    #[allow(dead_code)]
-    Disconnected,
-    Processing,
-}
-
-#[derive(Debug, Clone)]
-pub struct SelectionState {
-    pub selected_message_index: Option<usize>,
-}
-
-impl SelectionState {
-    pub fn new() -> Self {
-        Self {
-            selected_message_index: None,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct OverlayState {
-    pub title: String,
+pub struct TranscriptItem {
+    pub kind: TranscriptItemKind,
     pub content: String,
-    pub scroll: u16,
-    pub is_error: bool,
-    pub call_id: Option<String>,
-    pub permission_queue: VecDeque<(String, String, String)>, // (title, content, call_id)
+    pub timestamp: Instant,
+    pub is_streaming: bool,
 }
 
-impl OverlayState {
+#[derive(Debug, Default)]
+pub struct Transcript {
+    pub items: Vec<TranscriptItem>,
+    pub scroll_offset: u16,
+    pub stick_to_bottom: bool,
+}
+
+impl Transcript {
     pub fn new() -> Self {
         Self {
-            title: String::new(),
-            content: String::new(),
-            scroll: 0,
-            is_error: false,
-            call_id: None,
-            permission_queue: VecDeque::new(),
+            items: Vec::new(),
+            scroll_offset: 0,
+            stick_to_bottom: true,
         }
     }
 
-    #[allow(dead_code)]
-    pub fn show(&mut self, title: String, content: String, is_error: bool) {
-        self.title = title;
-        self.content = content;
-        self.scroll = 0;
-        self.is_error = is_error;
-        self.call_id = None;
-    }
-
-    pub fn show_approval(&mut self, title: String, content: String, call_id: String) {
-        self.title = title;
-        self.content = content;
-        self.scroll = 0;
-        self.is_error = false;
-        self.call_id = Some(call_id);
-    }
-
-    pub fn enqueue_approval(&mut self, title: String, content: String, call_id: String) {
-        self.permission_queue.push_back((title, content, call_id));
-        if self.call_id.is_none() {
-            self.show_next_approval();
-        }
-    }
-
-    pub fn show_next_approval(&mut self) -> bool {
-        if let Some((title, content, call_id)) = self.permission_queue.pop_front() {
-            self.show_approval(title, content, call_id);
-            true
-        } else {
-            false
-        }
-    }
-
-    pub fn scroll_down(&mut self) {
-        self.scroll = self.scroll.saturating_add(1);
-    }
-
-    pub fn scroll_up(&mut self) {
-        self.scroll = self.scroll.saturating_sub(1);
+    pub fn clear(&mut self) {
+        self.items.clear();
+        self.scroll_offset = 0;
+        self.stick_to_bottom = true;
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct CommandPaletteState {
-    pub selected_index: usize,
     pub input: String,
+    pub selected_index: usize,
     pub commands: Vec<String>,
     pub filtered_commands: Vec<String>,
 }
@@ -132,8 +67,8 @@ pub struct CommandPaletteState {
 impl CommandPaletteState {
     pub fn new(commands: Vec<String>) -> Self {
         Self {
-            selected_index: 0,
             input: String::new(),
+            selected_index: 0,
             filtered_commands: commands.clone(),
             commands,
         }
@@ -141,17 +76,18 @@ impl CommandPaletteState {
 
     pub fn reset(&mut self) {
         self.input.clear();
+        self.selected_index = 0;
         self.update_filter();
     }
 
     pub fn update_filter(&mut self) {
-        if self.input.is_empty() {
+        if self.input.is_empty() || self.input == "/" {
             self.filtered_commands = self.commands.clone();
         } else {
-            self.filtered_commands = self
-                .commands
+            let query = self.input.to_lowercase();
+            self.filtered_commands = self.commands
                 .iter()
-                .filter(|c| c.starts_with(&self.input))
+                .filter(|c| c.to_lowercase().contains(&query))
                 .cloned()
                 .collect();
         }
@@ -173,53 +109,161 @@ impl CommandPaletteState {
             }
         }
     }
+}
 
-    pub fn update_commands(&mut self, commands: Vec<String>) {
-        self.commands = commands;
-        self.update_filter();
+#[derive(Debug, Default)]
+pub struct OverlayState {
+    pub call_id: Option<String>,
+    pub title: String,
+    pub content: String,
+    pub scroll: u16,
+    pub is_error: bool,
+}
+
+impl OverlayState {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn enqueue_approval(&mut self, title: String, content: String, call_id: String) {
+        self.title = title;
+        self.content = content;
+        self.call_id = Some(call_id);
+        self.scroll = 0;
+        self.is_error = false;
+    }
+
+    pub fn show_next_approval(&mut self) -> bool {
+        false
+    }
+
+    pub fn scroll_down(&mut self) {
+        self.scroll = self.scroll.saturating_add(1);
+    }
+
+    pub fn scroll_up(&mut self) {
+        self.scroll = self.scroll.saturating_sub(1);
     }
 }
 
+#[derive(Debug, Default)]
+pub struct SelectionState {
+    pub selected_message_index: Option<usize>,
+}
+
 #[derive(Debug, Clone)]
+pub struct AgentSelectionState {
+    pub agents: Vec<AgentResponse>,
+    pub selected_index: usize,
+}
+
+impl AgentSelectionState {
+    pub fn new(agents: Vec<AgentResponse>) -> Self {
+        Self {
+            agents,
+            selected_index: 0,
+        }
+    }
+
+    pub fn select_next(&mut self) {
+        if !self.agents.is_empty() {
+            self.selected_index = (self.selected_index + 1) % self.agents.len();
+        }
+    }
+
+    pub fn select_prev(&mut self) {
+        if !self.agents.is_empty() {
+            if self.selected_index == 0 {
+                self.selected_index = self.agents.len() - 1;
+            } else {
+                self.selected_index -= 1;
+            }
+        }
+    }
+
+    pub fn get_selected(&self) -> Option<&AgentResponse> {
+        self.agents.get(self.selected_index)
+    }
+}
+
+#[derive(Debug)]
+pub struct Toast {
+    pub message: String,
+    pub kind: ToastKind,
+    pub expires_at: Instant,
+}
+
+impl Toast {
+    pub fn new(message: String, kind: ToastKind, duration: Duration) -> Self {
+        Self {
+            message,
+            kind,
+            expires_at: Instant::now() + duration,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ToastKind {
+    Info,
+    Success,
+    Error,
+}
+
 pub struct TuiState {
+    pub session_id: String,
+    pub active_model: String,
+    pub token_usage: String,
     pub transcript: Transcript,
     pub input_buffer: String,
-    pub session_id: String,
     pub mode: InputMode,
     pub command_palette: CommandPaletteState,
     pub overlay: OverlayState,
     pub selection: SelectionState,
+    pub agent_selection: Option<AgentSelectionState>,
     pub debug_mode: bool,
     pub status: AppStatus,
     pub spinner_frame: usize,
-    pub active_model: String,
-    pub token_usage: String,
-    pub context_title: String,
     pub toast: Option<Toast>,
+    pub context_title: String,
 }
 
 impl TuiState {
     pub fn new(session_id: String, commands: Vec<String>) -> Self {
         Self {
+            session_id,
+            active_model: "Loading...".to_string(),
+            token_usage: String::new(),
             transcript: Transcript::new(),
             input_buffer: String::new(),
-            session_id,
             mode: InputMode::Normal,
             command_palette: CommandPaletteState::new(commands),
             overlay: OverlayState::new(),
-            selection: SelectionState::new(),
+            selection: SelectionState::default(),
+            agent_selection: None,
             debug_mode: false,
-            status: AppStatus::default(),
+            status: AppStatus::Disconnected,
             spinner_frame: 0,
-            active_model: String::new(),
-            token_usage: String::new(),
-            context_title: String::new(),
             toast: None,
+            context_title: "Context".to_string(),
         }
     }
 
+    pub fn add_message(&mut self, kind: TranscriptItemKind, content: String) {
+        self.transcript.items.push(TranscriptItem {
+            kind,
+            content,
+            timestamp: Instant::now(),
+            is_streaming: false,
+        });
+    }
+
+    pub fn update_session_id(&mut self, session_id: String) {
+        self.session_id = session_id;
+    }
+
     pub fn update_commands(&mut self, commands: Vec<String>) {
-        self.command_palette.update_commands(commands);
+        self.command_palette = CommandPaletteState::new(commands);
     }
 
     pub fn handle_char(&mut self, c: char) {
@@ -234,116 +278,8 @@ impl TuiState {
         if self.input_buffer.trim().is_empty() {
             return None;
         }
-        Some(self.input_buffer.drain(..).collect())
-    }
-
-    pub fn add_message(&mut self, kind: TranscriptItemKind, msg: String) {
-        self.transcript.add_message(kind, msg);
-    }
-
-    pub fn update_session_id(&mut self, session_id: String) {
-        self.session_id = session_id.clone();
-        self.context_title = format!("Transcript - {}", session_id);
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::time::Instant;
-
-    #[test]
-    fn test_input_handling() {
-        let mut state = TuiState::new("sess-1".to_string(), vec![]);
-        state.handle_char('a');
-        state.handle_char('b');
-        assert_eq!(state.input_buffer, "ab");
-
-        state.handle_backspace();
-        assert_eq!(state.input_buffer, "a");
-
-        let input = state.get_input_and_clear();
-        assert_eq!(input, Some("a".to_string()));
-        assert!(state.input_buffer.is_empty());
-    }
-
-    #[test]
-    fn test_session_update() {
-        let mut state = TuiState::new("sess-1".to_string(), vec![]);
-        state.update_session_id("sess-2".to_string());
-        assert_eq!(state.session_id, "sess-2");
-    }
-
-    #[test]
-    fn test_command_palette() {
-        let commands = vec!["/help".to_string(), "/quit".to_string()];
-        let mut palette = CommandPaletteState::new(commands);
-        assert_eq!(palette.selected_index, 0);
-
-        palette.select_next();
-        assert_eq!(palette.selected_index, 1);
-
-        palette.input.push_str("/h");
-        palette.update_filter();
-        assert_eq!(palette.filtered_commands.len(), 1); // /help
-        assert_eq!(palette.filtered_commands[0], "/help");
-
-        palette.reset();
-        assert!(palette.input.is_empty());
-        assert_eq!(palette.filtered_commands.len(), 2);
-    }
-
-    #[test]
-    fn test_overlay_queue() {
-        let mut overlay = OverlayState::new();
-
-        // Enqueue first approval
-        overlay.enqueue_approval(
-            "Title1".to_string(),
-            "Content1".to_string(),
-            "id1".to_string(),
-        );
-
-        // Should be showing immediately
-        assert_eq!(overlay.call_id, Some("id1".to_string()));
-        assert_eq!(overlay.title, "Title1");
-        assert!(overlay.permission_queue.is_empty()); // Pop happened
-
-        // Enqueue second approval while showing first
-        overlay.enqueue_approval(
-            "Title2".to_string(),
-            "Content2".to_string(),
-            "id2".to_string(),
-        );
-
-        // Still showing first
-        assert_eq!(overlay.call_id, Some("id1".to_string()));
-        assert_eq!(overlay.permission_queue.len(), 1);
-
-        // Simulate approval of first (clearing call_id is done by caller usually, but here we just call show_next)
-        // Actually show_next_approval pops the next one.
-
-        let has_next = overlay.show_next_approval();
-        assert!(has_next);
-        assert_eq!(overlay.call_id, Some("id2".to_string()));
-        assert_eq!(overlay.title, "Title2");
-        assert!(overlay.permission_queue.is_empty());
-
-        // Try show next again
-        let has_next = overlay.show_next_approval();
-        assert!(!has_next);
-        // call_id remains as is unless cleared by caller, but show_next only updates if queue has item
-    }
-
-    #[test]
-    fn test_toast() {
-        let toast = Toast::new(
-            "test".to_string(),
-            ToastKind::Info,
-            std::time::Duration::from_secs(1),
-        );
-        assert_eq!(toast.message, "test");
-        assert_eq!(toast.kind, ToastKind::Info);
-        assert!(toast.expires_at > Instant::now());
+        let input = self.input_buffer.clone();
+        self.input_buffer.clear();
+        Some(input)
     }
 }

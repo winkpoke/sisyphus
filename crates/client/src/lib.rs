@@ -1,4 +1,3 @@
 pub mod client;
 
-pub use client::ChatResponse;
-pub use client::Client;
+pub use client::{AgentResponse, ChatResponse, Client};
