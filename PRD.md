@@ -109,7 +109,8 @@ The scope includes the migration and generalization of the core business logic, 
 - `crates/tools`: Standard tool implementations (fs, shell, glob, grep).
 - `crates/provider`: LLM provider adapters.
 - `crates/server`: HTTP/WebSocket API server.
-- `crates/cli`: Command-line interface.
+- `crates/cli`: Command-line interface (headless).
+- `crates/tui`: Terminal User Interface (optional feature).
 
 ### 4.3 Headless Architecture
 The system follows a **Headless Agent** design, decoupling the "Brain" (Rust Core) from the "Presentation" (UI).
