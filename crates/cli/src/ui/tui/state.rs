@@ -61,16 +61,19 @@ pub struct CommandPaletteState {
     pub input: String,
     pub selected_index: usize,
     pub commands: Vec<String>,
+    pub commands_lower: Vec<String>,
     pub filtered_commands: Vec<String>,
 }
 
 impl CommandPaletteState {
     pub fn new(commands: Vec<String>) -> Self {
+        let commands_lower = commands.iter().map(|c| c.to_lowercase()).collect();
         Self {
             input: String::new(),
             selected_index: 0,
             filtered_commands: commands.clone(),
             commands,
+            commands_lower,
         }
     }
 
@@ -85,10 +88,12 @@ impl CommandPaletteState {
             self.filtered_commands = self.commands.clone();
         } else {
             let query = self.input.to_lowercase();
-            self.filtered_commands = self.commands
+            self.filtered_commands = self
+                .commands
                 .iter()
-                .filter(|c| c.to_lowercase().contains(&query))
-                .cloned()
+                .zip(self.commands_lower.iter())
+                .filter(|(_, lower)| lower.contains(&query))
+                .map(|(original, _)| original.clone())
                 .collect();
         }
         self.selected_index = 0;

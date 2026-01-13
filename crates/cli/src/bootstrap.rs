@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tools::{
     cmd::CommandTool,
-    fs::{ReadFileTool, WriteFileTool},
+    fs::{ReadFileTool, ReplaceInFileTool, WriteFileTool},
     glob::GlobTool,
     grep::GrepTool,
 };
@@ -119,6 +119,7 @@ pub async fn build_builtins(config: &Config) -> anyhow::Result<BuiltInAgents> {
     build_agent.register_tool(Box::new(CommandTool));
     build_agent.register_tool(Box::new(ReadFileTool::new(sandbox.clone())));
     build_agent.register_tool(Box::new(WriteFileTool::new(sandbox.clone())));
+    build_agent.register_tool(Box::new(ReplaceInFileTool::new(sandbox.clone())));
     build_agent.register_tool(Box::new(GlobTool::new(sandbox.clone())));
     build_agent.register_tool(Box::new(GrepTool::new(sandbox)));
 

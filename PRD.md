@@ -46,7 +46,7 @@ The scope includes the migration and generalization of the core business logic, 
 
 ### 3.3 Tooling & Skills
 - **Execution Environment**: Safe execution of shell commands.
-- **File Operations**: Reading, writing, patching, and diffing files.
+- **File Operations**: Reading, writing, replacing text patterns, and diffing files.
 - **Knowledge Retrieval**: Semantic or regex-based search.
 - **Skills System**:
   - **Declarative Skills**: Define agent capabilities using `SKILL.md` files with YAML frontmatter (name, description) and markdown body for instructions.

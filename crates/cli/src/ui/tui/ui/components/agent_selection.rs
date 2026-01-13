@@ -18,7 +18,9 @@ pub fn draw(f: &mut Frame, app: &App) {
             .map(|agent| {
                 let name = Span::styled(
                     format!("{} ({})", agent.name, agent.model),
-                    Style::default().fg(Color::White).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(Color::White)
+                        .add_modifier(Modifier::BOLD),
                 );
                 let desc = Span::styled(
                     format!(" - {}", agent.description),
@@ -28,7 +30,7 @@ pub fn draw(f: &mut Frame, app: &App) {
                     format!(" [{}]", agent.id),
                     Style::default().fg(Color::DarkGray),
                 );
-                
+
                 ListItem::new(Line::from(vec![name, id, desc]))
             })
             .collect();

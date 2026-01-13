@@ -292,7 +292,7 @@ The system SHALL provide two built-in agents with stable identifiers and distinc
 - **GIVEN** `plan` agent is configured
 - **WHEN** tools are registered on the plan agent
 - **THEN** only read-only tools are registered (read_file, glob, grep)
-- **AND** write_file and execute_command tools are NOT registered
+- **AND** write_file, replace_in_file, and execute_command tools are NOT registered
 - **AND** permission policy denies edit and command execution operations
 
 #### Scenario: Agent discovery returns both agents

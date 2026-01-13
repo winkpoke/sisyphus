@@ -1,6 +1,8 @@
 use super::action::Action;
 use super::app::App;
-use super::state::{AgentSelectionState, AppStatus, InputMode, Toast, ToastKind, TranscriptItemKind};
+use super::state::{
+    AgentSelectionState, AppStatus, InputMode, Toast, ToastKind, TranscriptItemKind,
+};
 use common::bus::SystemEvent;
 use crossterm::event::{KeyCode, KeyModifiers};
 use sisyphus_core::command::parser::parse_command;
@@ -644,7 +646,10 @@ mod tests {
         assert_eq!(instruction, TuiInstruction::None);
         assert_eq!(app.state.mode, InputMode::AgentSelection);
         assert!(app.state.agent_selection.is_some());
-        assert_eq!(app.state.agent_selection.as_ref().unwrap().selected_index, 0);
+        assert_eq!(
+            app.state.agent_selection.as_ref().unwrap().selected_index,
+            0
+        );
 
         // 3. Test navigation
         let action = Action::Key(crossterm::event::KeyEvent::new(
@@ -652,7 +657,10 @@ mod tests {
             KeyModifiers::empty(),
         ));
         update(&mut app, action);
-        assert_eq!(app.state.agent_selection.as_ref().unwrap().selected_index, 1);
+        assert_eq!(
+            app.state.agent_selection.as_ref().unwrap().selected_index,
+            1
+        );
 
         // 4. Test selection
         let action = Action::Key(crossterm::event::KeyEvent::new(

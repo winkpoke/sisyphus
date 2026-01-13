@@ -142,6 +142,45 @@ For all output modes, results MUST be ordered deterministically by ascending `pa
 - **WHEN** `grep` is called with `output_mode="content"` and a match that starts after `max_line_length`
 - **THEN** the tool does not return a `content` entry for that match
 
+### Requirement: Replace In File Tool
+The system SHALL provide a `replace_in_file` tool for replacing exact text patterns in files.
+
+The `replace_in_file` tool MUST accept a JSON object argument with the following fields:
+- `path` (string, required): Relative path to file.
+- `old_string` (string, required): Exact text to search for and replace (case-sensitive).
+- `new_string` (string, required): New text to replace `old_string` with.
+- `replace_all` (boolean, optional, default `false`): If `true`, replace all occurrences; if `false`, replace only the first occurrence.
+
+The `replace_in_file` tool MUST:
+- Validate that file exists before attempting modification.
+- Perform exact string matching (case-sensitive, not regex).
+- Return an error if `old_string` is not found in the file.
+- Read the current file content, perform replacement, and write back.
+- Use sandboxed path resolution to prevent path traversal.
+
+#### Scenario: Single replacement succeeds
+- **GIVEN** a workspace with a file containing text `Hello World`
+- **WHEN** `replace_in_file` is called with `path="test.txt"`, `old_string="World"`, `new_string="Universe"`, `replace_all=false`
+- **THEN** the tool returns success
+- **AND** the file content is updated to `Hello Universe`
+
+#### Scenario: All occurrences replaced
+- **GIVEN** a workspace with a file containing text `foo foo bar foo`
+- **WHEN** `replace_in_file` is called with `path="test.txt"`, `old_string="foo"`, `new_string="baz"`, `replace_all=true`
+- **THEN** the tool returns success
+- **AND** the file content is updated to `baz baz bar baz`
+
+#### Scenario: Pattern not found returns error
+- **GIVEN** a workspace with a file containing text `Hello World`
+- **WHEN** `replace_in_file` is called with `path="test.txt"`, `old_string="Goodbye"`
+- **THEN** the tool returns an error indicating that pattern was not found
+- **AND** the file is not modified
+
+#### Scenario: File not found returns error
+- **GIVEN** a workspace without `nonexistent.txt`
+- **WHEN** `replace_in_file` is called with `path="nonexistent.txt"`
+- **THEN** the tool returns an error indicating that file was not found
+
 ### Requirement: Permission Configuration
 The system MUST support configuring permissions per tool via configuration, without requiring code changes for standard tools, and it MUST preserve safe defaults for tools that are not explicitly configured.
 
