@@ -1,7 +1,7 @@
 # server-core Specification
 
 ## Purpose
-TBD - created by archiving change implement-server. Update Purpose after archive.
+Defines the HTTP server that exposes REST APIs for session management, agent discovery, slash commands, and tool approvals. Provides Server-Sent Events (SSE) endpoint for real-time event streaming to connected clients.
 ## Requirements
 ### Requirement: HTTP Server Initialization
 The system SHALL provide a mechanism to start an HTTP server binding to a configured port.

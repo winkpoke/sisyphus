@@ -9,7 +9,6 @@ use regex::RegexBuilder;
 use serde_json::{json, Value};
 use std::fs::File;
 use std::io::Read;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 pub struct GrepTool {

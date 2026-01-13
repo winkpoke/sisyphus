@@ -1,8 +1,77 @@
 # agent-core Specification
 
 ## Purpose
-Defines the core architecture for Sisyphus Agents, including configuration, permissions, and dynamic prompt generation. This specification ensures agents are secure, configurable, and context-aware, matching OpenCode's capabilities.
+Defines the core architecture for Sisyphus Agents, including configuration, permissions, agent modes, and dynamic prompt generation. Agents are stateless execution engines that process chat turns, manage tool execution with permission gating, and expand SlashCommands via Jinja2 templates.
 ## Requirements
+### Requirement: Agent Mode
+The system SHALL support agent modes that control behavior and scope of operations.
+
+#### Scenario: Agent mode enumeration
+- **GIVEN** the Agent configuration is loaded
+- **THEN** the mode field SHALL be one of: Primary, SubAgent, or All
+- **AND** mode SHALL default to Primary
+
+#### Scenario: Primary agent mode
+- **GIVEN** an agent is configured with mode Primary
+- **WHEN** the agent executes tool calls
+- **THEN** the agent SHALL check the tool against permissions.allow, permissions.deny, and permissions.ask lists
+- **AND** the agent SHALL require approval if the tool has Ask permission level
+
+### Requirement: Permission Modes
+The system SHALL support permission modes that control how permission checks are evaluated.
+
+#### Scenario: Permission mode enumeration
+- **GIVEN** the Agent configuration is loaded
+- **THEN** the permissions.mode field SHALL be one of: Default, AcceptEdits, DontAsk, BypassPermissions, or Plan
+- **AND** mode SHALL default to Default
+
+#### Scenario: Default permission mode
+- **GIVEN** an agent is configured with mode Default
+- **WHEN** the agent evaluates tool execution permissions
+- **THEN** standard permission checks apply (Allow/Deny/Ask levels)
+
+#### Scenario: AcceptEdits permission mode
+- **GIVEN** an agent is configured with mode AcceptEdits
+- **WHEN** the agent evaluates Write/Edit tool execution (write_file, replace_in_file, delete_file)
+- **THEN** the tool SHALL be allowed without asking regardless of configured permission level
+- **AND** non-Edit tools SHALL follow configured permission levels
+
+#### Scenario: DontAsk permission mode
+- **GIVEN** an agent is configured with mode DontAsk
+- **WHEN** the agent evaluates tool execution permissions
+- **THEN** any tool configured with Ask permission level SHALL be denied
+- **AND** tools explicitly configured with Allow permission level SHALL still execute
+
+#### Scenario: BypassPermissions permission mode
+- **GIVEN** an agent is configured with mode BypassPermissions
+- **WHEN** the agent evaluates tool execution permissions
+- **THEN** all permission checks SHALL be skipped
+- **AND** all tools SHALL execute without prompts
+
+#### Scenario: Plan permission mode
+- **GIVEN** an agent is configured with mode Plan
+- **WHEN** the agent evaluates tool execution permissions
+- **THEN** all state-changing tools SHALL be denied
+- **AND** only read-only tools (read_file, glob, grep) SHALL be allowed
+
+### Requirement: Permission Lists
+The system SHALL support allow, ask, and deny lists for fine-grained tool permission control.
+
+#### Scenario: Allow list bypasses checks
+- **GIVEN** an agent has permissions.allow configured with ["tool1", "tool2"]
+- **WHEN** the agent evaluates tool execution for "tool1"
+- **THEN** the tool SHALL be allowed regardless of configured permission level or mode
+
+#### Scenario: Ask list enforces prompts
+- **GIVEN** an agent has permissions.ask configured with ["tool1"]
+- **WHEN** the agent evaluates tool execution for "tool1"
+- **THEN** the tool SHALL require approval even if configured as Allow
+
+#### Scenario: Deny list blocks execution
+- **GIVEN** an agent has permissions.deny configured with ["tool1"]
+- **WHEN** the agent evaluates tool execution for "tool1"
+- **THEN** the tool SHALL be denied regardless of configured permission level or mode
+
 ### Requirement: Agent Configuration
 The system SHALL support configuring Agents with strictly typed metadata including id, name, mode, permissions, and model settings.
 

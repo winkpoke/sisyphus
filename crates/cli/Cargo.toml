@@ -17,7 +17,7 @@ anyhow = { workspace = true }
 clap = { workspace = true }
 dotenv = "0.15"
 rust-i18n = "3"
-reqwest-eventsource = "0.5"
+reqwest-eventsource = "0.6"
 futures = { workspace = true }
 serde_json = { workspace = true }
 url = { workspace = true }

@@ -1,7 +1,7 @@
 # workspace Specification
 
 ## Purpose
-TBD - created by archiving change scaffold-phase-1. Update Purpose after archive.
+Defines the Cargo workspace structure that enforces separation of concerns across crates (common, core, provider, tools, server, cli). Ensures proper dependency flow with shared types in the common crate preventing circular dependencies.
 ## Requirements
 ### Requirement: Cargo Workspace Structure
 The project MUST use a Cargo Workspace with isolated crates to enforce separation of concerns.

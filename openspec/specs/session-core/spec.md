@@ -1,7 +1,7 @@
 # session-core Specification
 
 ## Purpose
-TBD - created by archiving change refactor-session-architecture. Update Purpose after archive.
+Defines session management architecture including conversation history storage, context compaction with token budgeting, turn-based message tracking, and pending approval state. Sessions track associated agents and provide concurrent-safe access via granular locking.
 ## Requirements
 ### Requirement: Session History
 The system SHALL store the linear history of conversation messages (User, Assistant, Tool) within the Session object via a dedicated context component.

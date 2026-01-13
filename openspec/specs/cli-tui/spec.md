@@ -1,7 +1,7 @@
 # cli-tui Specification
 
 ## Purpose
-TBD - created by archiving change add-cli-tui-foundation. Update Purpose after archive.
+Defines the Terminal User Interface (TUI) for Sisyphus CLI, implementing a Model-View-Update (MVU) architectural pattern. The TUI provides interactive chat with progressive rendering, command palettes, agent selection, permission approvals, and real-time event streaming.
 ## Requirements
 ### Requirement: TUI Availability and Fallback
 The CLI SHALL provide an interactive TUI for chat sessions when stdin and stdout are attached to a TTY.

@@ -68,25 +68,98 @@ impl Tool for MockTool {
     }
 }
 
-async fn wait_for_server(port: u16) {
-    let client = reqwest::Client::builder()
-        .pool_max_idle_per_host(0)
-        .build()
-        .unwrap();
+struct TestClient {
+    client: reqwest::Client,
+}
+
+impl TestClient {
+    fn new() -> Self {
+        // Use pool_max_idle_per_host(0) to prevent connection reuse issues between tests
+        // Use no_proxy() to bypass proxy for localhost connections in test environment
+        let client = reqwest::Client::builder()
+            .pool_max_idle_per_host(0)
+            .no_proxy()
+            .build()
+            .expect("Failed to create test client");
+        Self { client }
+    }
+
+    fn get(&self, url: String) -> TestRequestBuilder {
+        TestRequestBuilder {
+            request: self.client.get(&url),
+        }
+    }
+
+    fn post(&self, url: String) -> TestRequestBuilder {
+        TestRequestBuilder {
+            request: self.client.post(&url),
+        }
+    }
+}
+
+struct TestRequestBuilder {
+    request: reqwest::RequestBuilder,
+}
+
+impl TestRequestBuilder {
+    fn json<T: serde::Serialize>(mut self, json: &T) -> Self {
+        self.request = self.request.json(json);
+        self
+    }
+
+    async fn send(self) -> anyhow::Result<TestResponse> {
+        let response = self.request.send().await?;
+        let status = response.status();
+        let body = response.text().await?;
+
+        Ok(TestResponse {
+            status_code: status.as_u16(),
+            body,
+        })
+    }
+}
+
+struct TestResponse {
+    status_code: u16,
+    body: String,
+}
+
+impl TestResponse {
+    fn status(&self) -> TestStatus {
+        TestStatus {
+            code: self.status_code,
+        }
+    }
+
+    async fn json<T: serde::de::DeserializeOwned>(self) -> anyhow::Result<T> {
+        Ok(serde_json::from_str(&self.body)?)
+    }
+}
+
+struct TestStatus {
+    code: u16,
+}
+
+impl TestStatus {
+    fn is_success(&self) -> bool {
+        self.code >= 200 && self.code < 300
+    }
+}
+
+async fn wait_for_server(port: u16, client: &reqwest::Client) {
     let url = format!("http://127.0.0.1:{}/health", port);
     let start = std::time::Instant::now();
     while start.elapsed() < std::time::Duration::from_secs(5) {
-        if let Ok(resp) = client.get(&url).send().await {
-            if resp.status().is_success() {
-                return;
-            }
+        match client.get(&url).send().await {
+            Ok(resp) if resp.status().is_success() => return,
+            _ => {}
         }
         tokio::time::sleep(std::time::Duration::from_millis(100)).await;
     }
     panic!("Server failed to start on port {}", port);
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_approval_flow() {
     init_tracing();
     let bus = Arc::new(EventBus::new(100));
@@ -134,7 +207,7 @@ async fn test_approval_flow() {
     let port = listener.local_addr().unwrap().port();
     let server = Server::new(port, registry, session_manager, bus);
 
-    tokio::spawn(async move {
+    let server_handle = tokio::spawn(async move {
         if let Err(e) = server
             .run_on_listener(listener, std::future::pending::<()>())
             .await
@@ -143,13 +216,14 @@ async fn test_approval_flow() {
         }
     });
 
-    // Give server time to start
-    wait_for_server(port).await;
+    let client = TestClient::new();
 
-    let client = reqwest::Client::builder()
-        .pool_max_idle_per_host(0)
-        .build()
-        .unwrap();
+    // Give server time to start
+    wait_for_server(port, &client.client).await;
+
+    if server_handle.is_finished() {
+        panic!("Server task finished unexpectedly");
+    }
     let base_url = format!("http://127.0.0.1:{}", port);
 
     // Create session
@@ -212,7 +286,7 @@ async fn test_approval_flow() {
     );
 }
 
-#[tokio::test]
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_denial_flow() {
     init_tracing();
     let bus = Arc::new(EventBus::new(100));
@@ -260,7 +334,7 @@ async fn test_denial_flow() {
     let port = listener.local_addr().unwrap().port();
     let server = Server::new(port, registry, session_manager, bus);
 
-    tokio::spawn(async move {
+    let server_handle = tokio::spawn(async move {
         if let Err(e) = server
             .run_on_listener(listener, std::future::pending::<()>())
             .await
@@ -269,12 +343,13 @@ async fn test_denial_flow() {
         }
     });
 
-    wait_for_server(port).await;
+    let client = TestClient::new();
 
-    let client = reqwest::Client::builder()
-        .pool_max_idle_per_host(0)
-        .build()
-        .unwrap();
+    wait_for_server(port, &client.client).await;
+
+    if server_handle.is_finished() {
+        panic!("Server task finished unexpectedly");
+    }
     let base_url = format!("http://127.0.0.1:{}", port);
 
     // Create session

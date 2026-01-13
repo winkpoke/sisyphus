@@ -1,7 +1,7 @@
 # common-infra Specification
 
 ## Purpose
-TBD - created by archiving change scaffold-phase-1. Update Purpose after archive.
+Defines shared infrastructure components used across all Sisyphus crates, including typed event bus for system events, configuration management, structured logging, and common data models for LLM interactions.
 ## Requirements
 ### Requirement: Configuration System
 The system MUST load configuration from default values, a `sisyphus.toml` file, and Environment Variables.

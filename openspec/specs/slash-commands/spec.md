@@ -1,7 +1,7 @@
 # slash-commands Specification
 
 ## Purpose
-TBD - created by archiving change implement-slash-commands. Update Purpose after archive.
+Defines server-side slash command system that expands user commands via Jinja2 templates before LLM completion. Supports custom commands loaded from Markdown files, built-in commands, and reserved UiCommand name enforcement to prevent client-side command collisions.
 ## Requirements
 ### Requirement: Slash Command Support
 The system SHALL support executing SlashCommands triggered by a forward slash `/` at the start of a message.

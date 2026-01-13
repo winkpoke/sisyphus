@@ -1,7 +1,7 @@
 # tui-integration Specification
 
 ## Purpose
-TBD - created by archiving change add-agents-uicommand. Update Purpose after archive.
+Defines TUI-specific integrations including the `/agents` UiCommand for agent selection, permission approval overlays, and visual feedback mechanisms (toasts, spinners). Integrates with server APIs for agent discovery and session agent management.
 ## Requirements
 ### Requirement: /agents UiCommand displays available agents in TUI
 The TUI SHALL support the `/agents` command that displays an interactive list of available agents from the server and allows the user to select an agent for the active session.

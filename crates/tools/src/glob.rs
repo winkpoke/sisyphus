@@ -7,7 +7,6 @@ use globset::{Glob, GlobSetBuilder};
 use ignore::overrides::OverrideBuilder;
 use ignore::WalkBuilder;
 use serde_json::{json, Value};
-use std::path::PathBuf;
 use std::sync::Arc;
 
 pub struct GlobTool {

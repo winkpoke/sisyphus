@@ -1,7 +1,7 @@
 # llm-provider Specification
 
 ## Purpose
-TBD - created by archiving change scaffold-phase-1. Update Purpose after archive.
+Defines the LLM provider abstraction layer that unifies multiple LLM backends (OpenAI, Anthropic, Google, local) behind a common trait. Includes robust Server-Sent Events (SSE) parsing for streaming responses with proper UTF-8 and split-chunk handling.
 ## Requirements
 ### Requirement: LLMProvider Trait
 A unified `LLMProvider` trait MUST be defined to abstract different LLM backends.

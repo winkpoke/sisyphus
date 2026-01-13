@@ -117,12 +117,13 @@ impl Server {
     where
         S: std::future::Future<Output = ()> + Send + 'static,
     {
-        tracing::info!("Server listening on {}", listener.local_addr()?);
+        let addr = listener.local_addr()?;
+        tracing::info!("Server listening on {}", addr);
 
         axum::serve(listener, self.router)
             .with_graceful_shutdown(signal)
-            .await?;
-        Ok(())
+            .await
+            .map_err(|e| e.into())
     }
 }
 
