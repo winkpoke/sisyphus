@@ -1,5 +1,5 @@
-use crate::ui::tui::app::App;
-use crate::ui::tui::state::AppStatus;
+use crate::tui::app::App;
+use crate::tui::state::AppStatus;
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::Style,

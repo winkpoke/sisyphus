@@ -47,9 +47,9 @@ Sisyphus focuses on providing a high-performance agent runtime that can power va
 *   **Universal Tooling**: Shell, File System, and MCP integration.
 *   **Server Architecture**: HTTP/WebSocket API for remote clients.
 *   **CLI Entry Point**: Headless CLI for running the server or executing specific commands.
+*   **Terminal User Interface (TUI)**: Optional interactive TUI for chat sessions (via `--features tui`).
 
 ### Out of Scope
-*   **Terminal User Interface (TUI)**: The rich interactive TUI (found in OpenCode).
 *   **Desktop/Web Wrappers**: Specific frontend implementations (Electron, Tauri, React).
 
 ## 🏗️ Architecture
@@ -64,7 +64,9 @@ sisyphus/
 │   ├── provider/    # LLM provider adapters
 │   ├── tools/       # Standard tools (fs, shell)
 │   ├── server/      # HTTP/WebSocket API server
-│   └── cli/         # Command-line interface
+│   ├── cli/         # CLI entry point
+│   ├── cli-lib/     # Shared CLI library (commands, REPL, completer)
+│   └── tui/         # Optional TUI frontend (requires `--features tui`)
 └── Cargo.toml       # Workspace configuration
 ```
 
@@ -72,6 +74,7 @@ sisyphus/
 
 ### Current Capabilities
 -   **Interactive CLI**: Chat with the agent directly in your terminal.
+-   **Optional TUI**: Rich interactive terminal UI for chat sessions (build with `--features tui`).
 -   **LLM Support**:
     -   OpenAI (GPT-4, etc.)
     -   Mock Provider (for testing)
@@ -134,6 +137,13 @@ Run the CLI in chat mode:
 cargo run --release --bin sisyphus
 ```
 
+Or with the TUI (rich interactive terminal interface):
+
+```bash
+cargo run --release --bin sisyphus --features tui
+sisyphus chat --tui
+```
+
 Or if installed:
 
 ```bash
@@ -150,8 +160,11 @@ sisyphus chat
 ### Building and Testing
 
 ```bash
-# Build all crates
-cargo build
+# Build CLI-only (default)
+cargo build --release
+
+# Build with TUI support
+cargo build --release --features tui
 
 # Run all tests
 cargo test

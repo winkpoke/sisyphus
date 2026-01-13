@@ -1,4 +1,4 @@
-use crate::ui::tui::app::App;
+use crate::tui::app::App;
 use ratatui::{
     layout::Rect,
     widgets::{Block, Borders, Paragraph},

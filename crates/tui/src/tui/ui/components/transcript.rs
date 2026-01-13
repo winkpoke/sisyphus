@@ -1,5 +1,5 @@
-use crate::ui::tui::app::App;
-use crate::ui::tui::state::{InputMode, TranscriptItemKind};
+use crate::tui::app::App;
+use crate::tui::state::{InputMode, TranscriptItemKind};
 use ratatui::{
     layout::Rect,
     style::{Modifier, Style},

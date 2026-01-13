@@ -2,17 +2,13 @@ use clap::{Parser, Subcommand};
 use common::{config::Config, logging};
 use std::path::Path;
 
-mod bootstrap;
-mod commands;
-mod server_manager;
-mod ui;
-
-use ui::banner;
+use sisyphus_cli_lib::commands;
+use sisyphus_cli_lib::ui::repl::Repl;
 
 #[macro_use]
 extern crate rust_i18n;
 
-i18n!("../common/locales");
+i18n!("../cli-lib/src/locales");
 
 #[derive(Parser)]
 #[command(name = "sisyphus")]
@@ -30,7 +26,7 @@ struct Cli {
 enum Commands {
     /// Start a chat session
     Chat {
-        /// Use the TUI frontend
+        /// Use TUI frontend
         #[arg(long)]
         tui: bool,
     },
@@ -49,31 +45,44 @@ enum Commands {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Load .env file
     dotenv::dotenv().ok();
 
-    // 1. Parse Args
     let cli = Cli::parse();
 
-    // 2. Load Config
     let config = Config::load(cli.config.as_deref().map(Path::new)).unwrap_or_else(|e| {
         eprintln!("Failed to load config: {}", e);
         std::process::exit(1);
     });
 
-    // 3. Init Logging
     logging::init();
 
-    // 4. Init Locale
     rust_i18n::set_locale(&config.language);
 
-    // 5. Print Startup Banner
-    banner::print_startup_info(&config);
+    sisyphus_cli_lib::ui::banner::print_startup_info(&config);
 
     let config_path = cli.config.clone();
     match cli.command.unwrap_or(Commands::Chat { tui: false }) {
         Commands::Chat { tui } => {
-            commands::chat::run(config, config_path, tui).await?;
+            let mut ctx = commands::chat::setup_chat(config_path).await?;
+
+            if tui {
+                #[cfg(feature = "tui")]
+                {
+                    let mut tui_app =
+                        tui::Tui::new(ctx.client.clone(), ctx.session_id.clone(), ctx.shutdown_rx);
+                    tui_app.run().await?;
+                }
+                #[cfg(not(feature = "tui"))]
+                {
+                    eprintln!("Error: TUI feature not enabled. Build with --features tui");
+                    std::process::exit(1);
+                }
+            } else {
+                let mut repl = Repl::new(ctx.client, ctx.session_id, ctx.shutdown_rx);
+                repl.run().await?;
+            }
+
+            ctx.server_manager.stop().await?;
         }
         Commands::Serve { port } => {
             commands::serve::run(config, port).await?;

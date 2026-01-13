@@ -1,13 +1,15 @@
 [workspace]
 resolver = "2"
-members = [
+ members = [
     "crates/common",
     "crates/core",
     "crates/provider",
     "crates/tools",
     "crates/server",
     "crates/cli",
-]
+    "crates/cli-lib",
+    "crates/tui",
+ ]
 
 [workspace.dependencies]
 tokio = { version = "1.35", features = ["full"] }
@@ -26,9 +28,11 @@ uuid = { version = "1.6", features = ["v4", "serde"] }
 url = "2.5"
 bytes = "1.5"
 
-# Internal dependencies
+ # Internal dependencies
 common = { path = "crates/common" }
 tools = { path = "crates/tools" }
 provider = { path = "crates/provider" }
 sisyphus_core = { path = "crates/core" }
 client = { path = "crates/client", package = "sisyphus_client" }
+sisyphus_cli_lib = { path = "crates/cli-lib", package = "sisyphus-cli-lib" }
+tui = { path = "crates/tui" }

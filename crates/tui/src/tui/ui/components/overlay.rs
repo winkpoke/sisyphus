@@ -1,5 +1,5 @@
-use crate::ui::tui::app::App;
-use crate::ui::tui::ui::utils::centered_rect;
+use crate::tui::app::App;
+use crate::tui::ui::utils::centered_rect;
 use ratatui::{
     style::Style,
     widgets::{Block, Borders, Clear, Paragraph, Wrap},

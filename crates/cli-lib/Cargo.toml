@@ -1,14 +1,9 @@
 [package]
-name = "sisyphus"
+name = "sisyphus-cli-lib"
 version = "0.1.0"
 edition = "2021"
 
-[[bin]]
-name = "sisyphus"
-path = "src/main.rs"
-
 [dependencies]
-sisyphus_cli_lib = { path = "../cli-lib", package = "sisyphus-cli-lib" }
 common = { workspace = true }
 sisyphus_core = { workspace = true }
 provider = { workspace = true }
@@ -28,14 +23,7 @@ serde_json = { workspace = true }
 url = { workspace = true }
 colored = "2.0"
 reedline = "0.28"
-tui = { workspace = true, optional = true }
 async-trait.workspace = true
 
 [features]
-default = []
-tui = ["dep:tui"]
 dev_debug = []
-
-[dev-dependencies]
-assert_cmd = "2.0"
-predicates = "3.0"
