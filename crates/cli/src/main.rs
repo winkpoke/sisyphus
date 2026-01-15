@@ -8,7 +8,8 @@ use sisyphus_cli_lib::ui::repl::Repl;
 #[macro_use]
 extern crate rust_i18n;
 
-i18n!("../cli-lib/src/locales");
+// Initialize i18n once in the binary, shared with all crates
+i18n!("../common/locales");
 
 #[derive(Parser)]
 #[command(name = "sisyphus")]

@@ -6,7 +6,7 @@ pub mod commands;
 mod server_manager;
 pub mod ui;
 
-i18n!("locales");
+i18n!("../common/locales");
 
 pub use bootstrap::{build_agent_registry, build_builtins, BuiltInAgents};
 pub use commands::chat::{attach, setup_chat};
