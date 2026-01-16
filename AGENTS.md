@@ -51,7 +51,7 @@ cargo run --release --features dev_debug
 - Wrap debug code with `#[cfg(feature = "dev_debug")]`
 - Define `dev_debug = []` in crate's `Cargo.toml` to participate in workspace feature
 
-CLI TUI requirements (see `spec/cli-tui` in OpenSpec, implemented in `crates/tui`):
+CLI TUI requirements (see `spec/cli-tui` in OpenSpec, implemented in `crates/tui`; optional feature):
 - **Architecture**: Follow the Model-View-Update (MVU) pattern with a pure `update` function and centralized `Action` enum.
 - **Visuals**: Use the centralized `Theme` struct for semantic colors; avoid hardcoded ANSI values.
 - **Feedback**: Use `Toast` overlays for transient user feedback (e.g., clipboard success) and spinners for active states.

@@ -73,9 +73,10 @@ The scope includes the migration and generalization of the core business logic, 
 - **Multi-language Support**: The system shall be designed to support Internationalization (i18n), enabling localization for system messages, logs, and user-facing interactions.
 
 ### 3.7 CLI & TUI Experience
-- **Interactive TUI**: A rich terminal user interface (TUI) built on the Model-View-Update (MVU) pattern, featuring an async event loop.
-- **Transcript**: Structured, progressively updating transcript with support for streaming, scrolling, and "stick to bottom" behavior; backend `SystemEvent`s render as concise, end-user-readable entries by default.
-- **Command Palette**: A discoverable palette for slash commands triggered by `/`, supporting keyboard navigation and filtering (including `/debug`).
+- **Headless CLI**: Primary CLI is headless with REPL mode for basic interaction; optional TUI via `--features tui`.
+- **Interactive TUI** (optional): Rich terminal UI built on MVU pattern with async event loop (requires `crates/tui` crate).
+- **Transcript**: Structured, progressively updating transcript with streaming, scrolling, and "stick to bottom"; backend `SystemEvent`s render as concise, end-user-readable entries by default.
+- **Command Palette**: Discoverable palette for slash commands triggered by `/`, supporting keyboard navigation and filtering (including `/debug`).
 - **Polish**:
   - **Overlays**: Safe rendering of help, errors, and long content (pager) without corrupting the terminal.
   - **Visual Feedback**: Toast notifications for actions (e.g., copy) and loading indicators for active processing.
@@ -109,8 +110,8 @@ The scope includes the migration and generalization of the core business logic, 
 - `crates/tools`: Standard tool implementations (fs, shell, glob, grep).
 - `crates/provider`: LLM provider adapters.
 - `crates/server`: HTTP/WebSocket API server.
-- `crates/cli`: Command-line interface (headless).
-- `crates/tui`: Terminal User Interface (optional feature).
+- `crates/cli`: Command-line interface (headless, optional TUI via `--features tui`).
+- `crates/tui`: Terminal User Interface crate (optional, only built with `tui` feature).
 
 ### 4.3 Headless Architecture
 The system follows a **Headless Agent** design, decoupling the "Brain" (Rust Core) from the "Presentation" (UI).
@@ -120,7 +121,7 @@ The system follows a **Headless Agent** design, decoupling the "Brain" (Rust Cor
 - **UI Clients**:
   - **VS Code Plugin**: TypeScript extension communicating via WebSocket.
   - **Dioxus TUI/Web**: Rust-based frontends (WASM or Native) connecting to the server.
-  - **CLI**: A lightweight client with a feature-gated TUI frontend for interactive sessions, consuming the core directly or via server.
+  - **CLI**: A lightweight headless client with optional TUI (`--features tui`) for interactive sessions; consumes the core directly or via server.
 
 ### 4.4 Platform Support
 - **Cross-Platform**: The system shall fully support **Linux**, **Windows**, and **macOS** environments for both the server runtime and client tools.

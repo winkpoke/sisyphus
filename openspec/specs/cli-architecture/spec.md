@@ -66,11 +66,12 @@ And the model and directory paths must be clearly legible.
 The CLI codebase MUST be organized into modular components to ensure maintainability and testability.
 
 #### Scenario: Code Structure
-- **Given** the CLI source code
-- **Then** `main.rs` MUST only handle argument parsing and dispatching
-- **And** business logic MUST be encapsulated in `commands/` modules
-- **And** UI logic MUST be encapsulated in `ui/` modules
-- **And** the interactive UI MUST support multiple frontends (REPL and TUI) behind a selection mechanism
+- **Given** CLI source code
+- **Then** `crates/cli/src/main.rs` MUST only handle argument parsing and delegation to cli-lib
+- **And** binary crate MUST be a thin entry point with minimal logic
+- **And** all business logic, REPL implementation, and command handling MUST be encapsulated in `crates/cli-lib`
+- **And** there MUST be no duplicate code between `crates/cli` and `crates/cli-lib`
+- **And** interactive UI MUST support multiple frontends (REPL and TUI) behind a selection mechanism
 
 ### Requirement: REPL Session Switching
 The CLI REPL SHALL adopt new session IDs returned by the server after UiCommand-driven lifecycle operations.
