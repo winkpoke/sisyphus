@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sisyphus_cli_lib = { path = "../cli-lib", package = "sisyphus-cli-lib" }
+sisyphus_cli_core = { path = "../cli-core", package = "sisyphus-cli-core" }
 common = { workspace = true }
 sisyphus_core = { workspace = true }
 provider = { workspace = true }

@@ -65,7 +65,7 @@ sisyphus/
 │   ├── tools/       # Standard tools (fs, shell)
 │   ├── server/      # HTTP/WebSocket API server
 │   ├── cli/         # CLI entry point
-│   ├── cli-lib/     # Shared CLI library (commands, REPL, completer)
+ │   ├── cli-core/    # Shared CLI library (commands, REPL, completer)
 │   └── tui/         # Optional TUI frontend (requires `--features tui`)
 └── Cargo.toml       # Workspace configuration
 ```

@@ -2,8 +2,8 @@ use clap::{Parser, Subcommand};
 use common::{config::Config, logging};
 use std::path::Path;
 
-use sisyphus_cli_lib::commands;
-use sisyphus_cli_lib::ui::repl::Repl;
+use sisyphus_cli_core::commands;
+use sisyphus_cli_core::ui::repl::Repl;
 
 #[macro_use]
 extern crate rust_i18n;
@@ -59,7 +59,7 @@ async fn main() -> anyhow::Result<()> {
 
     rust_i18n::set_locale(&config.language);
 
-    sisyphus_cli_lib::ui::banner::print_startup_info(&config);
+    sisyphus_cli_core::ui::banner::print_startup_info(&config);
 
     let config_path = cli.config.clone();
     match cli.command.unwrap_or(Commands::Chat { tui: false }) {

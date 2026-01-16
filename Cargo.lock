@@ -2624,7 +2624,7 @@ dependencies = [
  "rust-i18n",
  "serde_json",
  "server",
- "sisyphus-cli-lib",
+ "sisyphus-cli-core",
  "sisyphus_client",
  "sisyphus_core",
  "tokio",
@@ -2636,7 +2636,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "sisyphus-cli-lib"
+name = "sisyphus-cli-core"
 version = "0.1.0"
 dependencies = [
  "anyhow",
@@ -3276,7 +3276,7 @@ dependencies = [
  "rust-i18n",
  "serde_json",
  "server",
- "sisyphus-cli-lib",
+ "sisyphus-cli-core",
  "sisyphus_client",
  "sisyphus_core",
  "tokio",
