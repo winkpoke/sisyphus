@@ -14,12 +14,24 @@ The system MUST wrap each `SystemEvent` in an `EventEnvelope` that carries stabl
 ## MODIFIED Requirements
 
 ### Requirement: Type-Safe Event Bus
-The system MUST provide a typed event bus for broadcasting system events as `EventEnvelope<SystemEvent>`.
+The system MUST provide a typed, topic-based event bus for broadcasting system events efficiently. It MUST distribute events only to subscribers that have requested them (by topic), while supporting global auditing.
+
+The event bus MUST broadcast `EventEnvelope<SystemEvent>` values (not raw `SystemEvent`) so consumers can rely on stable envelope metadata.
 
 #### Scenario: Event broadcasting uses envelopes
 - **GIVEN** a subscriber to the event bus
-- **WHEN** an `AgentStateChanged` system event is published
-- **THEN** the subscriber receives an envelope containing the event with the correct payload
+- **WHEN** an `AgentStateChanged` event is published
+- **THEN** the subscriber SHALL receive an `EventEnvelope<SystemEvent>` containing the correct `AgentStateChanged` payload
+
+#### Scenario: Specific subscription remains topic-based
+- **GIVEN** an `EventBus` with a subscriber for `MessageReceived`
+- **WHEN** a `ToolExecuted` event is published
+- **THEN** the `MessageReceived` subscriber MUST NOT be woken up
+
+#### Scenario: Global subscription receives all envelopes
+- **GIVEN** an `EventBus` with a `subscribe_all` listener
+- **WHEN** any event is published
+- **THEN** the listener MUST receive an envelope for that event
 
 ### Requirement: Event Bus Logging
 The system MUST provide a dedicated mechanism to log all system events from the Event Bus using the structured logging system.
@@ -27,5 +39,5 @@ The system MUST provide a dedicated mechanism to log all system events from the 
 #### Scenario: Logging system events includes envelope metadata
 - **GIVEN** the system is running
 - **WHEN** a `SystemEvent` is published to the `EventBus`
-- **THEN** it is logged with structured fields that include the envelope `id` and `timestamp_ms`
-
+- **THEN** it is logged with the appropriate log level (Info, Debug, Error) and structured fields
+- **AND** the structured fields MUST include the envelope `id` and `timestamp_ms`

@@ -8,7 +8,7 @@ The TUI SHALL render `PermissionRequest` events as a first-class permission prom
 #### Scenario: Permission request does not spam raw JSON by default
 - **GIVEN** the TUI is connected to the server event stream
 - **AND** debug mode is disabled
-- **WHEN** a `PermissionRequest` event is received inside an event envelope
+- **WHEN** a `PermissionRequest` event is received via the SSE stream as an `EventEnvelope<SystemEvent>`
 - **THEN** the TUI SHALL display the permission overlay
 - **AND** the transcript SHALL NOT include the raw JSON payload for that event
 
@@ -20,4 +20,3 @@ The TUI SHALL render backend SSE system events as concise, end-user-readable tra
 - **WHEN** an SSE message is received that cannot be parsed as an `EventEnvelope<SystemEvent>`
 - **THEN** the TUI MUST remain responsive
 - **AND** it SHALL append a minimal system message indicating an unparsed event was received
-
