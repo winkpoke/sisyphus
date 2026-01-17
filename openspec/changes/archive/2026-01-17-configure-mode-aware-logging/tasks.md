@@ -1,0 +1,15 @@
+## 1. Implementation
+- [x] 1.1 Add `init_with_defaults(default_level: &str)` function to `crates/common/src/logging.rs`
+- [x] 1.2 Update `crates/cli/src/main.rs` to call different log levels per mode:
+  - [x] Server mode: `init_with_defaults("info")`
+  - [x] REPL mode: `init_with_defaults("error")`
+  - [x] TUI mode: `init_with_defaults("error")`
+  - [x] Msg mode: `init_with_defaults("error")`
+- [x] 1.3 Update `crates/cli-core/src/server_manager.rs` to suppress subprocess stderr:
+  - [x] Change `stderr(Stdio::inherit())` to `stderr(Stdio::piped())`
+  - [x] Add background task to consume stderr silently
+- [x] 1.4 Verify logging behavior:
+  - [x] Server mode shows INFO level logs
+  - [x] Interactive modes (REPL/TUI/msg) only show ERROR level logs
+  - [x] Background server logs suppressed in interactive modes
+  - [x] Users can override defaults via `RUST_LOG` env var

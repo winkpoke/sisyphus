@@ -1,22 +1,89 @@
 use crate::bus::{EventBus, SystemEvent};
+use std::fs::File;
 use tracing::{debug, error, info};
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
+use tracing_subscriber::{fmt, layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
-pub fn init() {
-    let filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
+/// Log output destination
+#[derive(Debug, Clone)]
+pub enum LogOutput {
+    /// Log to stderr
+    Stderr,
+    /// Log to file at specified path
+    File(String),
+    /// Discard all logs (for interactive modes)
+    Null,
+}
 
-    // We default to pretty logs for CLI usage.
-    // In the future, we can switch to JSON based on an env var or flag.
-    let fmt_layer = tracing_subscriber::fmt::layer()
+/// Logging configuration
+pub struct LogConfig {
+    pub default_level: &'static str,
+    pub output: LogOutput,
+}
+
+impl Default for LogConfig {
+    fn default() -> Self {
+        Self {
+            default_level: "info",
+            output: LogOutput::Stderr,
+        }
+    }
+}
+
+/// Initialize logging with flexible configuration
+///
+/// # Arguments
+///
+/// * `config` - LogConfig specifying level and output destination
+pub fn init(config: LogConfig) -> anyhow::Result<()> {
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new(config.default_level));
+
+    let fmt_layer = fmt::layer()
         .with_target(false)
         .with_thread_ids(true)
         .with_line_number(true)
         .pretty();
 
-    tracing_subscriber::registry()
-        .with(filter)
-        .with(fmt_layer)
-        .init();
+    match config.output {
+        LogOutput::Stderr => {
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(fmt_layer.with_writer(std::io::stderr))
+                .try_init()
+                .map_err(|e| anyhow::anyhow!("Failed to initialize logging: {}", e))?;
+        }
+        LogOutput::File(path) => {
+            let file = File::options().append(true).create(true).open(path)?;
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(fmt_layer.with_writer(file))
+                .try_init()
+                .map_err(|e| anyhow::anyhow!("Failed to initialize logging: {}", e))?;
+        }
+        LogOutput::Null => {
+            tracing_subscriber::registry()
+                .with(filter)
+                .with(fmt_layer.with_writer(std::io::sink))
+                .try_init()
+                .map_err(|e| anyhow::anyhow!("Failed to initialize logging: {}", e))?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Initialize logging with default info level to stderr (backward compatibility)
+pub fn init_with_defaults(default_level: &'static str) {
+    init(LogConfig {
+        default_level,
+        output: LogOutput::Stderr,
+    })
+    .expect("Failed to initialize logging");
+}
+
+/// Initialize logging to info level (backward compatibility)
+pub fn init_legacy() {
+    init_with_defaults("info");
 }
 
 pub async fn start_event_logger(bus: &EventBus) {
@@ -45,6 +112,5 @@ pub async fn start_event_logger(bus: &EventBus) {
         }
     });
 
-    // Leak the subscription to keep the logger running in the background
     std::mem::forget(sub);
 }

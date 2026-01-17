@@ -17,7 +17,7 @@ use futures::StreamExt;
 use sisyphus_core::command::{CommandContext, CommandType};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::broadcast;
 
 use action::Action;
 use app::App;
@@ -25,12 +25,12 @@ use update::{update, TuiInstruction};
 
 pub struct Tui {
     client: Client,
-    shutdown_rx: mpsc::Receiver<()>,
+    shutdown_rx: broadcast::Receiver<()>,
     session_id: String,
 }
 
 impl Tui {
-    pub fn new(client: Client, session_id: String, shutdown_rx: mpsc::Receiver<()>) -> Self {
+    pub fn new(client: Client, session_id: String, shutdown_rx: broadcast::Receiver<()>) -> Self {
         Self {
             client,
             shutdown_rx,

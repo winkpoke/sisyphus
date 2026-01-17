@@ -8,7 +8,7 @@ use reedline::{
     Prompt, PromptEditMode, PromptHistorySearch, Reedline, ReedlineEvent, ReedlineMenu, Signal,
 };
 use rust_i18n::t;
-use tokio::sync::mpsc::Receiver;
+use tokio::sync::broadcast::Receiver;
 
 use super::completer::CommandCompleter;
 

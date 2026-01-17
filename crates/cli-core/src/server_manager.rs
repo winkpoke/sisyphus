@@ -1,6 +1,7 @@
 use anyhow::{Context, Result};
 use client::Client;
 use std::process::Stdio;
+use tokio::io::AsyncBufReadExt;
 use tokio::process::{Child, Command};
 use tokio::time::{sleep, Duration};
 use url::Url;
@@ -11,37 +12,55 @@ pub struct ServerManager {
 }
 
 impl ServerManager {
-    pub async fn start(port: u16, config_path: Option<String>) -> Result<Self> {
+    pub async fn start(
+        port: u16,
+        config_path: Option<String>,
+        log_file: Option<String>,
+    ) -> Result<Self> {
         let exe = std::env::current_exe()?;
 
         let mut cmd = Command::new(exe);
         cmd.arg("serve").arg("--port").arg(port.to_string());
+        cmd.arg("--print-port");
 
         if let Some(path) = config_path {
             cmd.arg("--config").arg(path);
         }
 
-        let child = cmd
-            .stdout(Stdio::null()) // Or pipe if we want to log
-            .stderr(Stdio::inherit())
+        if let Some(log_path) = &log_file {
+            cmd.arg("--log-file").arg(log_path);
+        }
+
+        let mut child = cmd
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
             .spawn()
             .context("Failed to spawn server process")?;
 
-        let base_url = Url::parse(&format!("http://localhost:{}", port))?;
-        let manager = Self {
+        let stdout = child.stdout.take().context("Failed to capture stdout")?;
+
+        let mut reader = tokio::io::BufReader::new(stdout);
+        let mut line = String::new();
+        reader.read_line(&mut line).await?;
+
+        let actual_port: u16 = line
+            .trim()
+            .parse()
+            .with_context(|| format!("Failed to parse port from server output: '{}'", line))?;
+
+        let base_url = Url::parse(&format!("http://localhost:{}", actual_port))?;
+        let mut manager = Self {
             process: Some(child),
             base_url,
         };
 
-        // Wait for health check
         manager.wait_for_ready().await?;
 
         Ok(manager)
     }
 
-    // Connect to existing server
     pub async fn connect(url: Url) -> Result<Self> {
-        let manager = Self {
+        let mut manager = Self {
             process: None,
             base_url: url,
         };
@@ -49,17 +68,25 @@ impl ServerManager {
         Ok(manager)
     }
 
-    async fn wait_for_ready(&self) -> Result<()> {
+    async fn wait_for_ready(&mut self) -> Result<()> {
         let client = Client::new(self.base_url.clone());
         let mut attempts = 0;
         loop {
+            if let Some(ref mut child) = &mut self.process {
+                if let Ok(Some(exit_status)) = child.try_wait() {
+                    anyhow::bail!(
+                        "Server process exited unexpectedly with status: {:?}",
+                        exit_status
+                    );
+                }
+            }
+
             if client.health_check().await.is_ok() {
                 return Ok(());
             }
 
             attempts += 1;
             if attempts > 20 {
-                // 10 seconds
                 anyhow::bail!("Server failed to start");
             }
 
@@ -83,8 +110,6 @@ impl ServerManager {
 impl Drop for ServerManager {
     fn drop(&mut self) {
         if let Some(child) = &mut self.process {
-            // We can't await in drop, so we try to kill it.
-            // If it's already awaited, this might fail, but that's fine.
             let _ = child.start_kill();
         }
     }
