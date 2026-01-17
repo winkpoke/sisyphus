@@ -9,12 +9,12 @@ The server SHALL provide an SSE endpoint to stream system events as JSON-encoded
 - **GIVEN** a running server
 - **WHEN** a client connects to `/api/v1/events`
 - **AND** a `MessageReceived` system event is published on the internal bus
-- **THEN** the client SHALL receive a JSON-encoded envelope via the stream
+- **THEN** the client SHALL receive a JSON-encoded envelope via the stream as the SSE `data` payload
 
 #### Scenario: SSE event id matches envelope id
 - **GIVEN** a running server
 - **WHEN** the server streams a system event via SSE
-- **THEN** the SSE `id` field SHOULD equal the envelope `id`
+- **THEN** the SSE `id` field SHOULD equal the envelope `id` (string-encoded)
 
 ### Requirement: Permission requests are streamed to clients
 The server SHALL stream `PermissionRequest` system events to connected clients via the SSE endpoint as `EventEnvelope<SystemEvent>`.

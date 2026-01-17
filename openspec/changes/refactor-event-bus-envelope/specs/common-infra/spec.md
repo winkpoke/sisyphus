@@ -33,6 +33,11 @@ The event bus MUST broadcast `EventEnvelope<SystemEvent>` values (not raw `Syste
 - **WHEN** any event is published
 - **THEN** the listener MUST receive an envelope for that event
 
+#### Scenario: Raw global subscription receives all envelopes
+- **GIVEN** an `EventBus` with a `subscribe_raw` listener
+- **WHEN** any event is published
+- **THEN** the listener MUST receive an envelope for that event
+
 ### Requirement: Event Bus Logging
 The system MUST provide a dedicated mechanism to log all system events from the Event Bus using the structured logging system.
 

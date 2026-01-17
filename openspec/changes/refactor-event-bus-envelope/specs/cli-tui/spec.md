@@ -1,5 +1,16 @@
 # cli-tui Delta Specification
 
+## ADDED Requirements
+
+### Requirement: Backend SSE envelope parsing
+The TUI SHALL parse backend SSE event `data` as `EventEnvelope<SystemEvent>` and dispatch the inner `SystemEvent` into the existing UI update flow.
+
+#### Scenario: Envelope is parsed and dispatched
+- **GIVEN** the TUI is connected to the server event stream
+- **WHEN** an SSE message is received with JSON-encoded `EventEnvelope<SystemEvent>` in `data`
+- **THEN** the TUI SHALL parse the envelope
+- **AND** it SHALL dispatch the inner `SystemEvent` for handling
+
 ## MODIFIED Requirements
 
 ### Requirement: Permission Request Prompt
