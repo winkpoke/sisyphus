@@ -1,33 +1,37 @@
 # Tasks
 
-- [ ] Define `EventEnvelope<SystemEvent>` and add stable metadata assignment at publish time
+- [x] Define `EventEnvelope<SystemEvent>` and add stable metadata assignment at publish time
   - Add `AtomicU64` counter to `EventBus` for monotonic `id` generation
   - Use `chrono::Utc::now().timestamp_millis()` for UTC timestamps
-- [ ] Audit all EventBus consumers in codebase to identify breaking changes
+- [x] Audit all EventBus consumers in codebase to identify breaking changes
   - Search for all `subscribe_all`, `subscribe`, and `subscribe_raw` usages
   - Document each consumer that needs migration
-- [ ] Update `EventBus` publish/subscribe APIs to use envelopes while preserving topic routing
+- [x] Update `EventBus` publish/subscribe APIs to use envelopes while preserving topic routing
   - Modify `publish()` to wrap events in envelopes
   - Update all subscription callback signatures to `FnMut(EventEnvelope<SystemEvent>)`
-- [ ] Update event logging to include envelope `id` and `timestamp_ms` fields
+- [x] Update event logging to include envelope `id` and `timestamp_ms` fields
   - Migrate `start_event_logger()` callback to work with envelopes
   - Add envelope metadata to structured log fields
-- [ ] Migrate all other EventBus consumers identified during audit
+- [x] Migrate all other EventBus consumers identified during audit
   - Update subscription callbacks to extract `SystemEvent` from envelopes where needed
   - Verify topic-based routing still works correctly
-- [ ] Update existing EventBus tests in `crates/common/src/bus.rs`
+- [x] Update existing EventBus tests in `crates/common/src/bus.rs`
   - Update test assertions to work with envelopes
   - Verify monotonic ID generation in tests
-- [ ] Update server SSE stream (`/api/v1/events`) to send envelopes and set SSE `id`
+- [x] Update server SSE stream (`/api/v1/events`) to send envelopes and set SSE `id`
   - Serialize `EventEnvelope<SystemEvent>` instead of raw event
   - Set SSE `id` field to envelope `id` (string-encoded)
-- [ ] Update TUI SSE consumer to decode envelopes and dispatch inner `SystemEvent`
+- [x] Update TUI SSE consumer to decode envelopes and dispatch inner `SystemEvent`
   - Parse `EventEnvelope<SystemEvent>` from SSE `data`
   - Extract inner `SystemEvent` for dispatch to existing UI logic
   - Add error handling for unparseable envelopes (log message, don't crash)
-- [ ] Add tests for envelope serialization, ordering, and SSE event shape
+- [x] Add tests for envelope serialization, ordering, and SSE event shape
   - Test envelope JSON serialization/deserialization
   - Test monotonic ID generation
   - Test SSE `id` field matches envelope `id`
   - Test timestamp accuracy and UTC timezone handling
-- [ ] Run the workspace test suite and fix failures
+- [x] Run the workspace test suite and fix failures
+- [x] Apply code review fixes for EventBus optimization
+  - Remove unnecessary `Arc` wrapper from `next_id` counter (not cloned anywhere)
+  - Optimize memory ordering from `SeqCst` to `Relaxed` for better performance
+  - Refactor timestamp test to capture time before publish for reliability

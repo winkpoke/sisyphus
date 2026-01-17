@@ -17,6 +17,7 @@ uuid = { workspace = true }
 futures = { workspace = true }
 regex = "1.10"
 rust-i18n = "3"
+chrono = { workspace = true }
 
 [features]
 dev_debug = []

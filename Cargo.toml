@@ -27,6 +27,7 @@ futures = "0.3"
 uuid = { version = "1.6", features = ["v4", "serde"] }
 url = "2.5"
 bytes = "1.5"
+chrono = "0.4"
 
  # Internal dependencies
 common = { path = "crates/common" }

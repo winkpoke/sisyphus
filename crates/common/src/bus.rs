@@ -1,5 +1,6 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::atomic::AtomicU64;
 use tokio::sync::broadcast;
 use tokio::task::JoinHandle;
 
@@ -52,6 +53,20 @@ impl SystemEvent {
     }
 }
 
+/// Wrapper for system events with stable metadata
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EventEnvelope<T> {
+    /// Monotonically increasing identifier (process-local)
+    pub id: u64,
+    /// Unix epoch timestamp in milliseconds (UTC)
+    pub timestamp_ms: i64,
+    /// The actual event payload
+    pub event: T,
+}
+
+/// Event envelope for SystemEvent
+pub type SystemEventEnvelope = EventEnvelope<SystemEvent>;
+
 pub struct Subscription {
     handle: JoinHandle<()>,
 }
@@ -69,8 +84,9 @@ impl Drop for Subscription {
 }
 
 pub struct EventBus {
-    global_tx: broadcast::Sender<SystemEvent>,
-    topic_txs: HashMap<SystemEventKind, broadcast::Sender<SystemEvent>>,
+    global_tx: broadcast::Sender<SystemEventEnvelope>,
+    topic_txs: HashMap<SystemEventKind, broadcast::Sender<SystemEventEnvelope>>,
+    next_id: AtomicU64,
 }
 
 impl EventBus {
@@ -95,47 +111,52 @@ impl EventBus {
         Self {
             global_tx,
             topic_txs,
+            next_id: AtomicU64::new(0),
         }
     }
 
     pub fn publish(&self, event: SystemEvent) -> usize {
+        let id = self
+            .next_id
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let timestamp_ms = chrono::Utc::now().timestamp_millis();
+
+        let envelope = SystemEventEnvelope {
+            id,
+            timestamp_ms,
+            event,
+        };
+
         let mut count = 0;
 
-        // Publish to specific topic channel
-        let kind = event.kind();
+        let kind = envelope.event.kind();
         if let Some(tx) = self.topic_txs.get(&kind) {
-            if let Ok(n) = tx.send(event.clone()) {
+            if let Ok(n) = tx.send(envelope.clone()) {
                 count += n;
             }
         }
 
-        // Publish to global channel
-        // Ignore errors if no active subscribers
-        if let Ok(n) = self.global_tx.send(event) {
+        if let Ok(n) = self.global_tx.send(envelope) {
             count += n;
         }
 
         count
     }
 
-    /// Returns a raw broadcast receiver for low-level handling (e.g. in loops or tests).
-    /// This subscribes to the global channel, receiving all events.
-    pub fn subscribe_raw(&self) -> broadcast::Receiver<SystemEvent> {
+    pub fn subscribe_raw(&self) -> broadcast::Receiver<SystemEventEnvelope> {
         self.global_tx.subscribe()
     }
 
-    /// Subscribes to all events with a callback.
-    /// Returns a Subscription handle that cancels the subscription when dropped.
     pub fn subscribe_all<F>(&self, mut callback: F) -> Subscription
     where
-        F: FnMut(SystemEvent) + Send + 'static,
+        F: FnMut(SystemEventEnvelope) + Send + 'static,
     {
         let mut rx = self.global_tx.subscribe();
         let handle = tokio::spawn(async move {
             loop {
                 match rx.recv().await {
-                    Ok(event) => {
-                        callback(event);
+                    Ok(envelope) => {
+                        callback(envelope);
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(broadcast::error::RecvError::Closed) => break,
@@ -145,11 +166,9 @@ impl EventBus {
         Subscription { handle }
     }
 
-    /// Subscribes to events of a specific kind with a callback.
-    /// Returns a Subscription handle that cancels the subscription when dropped.
     pub fn subscribe<F>(&self, kind: SystemEventKind, mut callback: F) -> Subscription
     where
-        F: FnMut(SystemEvent) + Send + 'static,
+        F: FnMut(SystemEventEnvelope) + Send + 'static,
     {
         let tx = self
             .topic_txs
@@ -159,8 +178,8 @@ impl EventBus {
         let handle = tokio::spawn(async move {
             loop {
                 match rx.recv().await {
-                    Ok(event) => {
-                        callback(event);
+                    Ok(envelope) => {
+                        callback(envelope);
                     }
                     Err(broadcast::error::RecvError::Lagged(_)) => continue,
                     Err(broadcast::error::RecvError::Closed) => break,
@@ -170,11 +189,9 @@ impl EventBus {
         Subscription { handle }
     }
 
-    /// Subscribes to the next event of a specific kind with a callback, then unsubscribes.
-    /// Returns a Subscription handle that cancels the subscription when dropped.
     pub fn subscribe_once<F>(&self, kind: SystemEventKind, callback: F) -> Subscription
     where
-        F: FnOnce(SystemEvent) + Send + 'static,
+        F: FnOnce(SystemEventEnvelope) + Send + 'static,
     {
         let tx = self
             .topic_txs
@@ -185,9 +202,9 @@ impl EventBus {
         let handle = tokio::spawn(async move {
             loop {
                 match rx.recv().await {
-                    Ok(event) => {
+                    Ok(envelope) => {
                         if let Some(cb) = callback_opt.take() {
-                            cb(event);
+                            cb(envelope);
                         }
                         break;
                     }
@@ -210,29 +227,24 @@ mod tests {
         let bus = EventBus::new(100);
         let (tx, mut rx) = tokio::sync::mpsc::channel(10);
 
-        let _sub = bus.subscribe(SystemEventKind::MessageReceived, move |event| {
-            tx.try_send(event).unwrap();
+        let _sub = bus.subscribe(SystemEventKind::MessageReceived, move |envelope| {
+            tx.try_send(envelope).unwrap();
         });
 
-        // Publish correct event
         bus.publish(SystemEvent::MessageReceived {
             content: "hello".to_string(),
             role: "user".to_string(),
         });
 
-        // Publish incorrect event
         bus.publish(SystemEvent::Error {
             message: "oops".to_string(),
         });
 
-        // Wait a bit
         sleep(Duration::from_millis(50)).await;
 
-        // Check what we got
-        let event = rx.recv().await.unwrap();
-        assert_eq!(event.kind(), SystemEventKind::MessageReceived);
+        let envelope = rx.recv().await.unwrap();
+        assert_eq!(envelope.event.kind(), SystemEventKind::MessageReceived);
 
-        // Should be empty now
         assert!(rx.try_recv().is_err());
     }
 
@@ -241,8 +253,8 @@ mod tests {
         let bus = EventBus::new(100);
         let (tx, mut rx) = tokio::sync::mpsc::channel(10);
 
-        let _sub = bus.subscribe_all(move |event| {
-            tx.try_send(event).unwrap();
+        let _sub = bus.subscribe_all(move |envelope| {
+            tx.try_send(envelope).unwrap();
         });
 
         bus.publish(SystemEvent::MessageReceived {
@@ -255,10 +267,79 @@ mod tests {
 
         sleep(Duration::from_millis(50)).await;
 
-        let event1 = rx.recv().await.unwrap();
-        let event2 = rx.recv().await.unwrap();
+        let envelope1 = rx.recv().await.unwrap();
+        let envelope2 = rx.recv().await.unwrap();
 
-        assert_eq!(event1.kind(), SystemEventKind::MessageReceived);
-        assert_eq!(event2.kind(), SystemEventKind::Error);
+        assert_eq!(envelope1.event.kind(), SystemEventKind::MessageReceived);
+        assert_eq!(envelope2.event.kind(), SystemEventKind::Error);
+    }
+
+    #[tokio::test]
+    async fn test_envelope_monotonic_ids() {
+        let bus = EventBus::new(100);
+        let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+
+        let _sub = bus.subscribe_all(move |envelope| {
+            tx.try_send(envelope).unwrap();
+        });
+
+        bus.publish(SystemEvent::MessageReceived {
+            content: "first".to_string(),
+            role: "user".to_string(),
+        });
+        bus.publish(SystemEvent::Error {
+            message: "second".to_string(),
+        });
+        bus.publish(SystemEvent::Shutdown);
+
+        sleep(Duration::from_millis(50)).await;
+
+        let env1 = rx.recv().await.unwrap();
+        let env2 = rx.recv().await.unwrap();
+        let env3 = rx.recv().await.unwrap();
+
+        assert_eq!(env1.id, 0);
+        assert_eq!(env2.id, 1);
+        assert_eq!(env3.id, 2);
+    }
+
+    #[tokio::test]
+    async fn test_envelope_serialization() {
+        let envelope = SystemEventEnvelope {
+            id: 42,
+            timestamp_ms: 1768631000000,
+            event: SystemEvent::MessageReceived {
+                content: "test".to_string(),
+                role: "user".to_string(),
+            },
+        };
+
+        let json = serde_json::to_string(&envelope).unwrap();
+        let deserialized: SystemEventEnvelope = serde_json::from_str(&json).unwrap();
+
+        assert_eq!(envelope.id, deserialized.id);
+        assert_eq!(envelope.timestamp_ms, deserialized.timestamp_ms);
+        assert_eq!(envelope.event, deserialized.event);
+    }
+
+    #[tokio::test]
+    async fn test_envelope_timestamp_in_utc() {
+        let bus = EventBus::new(100);
+        let (tx, mut rx) = tokio::sync::mpsc::channel(10);
+
+        let _sub = bus.subscribe_all(move |envelope| {
+            tx.try_send(envelope).unwrap();
+        });
+
+        let expected_min_timestamp = chrono::Utc::now().timestamp_millis();
+        bus.publish(SystemEvent::Shutdown);
+
+        sleep(Duration::from_millis(50)).await;
+
+        let envelope = rx.recv().await.unwrap();
+        let expected_max_timestamp = chrono::Utc::now().timestamp_millis();
+
+        assert!(envelope.timestamp_ms >= expected_min_timestamp);
+        assert!(envelope.timestamp_ms <= expected_max_timestamp);
     }
 }

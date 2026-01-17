@@ -25,9 +25,12 @@ pub async fn setup_connection(
         let url = Url::parse(&url_str).context("Failed to parse attach URL")?;
         let server_manager = ServerManager::connect(url.clone()).await?;
         let client = Client::new(url);
-        
+
         // Create a session
-        let session = client.create_session().await.context("Failed to create session")?;
+        let session = client
+            .create_session()
+            .await
+            .context("Failed to create session")?;
 
         return Ok(ConnectionContext {
             client,
@@ -41,12 +44,15 @@ pub async fn setup_connection(
 
     // Otherwise, start a new server
     // 0 means let OS choose port
-    let port = 0; 
+    let port = 0;
     let server_manager = ServerManager::start(port, config_path, log_file).await?;
     let client = server_manager.client();
 
     // Create a session
-    let session = client.create_session().await.context("Failed to create session")?;
+    let session = client
+        .create_session()
+        .await
+        .context("Failed to create session")?;
 
     Ok(ConnectionContext {
         client,

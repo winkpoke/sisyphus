@@ -1,6 +1,6 @@
 use anyhow::Result;
 use async_trait::async_trait;
-use common::bus::{EventBus, SystemEvent};
+use common::bus::{EventBus, SystemEvent, SystemEventEnvelope};
 use common::llm::{CompletionRequest, FunctionCall, LLMProvider, Message, Role, ToolCall};
 use common::tool::Tool;
 use futures::Stream;
@@ -153,23 +153,30 @@ async fn test_permission_enforcement_ask() {
     // Check pending approvals
     assert!(session.pending_approvals.contains_key("call_2"));
 
-    // Check for event
-    loop {
-        match rx.try_recv() {
-            Ok(SystemEvent::PermissionRequest {
-                operation,
-                tool_name,
-                call_id,
-            }) => {
-                assert_eq!(operation, "tool_execution");
-                assert_eq!(tool_name, "write_file");
-                assert_eq!(call_id, "call_2");
-                break;
+    // Wait for the permission request event
+    let result = tokio::time::timeout(std::time::Duration::from_millis(500), async {
+        loop {
+            match rx.recv().await {
+                Ok(SystemEventEnvelope { event, .. }) => {
+                    if let SystemEvent::PermissionRequest {
+                        operation,
+                        tool_name,
+                        call_id,
+                    } = event
+                    {
+                        assert_eq!(operation, "tool_execution");
+                        assert_eq!(tool_name, "write_file");
+                        assert_eq!(call_id, "call_2");
+                        return;
+                    }
+                }
+                Err(_) => return,
             }
-            Ok(_) => continue,
-            Err(_) => break, // Should have found it
         }
-    }
+    })
+    .await;
+
+    assert!(result.is_ok(), "Timed out waiting for permission request");
 }
 
 #[test]

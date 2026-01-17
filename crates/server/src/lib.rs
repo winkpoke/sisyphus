@@ -82,8 +82,11 @@ impl Server {
                 _ = async {
                     loop {
                         match rx.recv().await {
-                            Ok(SystemEvent::Shutdown) => break,
-                            Ok(_) => continue,
+                            Ok(envelope) => {
+                                if envelope.event == SystemEvent::Shutdown {
+                                    break;
+                                }
+                            }
                             Err(tokio::sync::broadcast::error::RecvError::Lagged(skipped)) => {
                                 tracing::warn!("Server event loop lagged, skipped {} events", skipped);
                                 continue;
@@ -379,19 +382,32 @@ async fn submit_approval(
 async fn events(
     State(state): State<AppState>,
 ) -> Sse<impl Stream<Item = Result<Event, axum::Error>>> {
-    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    // Use a bounded channel to prevent memory leaks if clients consume slowly
+    let (tx, rx) = tokio::sync::mpsc::channel(100);
 
-    // Subscribe to all events and forward them to the channel
-    let sub = state.bus.subscribe_all(move |event| {
-        let _ = tx.send(event);
+    let sub = state.bus.subscribe_all(move |envelope| {
+        // If the channel is full, we drop the event to prevent backpressure on the bus
+        // In a production system, we might want to log this or signal the client
+        let _ = tx.try_send(envelope);
     });
 
-    // Convert receiver into a stream
     let stream = stream::unfold((rx, sub), |(mut rx, _sub)| async move {
         match rx.recv().await {
-            Some(event) => {
-                let data = serde_json::to_string(&event).unwrap_or_default();
-                Some((Ok(Event::default().data(data)), (rx, _sub)))
+            Some(envelope) => {
+                match serde_json::to_string(&envelope) {
+                    Ok(data) => {
+                        let sse_id = envelope.id.to_string();
+                        Some((Ok(Event::default().data(data).id(sse_id)), (rx, _sub)))
+                    }
+                    Err(e) => {
+                        tracing::error!("Failed to serialize event envelope: {}", e);
+                        // Skip this event and continue
+                        Some((
+                            Ok(Event::default().event("error").data("Serialization failed")),
+                            (rx, _sub),
+                        ))
+                    }
+                }
             }
             None => None,
         }

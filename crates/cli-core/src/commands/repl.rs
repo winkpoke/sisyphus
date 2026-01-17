@@ -9,11 +9,7 @@ pub async fn run(
 ) -> Result<()> {
     let mut ctx = setup_connection(attach_url, config_path, log_file).await?;
 
-    let mut repl = Repl::new(
-        ctx.client.clone(),
-        ctx.session_id.clone(),
-        ctx.shutdown_rx,
-    );
+    let mut repl = Repl::new(ctx.client.clone(), ctx.session_id.clone(), ctx.shutdown_rx);
     repl.run().await?;
 
     if ctx.owns_server {

@@ -11,7 +11,7 @@ pub mod update;
 
 use anyhow::Result;
 use client::Client;
-use common::bus::SystemEvent;
+use common::bus::SystemEventEnvelope;
 use event::EventHandler;
 use futures::StreamExt;
 use sisyphus_core::command::{CommandContext, CommandType};
@@ -98,7 +98,6 @@ impl Tui {
         commands.sort();
         app.state.update_commands(commands);
 
-        // Spawn System Event Listener
         let mut backend_events = self.client.subscribe_events()?;
         let tx_clone = action_tx.clone();
         tokio::spawn(async move {
@@ -106,8 +105,11 @@ impl Tui {
                 match event {
                     Ok(reqwest_eventsource::Event::Open) => continue,
                     Ok(reqwest_eventsource::Event::Message(msg)) => {
-                        if let Ok(sys_event) = serde_json::from_str::<SystemEvent>(&msg.data) {
-                            let _ = tx_clone.send(Action::SystemEvent(sys_event));
+                        if let Ok(envelope) = serde_json::from_str::<SystemEventEnvelope>(&msg.data)
+                        {
+                            let _ = tx_clone.send(Action::SystemEvent(envelope.event));
+                        } else {
+                            tracing::warn!("Failed to parse event envelope: {}", msg.data);
                         }
                     }
                     Err(_) => {
