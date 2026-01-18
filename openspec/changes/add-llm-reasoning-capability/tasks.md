@@ -14,15 +14,19 @@
 ## 3. P1: Deterministic auto mode
 - [ ] 3.1 Implement `mode=auto` enablement rules and tests
 
-## 4. P1: TUI integration
-- [ ] 4.1 Add a local toggle to show/hide `kind=reasoning_summary` transcript entries
+## 4. P0: TUI integration
+- [ ] 4.1 Add a local toggle to show/hide `kind=reasoning_summary` transcript entries (default: shown)
 - [ ] 4.2 Ensure `kind=reasoning_raw` is gated by debug mode and redacted/truncated
 
-## 5. P1: Slash command support
-- [ ] 5.1 Add `/think` command to toggle session summary output
-- [ ] 5.2 Ensure `/think` is discoverable in the command palette
+## 5. P0: REPL integration
+- [ ] 5.1 Add a local toggle to show/hide `kind=reasoning_summary` transcript entries (default: shown)
+- [ ] 5.2 Ensure `/think` toggles summary visibility locally in the REPL
 
-## 6. Validation
-- [ ] 6.1 Add tests for merge order, reserved-key rejection, and summary emission
-- [ ] 6.2 Add tests for `/think` toggle behavior
-- [ ] 6.3 Run workspace test suite and fix failures
+## 6. P0: Ui command support
+- [ ] 6.1 Add `/think` UiCommand to toggle summary visibility in interactive UIs
+- [ ] 6.2 Ensure `/think` is discoverable in the TUI command palette
+
+## 7. Validation
+- [ ] 7.1 Add tests for merge order, reserved-key rejection, and summary emission
+- [ ] 7.2 Add tests for `/think` toggle behavior (TUI + REPL)
+- [ ] 7.3 Run workspace test suite and fix failures

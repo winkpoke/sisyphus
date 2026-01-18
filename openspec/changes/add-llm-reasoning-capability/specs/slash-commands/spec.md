@@ -1,21 +1,10 @@
 ## ADDED Requirements
 
-### Requirement: /think toggles reasoning summary output
-The system SHALL provide a `/think` slash command that toggles reasoning summary output for the current session.
+### Requirement: /think is a reserved UiCommand name
+The system SHALL reserve `/think` as a UiCommand name and MUST NOT allow registering it as a SlashCommand.
 
-#### Scenario: /think enables summary output
-- **GIVEN** the current session has reasoning summary output disabled
-- **WHEN** the user executes `/think`
-- **THEN** reasoning summary output SHALL become enabled for that session
-
-#### Scenario: /think disables summary output
-- **GIVEN** the current session has reasoning summary output enabled
-- **WHEN** the user executes `/think`
-- **THEN** reasoning summary output SHALL become disabled for that session
-
-### Requirement: /think is safe by default
-The `/think` command MUST NOT enable raw reasoning output.
-
-#### Scenario: /think does not enable raw reasoning
-- **WHEN** the user executes `/think`
-- **THEN** raw reasoning output MUST remain disabled
+#### Scenario: Custom SlashCommand colliding with /think is rejected
+- **GIVEN** `/think` is a reserved UiCommand name
+- **AND** a command directory contains `think.md`
+- **WHEN** the agent starts
+- **THEN** the system MUST NOT register `/think` as a SlashCommand

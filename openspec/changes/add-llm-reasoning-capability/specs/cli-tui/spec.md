@@ -3,15 +3,15 @@
 ### Requirement: Reasoning summary visibility toggle
 The TUI SHALL allow toggling the visibility of reasoning summaries.
 
-#### Scenario: Summaries are hidden by default
+#### Scenario: Summaries are shown by default
 - **GIVEN** the TUI starts in a new session
 - **WHEN** a `MessageReceived` system event with `kind = "reasoning_summary"` is received
-- **THEN** the TUI MUST hide it by default
+- **THEN** the TUI MUST display it as a system transcript entry
 
-#### Scenario: Toggle shows reasoning summaries
-- **GIVEN** the user enables reasoning summary visibility
+#### Scenario: Toggle hides reasoning summaries
+- **GIVEN** the user disables reasoning summary visibility
 - **WHEN** a `MessageReceived` system event with `kind = "reasoning_summary"` is received
-- **THEN** the TUI SHALL display it as a system transcript entry
+- **THEN** the TUI MUST hide it
 
 #### Scenario: /think toggles summary visibility
 - **GIVEN** the TUI is running

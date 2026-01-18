@@ -22,13 +22,18 @@ Then a new session ID should be returned
 And a subsequent GET request to `/api/v1/sessions` should include this ID.
 
 ### Requirement: Real-time Event Streaming
-The server SHALL provide an SSE endpoint to stream system events.
+The server SHALL provide an SSE endpoint to stream system events as JSON-encoded `EventEnvelope<SystemEvent>` values.
 
-#### Scenario: Subscribe to Events
-Given a running server
-When a client connects to `/api/v1/events`
-And a `MessageReceived` event is published on the internal bus
-Then the client should receive this event via the stream.
+#### Scenario: Subscribe to envelope events
+- **GIVEN** a running server
+- **WHEN** a client connects to `/api/v1/events`
+- **AND** a `MessageReceived` system event is published on the internal bus
+- **THEN** the client SHALL receive a JSON-encoded envelope via the stream as the SSE `data` payload
+
+#### Scenario: SSE event id matches envelope id
+- **GIVEN** a running server
+- **WHEN** the server streams a system event via SSE
+- **THEN** the SSE `id` field SHOULD equal the envelope `id` (string-encoded)
 
 ### Requirement: Efficient Session Listing
 The system SHALL provide a lightweight representation of sessions for listing endpoints to optimize performance.
@@ -51,13 +56,13 @@ And it should contain metadata (e.g., message count)
 But it should not contain the `messages` array
 
 ### Requirement: Permission requests are streamed to clients
-The server SHALL stream `PermissionRequest` system events to connected clients via the SSE endpoint.
+The server SHALL stream `PermissionRequest` system events to connected clients via the SSE endpoint as `EventEnvelope<SystemEvent>`.
 
-#### Scenario: Client receives permission request event
+#### Scenario: Client receives permission request envelope
 - **GIVEN** a running server
 - **AND** a client is connected to `/api/v1/events`
 - **WHEN** the agent emits a `PermissionRequest` system event
-- **THEN** the client SHALL receive the event data as JSON via the stream
+- **THEN** the client SHALL receive the event data as JSON-encoded `EventEnvelope<SystemEvent>` via the stream
 
 ### Requirement: Permission Approval API
 The server SHALL provide an endpoint to submit approval decisions for Ask-gated tool execution.

@@ -3,10 +3,11 @@
 ### Requirement: Optional reasoning request controls
 The system SHALL support optional reasoning request controls in a provider-agnostic form.
 
-#### Scenario: Reasoning defaults are off
+#### Scenario: Reasoning defaults are enabled in safe mode
 - **GIVEN** no reasoning settings are configured
 - **WHEN** a completion request is constructed
-- **THEN** the provider payload MUST NOT include any reasoning-specific fields
+- **THEN** the system SHALL behave as if reasoning is configured with `mode=auto`
+- **AND** the request MUST still be sent successfully even if the provider ignores reasoning fields
 
 #### Scenario: Reasoning is enabled with normalized settings
 - **GIVEN** reasoning is configured with `mode=on` and `effort=high`
@@ -40,7 +41,7 @@ The system SHALL allow provider-agnostic JSON request overrides to be merged int
 The system SHALL support mapping provider-specific reasoning output into a safe summary channel.
 
 #### Scenario: Summary is available without exposing raw reasoning
-- **GIVEN** a provider response contains provider-specific reasoning output
+- **GIVEN** a provider response contains a dedicated `reasoning_summary`-like field
 - **WHEN** the system maps the response into its internal message model
 - **THEN** it MUST be able to populate a `reasoning_summary` representation
 - **AND** it MUST NOT require exposing raw chain-of-thought by default

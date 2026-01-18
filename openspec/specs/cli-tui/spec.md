@@ -124,7 +124,7 @@ The TUI SHALL render `PermissionRequest` events as a first-class permission prom
 #### Scenario: Permission request does not spam raw JSON by default
 - **GIVEN** the TUI is connected to the server event stream
 - **AND** debug mode is disabled
-- **WHEN** a `PermissionRequest` event is received
+- **WHEN** a `PermissionRequest` event is received via the SSE stream as an `EventEnvelope<SystemEvent>`
 - **THEN** the TUI SHALL display the permission overlay
 - **AND** the transcript SHALL NOT include the raw JSON payload for that event
 
@@ -174,19 +174,9 @@ To improve readability.
 ### Requirement: Human-readable backend event rendering
 The TUI SHALL render backend SSE system events as concise, end-user-readable transcript entries by default.
 
-#### Scenario: Tool execution event is summarized
-- **GIVEN** the TUI is connected to the server event stream
-- **WHEN** a `ToolExecuted` event is received
-- **THEN** the TUI SHALL append a short system message summarizing the tool completion
-
-#### Scenario: Backend error event is surfaced
-- **GIVEN** the TUI is connected to the server event stream
-- **WHEN** an `Error` event is received
-- **THEN** the TUI SHALL append an error message suitable for end users
-
 #### Scenario: Unparseable event payload does not crash the UI
 - **GIVEN** the TUI is connected to the server event stream
-- **WHEN** an SSE message is received that cannot be parsed as a `SystemEvent`
+- **WHEN** an SSE message is received that cannot be parsed as an `EventEnvelope<SystemEvent>`
 - **THEN** the TUI MUST remain responsive
 - **AND** it SHALL append a minimal system message indicating an unparsed event was received
 
@@ -344,4 +334,13 @@ The TUI MUST be implemented in a separate crate (`crates/tui`) from the CLI to e
 - **When** examining the crate structure
 - **Then** the TUI crate MUST contain all TUI-specific code (MVU architecture, components, event handling)
 - **And** the TUI crate MUST NOT contain CLI-specific code (argument parsing, command routing, server management)
+
+### Requirement: Backend SSE envelope parsing
+The TUI SHALL parse backend SSE event `data` as `EventEnvelope<SystemEvent>` and dispatch the inner `SystemEvent` into the existing UI update flow.
+
+#### Scenario: Envelope is parsed and dispatched
+- **GIVEN** the TUI is connected to the server event stream
+- **WHEN** an SSE message is received with JSON-encoded `EventEnvelope<SystemEvent>` in `data`
+- **THEN** the TUI SHALL parse the envelope
+- **AND** it SHALL dispatch the inner `SystemEvent` for handling
 

@@ -1,7 +1,7 @@
 # Design: Reasoning capability for OpenAI-compatible providers
 
 ## Overview
-Add an opt-in “reasoning” capability that can be enabled per configuration and applied to OpenAI-compatible API requests. The system may surface a safe reasoning summary while keeping raw chain-of-thought hidden by default.
+Add a “reasoning” capability that is enabled by default in a safe mode and applied to OpenAI-compatible API requests when it is likely to help tool planning. The system may surface a safe reasoning summary while keeping raw chain-of-thought hidden by default.
 
 This design intentionally supports OpenAI-compatible routers (e.g., custom `base_url`) without requiring a new provider implementation per vendor.
 
@@ -13,6 +13,12 @@ Introduce a normalized reasoning request object (conceptual):
 - `effort`: `low | medium | high` (provider-dependent mapping)
 - `expose`: `none | summary | debug`
 - `store`: `none | summary`
+
+Default behavior:
+- `mode=auto`
+- `effort=medium`
+- `expose=summary`
+- `store=none`
 
 `auto` means “enable reasoning only when the agent is in a tool-using phase that is likely to require planning”, to keep cost/latency predictable.
 
@@ -74,13 +80,19 @@ Rationale:
 - Adding new enum variants is feasible, but increases client coupling.
 - Using a discriminator avoids sentinel content prefixes and enables the TUI to toggle visibility without parsing content.
 
-## Slash command integration
-The system SHALL support a `/think` command to toggle reasoning summary output for the current session.
+## Ui command integration
+The system SHALL support a `/think` UiCommand to toggle reasoning summary visibility in the UI.
 
 Behavior:
-- `/think` toggles a session-scoped preference that controls whether the agent emits `kind = "reasoning_summary"` events.
-- `/think` does not enable raw reasoning output.
-- The TUI additionally uses `/think` to toggle local rendering of `kind = "reasoning_summary"` transcript entries.
+- `/think` toggles local rendering of `kind = "reasoning_summary"` transcript entries.
+- `/think` defaults to enabled (summaries visible) for new sessions.
+- `/think` MUST NOT enable raw reasoning output.
+- If the server does not emit `kind = "reasoning_summary"` events, `/think` is a no-op.
+- `/think` MUST be treated as a reserved UiCommand name and MUST NOT be registerable as a SlashCommand.
+
+Scope note:
+- This change specifies `/think` behavior for interactive CLI clients (TUI + REPL).
+- `msg` mode behavior is intentionally left unchanged for a future decision.
 
 ## Security notes
 - Never treat reasoning text as instruction authority for tool execution.
