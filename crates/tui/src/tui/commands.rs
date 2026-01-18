@@ -2,6 +2,23 @@ use anyhow::Result;
 use async_trait::async_trait;
 use sisyphus_core::command::{Command, CommandArgs, CommandContext, CommandOutcome};
 
+pub struct ThinkCommand;
+
+#[async_trait]
+impl Command for ThinkCommand {
+    fn name(&self) -> &str {
+        "think"
+    }
+    fn description(&self) -> &str {
+        "Toggle reasoning summary visibility"
+    }
+    async fn execute(&self, _ctx: &CommandContext, _args: CommandArgs) -> Result<CommandOutcome> {
+        Ok(CommandOutcome {
+            output: Some("Toggling reasoning summary visibility...".to_string()),
+        })
+    }
+}
+
 pub struct ExitCommand;
 
 #[async_trait]

@@ -1,10 +1,33 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use common::llm::{CompletionRequest, LLMProvider, Message, Role};
+use common::llm::{CompletionRequest, LLMProvider, Message, Role, RESERVED_REQUEST_KEYS};
 use futures::{Stream, StreamExt};
 use reqwest::Client;
 use serde_json::{json, Value};
 use std::pin::Pin;
+
+/// Deep merge JSON values, excluding reserved keys from overrides
+fn merge_with_reserved_protection(base: &mut Value, overrides: &Value, reserved_keys: &[&str]) {
+    if let (Some(base_obj), Some(overrides_obj)) = (base.as_object_mut(), overrides.as_object()) {
+        let reserved_set: std::collections::HashSet<&str> = reserved_keys.iter().cloned().collect();
+
+        for (key, value) in overrides_obj {
+            if reserved_set.contains(key.as_str()) {
+                continue;
+            }
+
+            if let Some(base_value) = base_obj.get_mut(key) {
+                if base_value.is_object() && value.is_object() {
+                    merge_with_reserved_protection(base_value, value, reserved_keys);
+                } else {
+                    base_obj.insert(key.clone(), value.clone());
+                }
+            } else {
+                base_obj.insert(key.clone(), value.clone());
+            }
+        }
+    }
+}
 
 #[cfg(feature = "dev_debug")]
 use std::fs::OpenOptions;
@@ -48,6 +71,26 @@ impl LLMProvider for OpenAIProvider {
             }
             if let Some(tools) = request.tools {
                 obj.insert("tools".to_string(), json!(tools));
+            }
+
+            // Add reasoning settings if mode is not Off
+            if request.reasoning.mode != common::llm::ReasoningMode::Off {
+                match request.reasoning.effort {
+                    common::llm::ReasoningEffort::Low => {
+                        obj.insert("reasoning_effort".to_string(), json!("low"));
+                    }
+                    common::llm::ReasoningEffort::Medium => {
+                        obj.insert("reasoning_effort".to_string(), json!("medium"));
+                    }
+                    common::llm::ReasoningEffort::High => {
+                        obj.insert("reasoning_effort".to_string(), json!("high"));
+                    }
+                }
+            }
+
+            // Apply request_overrides with reserved-key protection
+            if let Some(overrides) = request.request_overrides {
+                merge_with_reserved_protection(&mut payload, &overrides, RESERVED_REQUEST_KEYS);
             }
         }
 
@@ -120,11 +163,19 @@ impl LLMProvider for OpenAIProvider {
             None
         };
 
+        // Extract reasoning_summary from OpenAI-compatible responses
+        let reasoning_summary = choice["reasoning_summary"].as_str().map(|s| s.to_string());
+
+        // Extract reasoning_raw from OpenAI-compatible responses (for debug mode)
+        let reasoning_raw = choice["reasoning"].as_str().map(|s| s.to_string());
+
         Ok(Message {
             role: Role::Assistant,
             content,
             tool_calls,
             tool_call_id: None,
+            reasoning_summary,
+            reasoning_raw,
         })
     }
 
@@ -147,6 +198,26 @@ impl LLMProvider for OpenAIProvider {
             }
             if let Some(tools) = request.tools {
                 obj.insert("tools".to_string(), json!(tools));
+            }
+
+            // Add reasoning settings if mode is not Off
+            if request.reasoning.mode != common::llm::ReasoningMode::Off {
+                match request.reasoning.effort {
+                    common::llm::ReasoningEffort::Low => {
+                        obj.insert("reasoning_effort".to_string(), json!("low"));
+                    }
+                    common::llm::ReasoningEffort::Medium => {
+                        obj.insert("reasoning_effort".to_string(), json!("medium"));
+                    }
+                    common::llm::ReasoningEffort::High => {
+                        obj.insert("reasoning_effort".to_string(), json!("high"));
+                    }
+                }
+            }
+
+            // Apply request_overrides with reserved-key protection
+            if let Some(overrides) = request.request_overrides {
+                merge_with_reserved_protection(&mut payload, &overrides, RESERVED_REQUEST_KEYS);
             }
         }
 
@@ -237,9 +308,7 @@ impl LLMProvider for OpenAIProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::llm::{
-        CompletionRequest, FunctionCall, ToolCall, ToolDefinition, ToolFunctionDefinition,
-    };
+    use common::llm::{CompletionRequest, ToolDefinition, ToolFunctionDefinition};
     use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -312,10 +381,14 @@ mod tests {
                 content: Some("Say hello".to_string()),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_summary: None,
+                reasoning_raw: None,
             }],
             temperature: Some(0.7),
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -355,6 +428,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -403,6 +478,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -463,6 +540,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: Some(tools),
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -497,8 +576,10 @@ mod tests {
         let request = CompletionRequest {
             messages: vec![],
             temperature: None,
-            max_tokens: Some(100),
+            max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -526,6 +607,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -562,6 +645,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -597,6 +682,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -632,6 +719,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -660,6 +749,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -691,6 +782,8 @@ mod tests {
             temperature: Some(0.5),
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.stream(request).await;
@@ -730,6 +823,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: Some(tools),
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.stream(request).await;
@@ -766,6 +861,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -823,6 +920,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -861,6 +960,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -894,6 +995,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;

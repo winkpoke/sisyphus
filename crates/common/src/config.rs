@@ -19,12 +19,34 @@ pub struct ServerConfig {
 }
 
 #[derive(Debug, Deserialize, Clone)]
+#[serde(default)]
+pub struct ReasoningConfig {
+    pub mode: String,
+    pub effort: String,
+    pub expose: String,
+    pub store: String,
+}
+
+impl Default for ReasoningConfig {
+    fn default() -> Self {
+        Self {
+            mode: "auto".to_string(),
+            effort: "medium".to_string(),
+            expose: "summary".to_string(),
+            store: "none".to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
 pub struct LLMConfig {
     pub provider: String,
     pub model: String,
     pub temperature: f64,
     pub api_key: Option<String>,
     pub base_url: Option<String>,
+    #[serde(default)]
+    pub reasoning: ReasoningConfig,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -45,7 +67,11 @@ impl Config {
             .set_default("llm.model", "gpt-3.5-turbo")?
             .set_default("llm.temperature", 0.2)?
             .set_default("workspace.root", "./workspace")?
-            .set_default("language", "en")?;
+            .set_default("language", "en")?
+            .set_default("llm.reasoning.mode", "auto")?
+            .set_default("llm.reasoning.effort", "medium")?
+            .set_default("llm.reasoning.expose", "summary")?
+            .set_default("llm.reasoning.store", "none")?;
 
         // Manual variable substitution
         // If a path is provided, use it. Otherwise check sisyphus.toml

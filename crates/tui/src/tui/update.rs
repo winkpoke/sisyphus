@@ -163,8 +163,34 @@ fn handle_system_event(app: &mut App, event: SystemEvent) {
                 app.state.status = AppStatus::Connected;
             }
         }
-        SystemEvent::MessageReceived { .. } => {
-            // Suppress as it's shown in chat UI
+        SystemEvent::MessageReceived {
+            content,
+            role,
+            kind,
+        } => {
+            if role == "system" {
+                if let Some(kind) = kind {
+                    match kind.as_str() {
+                        "reasoning_summary" => {
+                            app.state
+                                .add_message(TranscriptItemKind::ReasoningSummary, content);
+                        }
+                        "reasoning_raw" => {
+                            if app.state.debug_mode {
+                                app.state
+                                    .add_message(TranscriptItemKind::ReasoningRaw, content);
+                            }
+                        }
+                        _ => {
+                            app.state.add_message(TranscriptItemKind::System, content);
+                        }
+                    }
+                } else {
+                    app.state.add_message(TranscriptItemKind::System, content);
+                }
+            } else {
+                // Suppress as it's shown in chat UI
+            }
         }
         SystemEvent::Shutdown => {
             app.state.add_message(
@@ -347,6 +373,19 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
                                 return TuiInstruction::Quit;
                             }
                             "debug" => return TuiInstruction::ToggleDebug,
+                            "think" => {
+                                app.state.show_reasoning_summary =
+                                    !app.state.show_reasoning_summary;
+                                let status = if app.state.show_reasoning_summary {
+                                    "enabled"
+                                } else {
+                                    "disabled"
+                                };
+                                return TuiInstruction::DispatchCommand(format!(
+                                    "/think (reasoning summary visibility: {})",
+                                    status
+                                ));
+                            }
                             "clear" => return TuiInstruction::ClearSession,
                             "new" => return TuiInstruction::NewSession,
                             "agents" => return TuiInstruction::ShowAgentList,

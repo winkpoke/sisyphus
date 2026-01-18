@@ -40,6 +40,8 @@ impl LLMProvider for ScriptedProvider {
                 content: Some("No more scripted responses".to_string()),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_summary: None,
+                reasoning_raw: None,
             })
         }
     }
@@ -179,6 +181,8 @@ async fn test_approval_flow() {
             },
         }]),
         tool_call_id: None,
+        reasoning_summary: None,
+        reasoning_raw: None,
     });
 
     // Second response: After approval, agent resumes and sees tool output
@@ -187,6 +191,8 @@ async fn test_approval_flow() {
         content: Some("Tool executed successfully".to_string()),
         tool_calls: None,
         tool_call_id: None,
+        reasoning_summary: None,
+        reasoning_raw: None,
     });
 
     let provider = Box::new(ScriptedProvider { responses });
@@ -306,6 +312,8 @@ async fn test_denial_flow() {
             },
         }]),
         tool_call_id: None,
+        reasoning_summary: None,
+        reasoning_raw: None,
     });
 
     // Second response: After denial, agent resumes and sees denial message
@@ -314,6 +322,8 @@ async fn test_denial_flow() {
         content: Some("Understood, tool execution denied.".to_string()),
         tool_calls: None,
         tool_call_id: None,
+        reasoning_summary: None,
+        reasoning_raw: None,
     });
 
     let provider = Box::new(ScriptedProvider { responses });

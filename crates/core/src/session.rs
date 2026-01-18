@@ -81,6 +81,11 @@ impl Session {
         self.context.clear();
     }
 
+    /// Check if the session context contains any tool messages
+    pub fn has_tool_messages(&self) -> bool {
+        self.context.has_tool_messages()
+    }
+
     pub fn history(&self) -> Vec<Message> {
         self.context.linear_messages()
     }

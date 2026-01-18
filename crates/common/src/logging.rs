@@ -88,7 +88,7 @@ pub fn init_legacy() {
 
 pub async fn start_event_logger(bus: &EventBus) {
     let sub = bus.subscribe_all(|envelope| match envelope.event {
-        SystemEvent::MessageReceived { role, content } => {
+        SystemEvent::MessageReceived { role, content, .. } => {
             info!(
                 target: "bus",
                 event_id = envelope.id,

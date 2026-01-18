@@ -4,6 +4,17 @@ use futures::Stream;
 use serde::{Deserialize, Serialize};
 use std::pin::Pin;
 
+/// Reserved keys that cannot be overridden by request_overrides
+/// These are core fields that control Sisyphus behavior
+pub const RESERVED_REQUEST_KEYS: &[&str] = &[
+    "model",
+    "messages",
+    "tools",
+    "tool_calls",
+    "tool_choice",
+    "stream",
+];
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
@@ -36,6 +47,10 @@ pub struct Message {
     pub tool_calls: Option<Vec<ToolCall>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub tool_call_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_summary: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reasoning_raw: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,12 +67,84 @@ pub struct ToolFunctionDefinition {
     pub parameters: serde_json::Value,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ReasoningMode {
+    Off,
+    On,
+    Auto,
+}
+
+impl Default for ReasoningMode {
+    fn default() -> Self {
+        Self::Auto
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ReasoningEffort {
+    Low,
+    Medium,
+    High,
+}
+
+impl Default for ReasoningEffort {
+    fn default() -> Self {
+        Self::Medium
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ReasoningExposure {
+    None,
+    Summary,
+    Debug,
+}
+
+impl Default for ReasoningExposure {
+    fn default() -> Self {
+        Self::Summary
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum ReasoningStorage {
+    None,
+    Summary,
+}
+
+impl Default for ReasoningStorage {
+    fn default() -> Self {
+        Self::None
+    }
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct ReasoningConfig {
+    pub mode: ReasoningMode,
+    pub effort: ReasoningEffort,
+    pub expose: ReasoningExposure,
+    pub store: ReasoningStorage,
+}
+
+impl ReasoningConfig {
+    pub fn with_defaults() -> Self {
+        Self {
+            mode: ReasoningMode::Auto,
+            effort: ReasoningEffort::Medium,
+            expose: ReasoningExposure::Summary,
+            store: ReasoningStorage::None,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct CompletionRequest {
     pub messages: Vec<Message>,
     pub temperature: Option<f64>,
     pub max_tokens: Option<u32>,
     pub tools: Option<Vec<ToolDefinition>>,
+    pub reasoning: ReasoningConfig,
+    pub request_overrides: Option<serde_json::Value>,
 }
 
 #[async_trait]

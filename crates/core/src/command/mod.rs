@@ -73,7 +73,7 @@ impl CommandRegistry {
     pub fn register_custom(&mut self, name: &str, config: CommandConfig) {
         // Enforce reserved UiCommand names
         match name {
-            "help" | "quit" | "exit" | "clear" | "debug" | "new" => {
+            "help" | "quit" | "exit" | "clear" | "debug" | "new" | "think" => {
                 tracing::warn!("Ignoring attempt to overwrite reserved UiCommand: {}", name);
                 return;
             }

@@ -75,6 +75,8 @@ mod tests {
                 content: Some("Test response".to_string()),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_summary: None,
+                reasoning_raw: None,
             })
         }
 

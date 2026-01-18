@@ -39,6 +39,8 @@ impl LLMProvider for MockProvider {
                 content: Some("Done".to_string()),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_summary: None,
+                reasoning_raw: None,
             })
         }
     }
@@ -108,6 +110,8 @@ async fn test_sequential_tool_execution() {
         content: Some("Thinking...".to_string()),
         tool_calls: Some(tool_calls),
         tool_call_id: None,
+        reasoning_summary: None,
+        reasoning_raw: None,
     };
 
     let provider = Box::new(MockProvider::new(vec![initial_response]));

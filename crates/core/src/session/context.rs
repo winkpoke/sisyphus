@@ -169,6 +169,36 @@ impl Context {
         count
     }
 
+    /// Check if there are any tool messages in the context
+    pub fn has_tool_messages(&self) -> bool {
+        for entry in &self.entries {
+            match entry {
+                Entry::Pinned { message } => {
+                    if message.role == Role::Tool {
+                        return true;
+                    }
+                }
+                Entry::UserTurn { steps, .. } => {
+                    for step in steps {
+                        match step {
+                            Step::Assistant { message } => {
+                                if message.role == Role::Tool {
+                                    return true;
+                                }
+                            }
+                            Step::ToolExchange { tool_results, .. } => {
+                                if tool_results.iter().any(|m| m.role == Role::Tool) {
+                                    return true;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        false
+    }
+
     pub fn push_pinned(&mut self, message: Message) {
         self.entries.push(Entry::Pinned { message });
     }
@@ -488,6 +518,8 @@ mod tests {
             content: Some(content.to_string()),
             tool_calls: None,
             tool_call_id: None,
+            reasoning_summary: None,
+            reasoning_raw: None,
         }
     }
 
@@ -518,6 +550,8 @@ mod tests {
                 },
             ]),
             tool_call_id: None,
+            reasoning_summary: None,
+            reasoning_raw: None,
         };
 
         ctx.begin_tool_exchange(assistant).unwrap();

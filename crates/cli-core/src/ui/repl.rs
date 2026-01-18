@@ -2,6 +2,7 @@ use anyhow::Result;
 use client::Client;
 use sisyphus_core::command::parser::parse_command;
 use std::borrow::Cow;
+use std::cell::RefCell;
 
 use reedline::{
     default_emacs_keybindings, Color, ColumnarMenu, EditCommand, Emacs, KeyCode, KeyModifiers,
@@ -47,6 +48,7 @@ pub struct Repl {
     client: Client,
     session_id: String,
     shutdown_rx: Receiver<()>,
+    show_reasoning_summary: RefCell<bool>,
 }
 
 impl Repl {
@@ -55,6 +57,7 @@ impl Repl {
             client,
             session_id,
             shutdown_rx,
+            show_reasoning_summary: RefCell::new(true),
         }
     }
 
@@ -143,6 +146,13 @@ impl Repl {
                         if let Ok((cmd, _args, _raw)) = parse_command(input) {
                             match cmd.as_str() {
                                 "/exit" | "/quit" => break,
+                                "/think" => {
+                                    let current = *self.show_reasoning_summary.borrow();
+                                    *self.show_reasoning_summary.borrow_mut() = !current;
+                                    let status = if current { "disabled" } else { "enabled" };
+                                    println!("Reasoning summary visibility: {}", status);
+                                    continue;
+                                }
                                 "/new" => {
                                     match self.client.create_session().await {
                                         Ok(session) => {

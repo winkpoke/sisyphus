@@ -20,17 +20,35 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
 
     let mut lines = Vec::new();
     for (i, item) in app.state.transcript.items.iter().enumerate() {
+        // Filter reasoning_summary based on show_reasoning_summary toggle
+        if matches!(item.kind, TranscriptItemKind::ReasoningSummary)
+            && !app.state.show_reasoning_summary
+        {
+            continue;
+        }
+
+        // Filter reasoning_raw based on debug_mode
+        if matches!(item.kind, TranscriptItemKind::ReasoningRaw) && !app.state.debug_mode {
+            continue;
+        }
+
         let prefix = match item.kind {
             TranscriptItemKind::User => "You: ",
             TranscriptItemKind::Assistant => "Assistant: ",
             TranscriptItemKind::System => "System: ",
             TranscriptItemKind::Error => "Error: ",
+            TranscriptItemKind::ReasoningSummary => "Thinking: ",
+            TranscriptItemKind::ReasoningRaw => "Debug Thinking: ",
         };
         let mut style = match item.kind {
             TranscriptItemKind::User => Style::default().fg(app.theme.user),
             TranscriptItemKind::Assistant => Style::default().fg(app.theme.assistant),
             TranscriptItemKind::System => Style::default().fg(app.theme.system),
             TranscriptItemKind::Error => Style::default().fg(app.theme.error),
+            TranscriptItemKind::ReasoningSummary => Style::default().fg(app.theme.system),
+            TranscriptItemKind::ReasoningRaw => Style::default()
+                .fg(app.theme.system)
+                .add_modifier(Modifier::DIM),
         };
 
         if app.state.mode == InputMode::Selection

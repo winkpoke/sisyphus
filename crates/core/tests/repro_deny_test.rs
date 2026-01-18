@@ -39,6 +39,8 @@ impl LLMProvider for MockProvider {
                 content: Some("I understand you denied.".to_string()),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_summary: None,
+                reasoning_raw: None,
             })
         }
     }
@@ -90,6 +92,8 @@ async fn test_deny_tool_execution() {
         content: Some("Thinking...".to_string()),
         tool_calls: Some(tool_calls),
         tool_call_id: None,
+        reasoning_summary: None,
+        reasoning_raw: None,
     };
 
     let provider = Box::new(MockProvider::new(vec![initial_response]));

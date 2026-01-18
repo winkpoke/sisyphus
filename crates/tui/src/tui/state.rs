@@ -23,6 +23,8 @@ pub enum TranscriptItemKind {
     Assistant,
     System,
     Error,
+    ReasoningSummary,
+    ReasoningRaw,
 }
 
 #[derive(Debug, Clone)]
@@ -231,6 +233,7 @@ pub struct TuiState {
     pub spinner_frame: usize,
     pub toast: Option<Toast>,
     pub context_title: String,
+    pub show_reasoning_summary: bool,
 }
 
 impl TuiState {
@@ -251,6 +254,7 @@ impl TuiState {
             spinner_frame: 0,
             toast: None,
             context_title: "Context".to_string(),
+            show_reasoning_summary: true,
         }
     }
 

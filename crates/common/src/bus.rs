@@ -24,6 +24,8 @@ pub enum SystemEvent {
     MessageReceived {
         content: String,
         role: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        kind: Option<String>,
     },
     ToolExecuted {
         tool: String,
@@ -234,6 +236,7 @@ mod tests {
         bus.publish(SystemEvent::MessageReceived {
             content: "hello".to_string(),
             role: "user".to_string(),
+            kind: None,
         });
 
         bus.publish(SystemEvent::Error {
@@ -260,6 +263,7 @@ mod tests {
         bus.publish(SystemEvent::MessageReceived {
             content: "hello".to_string(),
             role: "user".to_string(),
+            kind: None,
         });
         bus.publish(SystemEvent::Error {
             message: "oops".to_string(),
@@ -284,8 +288,9 @@ mod tests {
         });
 
         bus.publish(SystemEvent::MessageReceived {
-            content: "first".to_string(),
+            content: "hello".to_string(),
             role: "user".to_string(),
+            kind: None,
         });
         bus.publish(SystemEvent::Error {
             message: "second".to_string(),
@@ -311,6 +316,7 @@ mod tests {
             event: SystemEvent::MessageReceived {
                 content: "test".to_string(),
                 role: "user".to_string(),
+                kind: None,
             },
         };
 

@@ -59,6 +59,8 @@ impl LLMProvider for MockProvider {
                 content: Some("Default response".to_string()),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_summary: None,
+                reasoning_raw: None,
             })
         }
     }
@@ -89,6 +91,8 @@ async fn test_permission_enforcement_deny() {
             kind: "function".to_string(),
         }]),
         tool_call_id: None,
+        reasoning_summary: None,
+        reasoning_raw: None,
     }]));
 
     let mut agent = Agent::new(provider, bus.clone(), config, std::path::PathBuf::from("."));
@@ -131,6 +135,8 @@ async fn test_permission_enforcement_ask() {
             kind: "function".to_string(),
         }]),
         tool_call_id: None,
+        reasoning_summary: None,
+        reasoning_raw: None,
     }]));
 
     let mut agent = Agent::new(provider, bus.clone(), config, std::path::PathBuf::from("."));
@@ -205,6 +211,8 @@ async fn test_permission_ask_stops_turn() {
                 kind: "function".to_string(),
             }]),
             tool_call_id: None,
+            reasoning_summary: None,
+            reasoning_raw: None,
         },
         // Provide a second response that should NOT be consumed if it stops
         Message {
@@ -212,6 +220,8 @@ async fn test_permission_ask_stops_turn() {
             content: Some("I should not be called".to_string()),
             tool_calls: None,
             tool_call_id: None,
+            reasoning_summary: None,
+            reasoning_raw: None,
         },
     ]));
 

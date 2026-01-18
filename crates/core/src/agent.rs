@@ -14,7 +14,8 @@ use crate::template::{SystemPromptContext, TemplateContext, TemplateEngine};
 use anyhow::{anyhow, Result};
 use common::bus::{EventBus, SystemEvent};
 use common::llm::{
-    CompletionRequest, LLMProvider, Message, Role, ToolCall, ToolDefinition, ToolFunctionDefinition,
+    CompletionRequest, LLMProvider, Message, ReasoningConfig, ReasoningExposure, ReasoningMode,
+    Role, ToolCall, ToolDefinition, ToolFunctionDefinition,
 };
 use common::tool::Tool;
 use rust_i18n::t;
@@ -32,6 +33,7 @@ pub struct Agent {
     commands: CommandRegistry,
     workspace_root: PathBuf,
     prompt_builder: SystemPromptBuilder,
+    reasoning_config: ReasoningConfig,
 }
 
 enum ToolExecResult {
@@ -54,6 +56,7 @@ impl Agent {
             commands: CommandRegistry::new(),
             workspace_root: workspace_root.clone(),
             prompt_builder: SystemPromptBuilder::new(),
+            reasoning_config: ReasoningConfig::with_defaults(),
         };
         agent.register_builtins();
         let cmd_path = agent.config.get_command_path();
@@ -111,6 +114,41 @@ impl Agent {
             self.register_tool(tool);
         }
         Ok(())
+    }
+
+    fn should_enable_reasoning(&self, session: &Session) -> ReasoningConfig {
+        let mode = self.reasoning_config.mode.clone();
+
+        if mode == ReasoningMode::Off {
+            return ReasoningConfig {
+                mode: ReasoningMode::Off,
+                effort: self.reasoning_config.effort.clone(),
+                expose: self.reasoning_config.expose.clone(),
+                store: self.reasoning_config.store.clone(),
+            };
+        }
+
+        if mode == ReasoningMode::On {
+            return self.reasoning_config.clone();
+        }
+
+        if mode == ReasoningMode::Auto {
+            let has_tool_messages = session.has_tool_messages();
+
+            let has_pending_approval_or_batch =
+                !session.pending_approvals.is_empty() || !session.pending_batch.is_empty();
+
+            if has_tool_messages || has_pending_approval_or_batch {
+                return self.reasoning_config.clone();
+            }
+        }
+
+        ReasoningConfig {
+            mode: ReasoningMode::Off,
+            effort: self.reasoning_config.effort.clone(),
+            expose: self.reasoning_config.expose.clone(),
+            store: self.reasoning_config.store.clone(),
+        }
     }
 
     fn get_tool_definitions(&self) -> Option<Vec<ToolDefinition>> {
@@ -331,6 +369,8 @@ impl Agent {
             content: Some(result.clone()),
             tool_calls: None,
             tool_call_id: Some(call_id.to_string()),
+            reasoning_summary: None,
+            reasoning_raw: None,
         };
         session.add_message(tool_msg)?;
 
@@ -373,7 +413,9 @@ impl Agent {
                         role: Role::Tool,
                         content: Some(result),
                         tool_calls: None,
-                        tool_call_id: Some(call.id.clone()),
+                        tool_call_id: Some(call.id.to_string()),
+                        reasoning_summary: None,
+                        reasoning_raw: None,
                     };
                     session.add_message(tool_msg)?;
                 }
@@ -404,12 +446,15 @@ impl Agent {
             content: Some(input.clone()),
             tool_calls: None,
             tool_call_id: None,
+            reasoning_summary: None,
+            reasoning_raw: None,
         };
         session.add_message(user_msg)?;
 
         self.bus.publish(SystemEvent::MessageReceived {
             content: input,
             role: "user".to_string(),
+            kind: None,
         });
 
         self.run_turn_loop(session, 0).await
@@ -442,6 +487,8 @@ impl Agent {
                 content: Some(system_prompt),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_summary: None,
+                reasoning_raw: None,
             };
 
             let rendered = session
@@ -464,6 +511,8 @@ impl Agent {
                 temperature: None,
                 max_tokens: None,
                 tools: self.get_tool_definitions(),
+                reasoning: self.should_enable_reasoning(&session),
+                request_overrides: None,
             };
 
             let response_msg = self.provider.complete(req).await?;
@@ -473,7 +522,18 @@ impl Agent {
                 self.bus.publish(SystemEvent::MessageReceived {
                     content: content.clone(),
                     role: "assistant".to_string(),
+                    kind: None,
                 });
+            }
+
+            if let Some(reasoning_summary) = &response_msg.reasoning_summary {
+                if self.reasoning_config.expose == ReasoningExposure::Summary {
+                    self.bus.publish(SystemEvent::MessageReceived {
+                        content: reasoning_summary.clone(),
+                        role: "system".to_string(),
+                        kind: Some("reasoning_summary".to_string()),
+                    });
+                }
             }
 
             if let Some(tool_calls) = &response_msg.tool_calls {

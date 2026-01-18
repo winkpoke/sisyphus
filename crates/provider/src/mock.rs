@@ -31,6 +31,8 @@ impl LLMProvider for MockProvider {
             content: Some(format!("Mock response to: {}", last_msg)),
             tool_calls: None,
             tool_call_id: None,
+            reasoning_summary: None,
+            reasoning_raw: None,
         })
     }
 
@@ -64,10 +66,14 @@ mod tests {
                 content: Some("Hello".to_string()),
                 tool_calls: None,
                 tool_call_id: None,
+                reasoning_summary: None,
+                reasoning_raw: None,
             }],
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -88,6 +94,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
@@ -108,6 +116,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.stream(request).await;
@@ -135,6 +145,8 @@ mod tests {
             temperature: None,
             max_tokens: None,
             tools: None,
+            reasoning: Default::default(),
+            request_overrides: None,
         };
 
         let result = provider.complete(request).await;
