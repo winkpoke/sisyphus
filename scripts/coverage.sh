@@ -10,7 +10,6 @@ echo "Running coverage analysis..."
 cargo llvm-cov \
   --workspace \
   --html \
-  --lcov \
   --output-dir target/coverage \
   --color always
 

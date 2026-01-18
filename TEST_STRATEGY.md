@@ -12,15 +12,18 @@ We adopt a standard Testing Pyramid approach, adapted for AI Agent systems:
 
 ## 2. Recommended Tooling & Stack
 
-We leverage the Rust ecosystem's best-in-class testing libraries. These are standard `dev-dependencies` in our crates.
+We leverage Rust ecosystem's best-in-class testing libraries. These are standard `dev-dependencies` in our crates.
 
 | Crate | Purpose |
-| :--- | :--- |
-| **`mockall`** | **Critical**. Used to mock `LLMProvider` and `Tool` traits. Allows us to test the Agent's decision loop without real AI. |
+|-------|---------|
+| **`mockall`** | **Critical**. Used to mock `LLMProvider` and `Tool` traits. Allows us to test Agent's decision loop without real AI. |
 | **`tokio-test`** | For testing async functions and streams deterministically. |
 | **`tempfile`** | For safely testing filesystem tools (`fs.rs`) without polluting the developer's machine. |
-| **`wiremock`** | For testing HTTP providers (OpenAI, Anthropic) by mocking the external API endpoints. |
+| **`wiremock`** | For testing HTTP providers (OpenAI, Anthropic) by mocking external API endpoints. |
 | **`insta`** | **Snapshot Testing**. Extremely useful for verifying generated Prompts and JSON schemas. |
+| **`cargo-llvm-cov`** | **Coverage Tracking**. Generates HTML coverage reports. |
+
+**Note**: `tarpaulin` is configured but coverage is measured using `cargo-llvm-cov` for better workspace-wide support.
 
 ## 3. Component-Specific Strategy
 

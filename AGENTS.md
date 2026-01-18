@@ -196,9 +196,21 @@ cargo test
 # Review snapshot changes
 cargo insta review
 ```
-
 Snapshot targets:
 - System prompts (agent/prompt.rs)
 - Tool schemas (provider implementations)
 - JSON request/response formats
 - Error messages
+
+**Review Process**:
+1. Run `cargo test` to generate new snapshots (`.snap.new` files created)
+2. Run `cargo insta review` to review changes interactively
+3. For automated review: Check `.snap.new` file content matches expectations
+4. Accept snapshot: Rename `.snap.new` → `.snap`
+5. Reject snapshot: Manually edit to match expectations, then rename
+
+**Best Practices**:
+- Keep snapshots in version control
+- Add commit messages explaining intentional snapshot changes
+- Review snapshot diffs carefully before accepting
+- Use descriptive snapshot names for clarity

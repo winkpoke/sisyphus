@@ -904,4 +904,25 @@ mod tests {
             "Expected empty result or error for missing choices"
         );
     }
+
+    #[tokio::test]
+    async fn test_tool_schema_snapshot() {
+        let tool_definition = ToolDefinition {
+            kind: "function".to_string(),
+            function: ToolFunctionDefinition {
+                name: "search".to_string(),
+                description: "Search web".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string", "description": "Search query"}
+                    },
+                    "required": ["query"]
+                }),
+            },
+        };
+
+        let json_str = serde_json::to_string(&tool_definition).unwrap();
+        insta::assert_snapshot!(json_str);
+    }
 }

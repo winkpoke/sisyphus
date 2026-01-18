@@ -114,3 +114,68 @@ impl Drop for ServerManager {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_server_manager_structure() {
+        let url = url::Url::parse("http://localhost:8080").unwrap();
+        let manager = ServerManager {
+            process: None,
+            base_url: url.clone(),
+        };
+
+        assert_eq!(manager.base_url, url);
+        assert!(manager.process.is_none());
+    }
+
+    #[test]
+    fn test_client_method() {
+        let url = url::Url::parse("http://localhost:8080").unwrap();
+        let manager = ServerManager {
+            process: None,
+            base_url: url.clone(),
+        };
+
+        let _client = manager.client();
+    }
+
+    #[test]
+    fn test_url_parsing() {
+        let port = 8080;
+        let url_str = format!("http://localhost:{}", port);
+        let url = url::Url::parse(&url_str);
+
+        assert!(url.is_ok());
+
+        let parsed = url.unwrap();
+        assert_eq!(parsed.host_str(), Some("localhost"));
+        assert_eq!(parsed.port().unwrap_or(80), 8080);
+    }
+
+    #[test]
+    fn test_stop_with_no_process() {
+        let mut manager = ServerManager {
+            process: None,
+            base_url: url::Url::parse("http://localhost:8080").unwrap(),
+        };
+
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        let result = rt.block_on(manager.stop());
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_drop_trait() {
+        let url = url::Url::parse("http://localhost:8080").unwrap();
+        let manager = ServerManager {
+            process: None,
+            base_url: url,
+        };
+
+        drop(manager);
+    }
+}

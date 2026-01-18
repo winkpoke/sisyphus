@@ -225,3 +225,152 @@ impl Client {
         Ok(commands)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_client_initialization() {
+        let url = url::Url::parse("http://localhost:3000").unwrap();
+        let client = Client::new(url);
+
+        let base_url = url::Url::parse("http://localhost:3000").unwrap();
+        assert_eq!(client.base_url, base_url);
+    }
+
+    #[test]
+    fn test_url_construction() {
+        let base = url::Url::parse("http://localhost:3000").unwrap();
+
+        assert!(base.join("/api/v1/sessions").is_ok());
+        assert!(base.join("/api/v1/model").is_ok());
+        assert!(base.join("/health").is_ok());
+        assert!(base
+            .join(&format!("/api/v1/sessions/{}/chat", "session-123"))
+            .is_ok());
+    }
+
+    #[test]
+    fn test_chat_request_serialization() {
+        let req = ChatRequest {
+            message: "Hello, world!".to_string(),
+        };
+
+        let json = serde_json::to_string(&req);
+        assert!(json.is_ok());
+
+        let parsed = json.unwrap();
+        assert!(parsed.contains("Hello, world!"));
+        assert!(parsed.contains("message"));
+    }
+
+    #[test]
+    fn test_approval_request_serialization() {
+        let req = ApprovalRequest {
+            decision: "approve".to_string(),
+        };
+
+        let json = serde_json::to_string(&req);
+        assert!(json.is_ok());
+
+        let parsed = json.unwrap();
+        assert!(parsed.contains("approve"));
+        assert!(parsed.contains("decision"));
+    }
+
+    #[test]
+    fn test_chat_response_deserialization() {
+        let json = r#"{
+            "response": "Test response",
+            "session_id": "session-123",
+            "usage": "100 tokens",
+            "model": "gpt-4"
+        }"#;
+
+        let resp: Result<ChatResponse, _> = serde_json::from_str(json);
+        assert!(resp.is_ok());
+
+        let parsed = resp.unwrap();
+        assert_eq!(parsed.response, "Test response");
+        assert_eq!(parsed.session_id, Some("session-123".to_string()));
+        assert_eq!(parsed.usage, Some("100 tokens".to_string()));
+        assert_eq!(parsed.model, Some("gpt-4".to_string()));
+    }
+
+    #[test]
+    fn test_chat_response_with_optional_fields() {
+        let json = r#"{
+            "response": "Test"
+        }"#;
+
+        let resp: Result<ChatResponse, _> = serde_json::from_str(json);
+        assert!(resp.is_ok());
+
+        let parsed = resp.unwrap();
+        assert_eq!(parsed.response, "Test");
+        assert!(parsed.session_id.is_none());
+        assert!(parsed.usage.is_none());
+        assert!(parsed.model.is_none());
+    }
+
+    #[test]
+    fn test_agent_response_deserialization() {
+        let json = r#"{
+            "id": "plan",
+            "name": "Plan Agent",
+            "description": "Planning agent",
+            "model": "gpt-4"
+        }"#;
+
+        let resp: Result<AgentResponse, _> = serde_json::from_str(json);
+        assert!(resp.is_ok());
+
+        let parsed = resp.unwrap();
+        assert_eq!(parsed.id, "plan");
+        assert_eq!(parsed.name, "Plan Agent");
+        assert_eq!(parsed.description, "Planning agent");
+        assert_eq!(parsed.model, "gpt-4");
+    }
+
+    #[test]
+    fn test_model_info_deserialization() {
+        let json = r#"{
+            "model": "gpt-4"
+        }"#;
+
+        let resp: Result<ModelInfo, _> = serde_json::from_str(json);
+        assert!(resp.is_ok());
+
+        let parsed = resp.unwrap();
+        assert_eq!(parsed.model, "gpt-4");
+    }
+
+    #[test]
+    fn test_client_url_error_handling() {
+        let url = url::Url::parse("http://localhost:3000").unwrap();
+        let client = Client::new(url);
+
+        let result = client.base_url.join("relative/path");
+        assert!(result.is_ok());
+
+        let absolute_path = "http://external.com/path";
+        let result = client.base_url.join(absolute_path);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_session_id_formatting() {
+        let session_id = "session-123";
+        let base = url::Url::parse("http://localhost:3000").unwrap();
+
+        let chat_url = base.join(&format!("/api/v1/sessions/{}/chat", session_id));
+        assert!(chat_url.is_ok());
+
+        let agent_url = base.join(&format!("/api/v1/sessions/{}/agent", session_id));
+        assert!(agent_url.is_ok());
+
+        let clear_url = base.join(&format!("/api/v1/sessions/{}/clear", session_id));
+        assert!(clear_url.is_ok());
+    }
+}

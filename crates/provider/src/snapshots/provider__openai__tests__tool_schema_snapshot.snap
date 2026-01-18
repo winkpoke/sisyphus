@@ -1,0 +1,6 @@
+---
+source: crates/provider/src/openai.rs
+assertion_line: 926
+expression: json_str
+---
+{"type":"function","function":{"name":"search","description":"Search web","parameters":{"properties":{"query":{"description":"Search query","type":"string"}},"required":["query"],"type":"object"}}}

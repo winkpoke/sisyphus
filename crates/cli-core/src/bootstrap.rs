@@ -169,3 +169,77 @@ pub fn build_agent_registry(
     registry.register(build_id, agents.build);
     registry
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_plan_agent_config() {
+        let config = plan_agent_config();
+
+        assert_eq!(config.id, "plan");
+        assert_eq!(config.name, "Plan Agent");
+        assert!(config.description.contains("planning and analysis"));
+
+        assert_eq!(config.permissions.edit, PermissionLevel::Deny);
+        assert_eq!(config.permissions.bash, PermissionLevel::Deny);
+        assert_eq!(config.permissions.skill, PermissionLevel::Allow);
+
+        let overrides = &config.permissions.overrides;
+        assert!(overrides.contains_key("execute_command"));
+        assert_eq!(
+            overrides.get("execute_command"),
+            Some(&PermissionLevel::Deny)
+        );
+    }
+
+    #[test]
+    fn test_build_agent_config() {
+        let config = build_agent_config();
+
+        assert_eq!(config.id, "build");
+        assert_eq!(config.name, "Build Agent");
+        assert!(config.description.contains("Execution and implementation"));
+
+        assert_eq!(config.permissions.edit, PermissionLevel::Ask);
+        assert_eq!(config.permissions.bash, PermissionLevel::Ask);
+        assert_eq!(config.permissions.skill, PermissionLevel::Allow);
+
+        let overrides = &config.permissions.overrides;
+        assert!(overrides.is_empty());
+    }
+
+    #[test]
+    fn test_agent_registry_creation() {
+        let bus = Arc::new(common::bus::EventBus::new(10));
+
+        let provider: Box<dyn common::llm::LLMProvider> = Box::new(MockProvider::new());
+        let workspace_root = std::path::PathBuf::from("/tmp");
+        let build_agent = Agent::new(
+            provider,
+            bus.clone(),
+            build_agent_config(),
+            workspace_root.clone(),
+        );
+
+        let plan_provider: Box<dyn common::llm::LLMProvider> = Box::new(MockProvider::new());
+        let plan_agent = Agent::new(
+            plan_provider,
+            bus.clone(),
+            plan_agent_config(),
+            workspace_root,
+        );
+
+        let plan_config = plan_agent.config();
+        assert_eq!(plan_config.id, "plan");
+
+        let agents = BuiltInAgents {
+            plan: Arc::new(plan_agent),
+            build: Arc::new(build_agent),
+            bus,
+        };
+
+        let _registry = build_agent_registry(agents);
+    }
+}

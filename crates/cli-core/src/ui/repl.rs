@@ -216,3 +216,32 @@ impl Repl {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tokio::sync::broadcast;
+
+    #[test]
+    fn test_prompt_rendering() {
+        let prompt = SisyphusPrompt;
+
+        assert_eq!(prompt.render_prompt_left(), "› ");
+        assert_eq!(prompt.render_prompt_right(), "");
+        assert_eq!(prompt.render_prompt_indicator(PromptEditMode::Emacs), "");
+        assert_eq!(prompt.render_prompt_multiline_indicator(), "::: ");
+        assert_eq!(prompt.get_prompt_color(), Color::Cyan);
+    }
+
+    #[test]
+    fn test_repl_creation() {
+        let (tx, _rx) = broadcast::channel(1);
+        let url = url::Url::parse("http://localhost:3000").unwrap();
+        let client = Client::new(url);
+
+        let repl = Repl::new(client, "test-session-id".to_string(), _rx);
+        assert_eq!(repl.session_id, "test-session-id");
+
+        drop(tx);
+    }
+}
