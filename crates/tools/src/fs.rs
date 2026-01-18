@@ -79,7 +79,6 @@ impl Tool for WriteFileTool {
             .ok_or_else(|| anyhow::anyhow!("Missing content"))?;
         let path = self.sandbox.join(path_str)?;
 
-        // Ensure parent exists
         if let Some(parent) = path.parent() {
             tokio::fs::create_dir_all(parent).await?;
         }
@@ -176,5 +175,221 @@ impl Tool for ReplaceInFileTool {
         tokio::fs::write(&path, new_content).await?;
 
         Ok("Success".to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::TempDir;
+
+    #[tokio::test]
+    async fn test_read_file_success() {
+        let temp_dir = TempDir::new().unwrap();
+        let sandboxed_path = SandboxedPath::new(temp_dir.path().to_path_buf()).unwrap();
+        let sandbox = Arc::new(sandboxed_path);
+
+        let file_path = sandbox.join("test.txt").unwrap();
+        tokio::fs::write(&file_path, "Hello, World!").await.unwrap();
+
+        let tool = ReadFileTool::new(Arc::clone(&sandbox));
+        let args = json!({"path": "test.txt"});
+        let result = tool.execute(args).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Hello, World!");
+    }
+
+    #[tokio::test]
+    async fn test_write_file_success() {
+        let temp_dir = TempDir::new().unwrap();
+        let sandboxed_path = SandboxedPath::new(temp_dir.path().to_path_buf()).unwrap();
+        let sandbox = Arc::new(sandboxed_path);
+
+        let tool = WriteFileTool::new(Arc::clone(&sandbox));
+        let args = json!({"path": "newfile.txt", "content": "Test content"});
+        let result = tool.execute(args).await;
+
+        assert!(result.is_ok());
+        assert_eq!(result.unwrap(), "Success");
+
+        let file_path = sandbox.join("newfile.txt").unwrap();
+        let content = tokio::fs::read_to_string(&file_path).await.unwrap();
+        assert_eq!(content, "Test content");
+    }
+
+    #[tokio::test]
+    async fn test_write_file_overwrite() {
+        let temp_dir = TempDir::new().unwrap();
+        let sandboxed_path = SandboxedPath::new(temp_dir.path().to_path_buf()).unwrap();
+        let sandbox = Arc::new(sandboxed_path);
+
+        let file_path = sandbox.join("overwrite.txt").unwrap();
+        tokio::fs::write(&file_path, "Original content")
+            .await
+            .unwrap();
+
+        let tool = WriteFileTool::new(Arc::clone(&sandbox));
+        let args = json!({"path": "overwrite.txt", "content": "New content"});
+        let result = tool.execute(args).await;
+
+        assert!(result.is_ok());
+
+        let content = tokio::fs::read_to_string(&file_path).await.unwrap();
+        assert_eq!(content, "New content");
+    }
+
+    #[tokio::test]
+    async fn test_replace_in_file_first_occurrence() {
+        let temp_dir = TempDir::new().unwrap();
+        let sandboxed_path = SandboxedPath::new(temp_dir.path().to_path_buf()).unwrap();
+        let sandbox = Arc::new(sandboxed_path);
+
+        let file_path = sandbox.join("replace.txt").unwrap();
+        tokio::fs::write(&file_path, "foo bar foo bar foo")
+            .await
+            .unwrap();
+
+        let tool = ReplaceInFileTool::new(Arc::clone(&sandbox));
+        let args = json!({
+            "path": "replace.txt",
+            "old_string": "foo",
+            "new_string": "baz",
+            "replace_all": false
+        });
+        let result = tool.execute(args).await;
+
+        assert!(result.is_ok());
+
+        let content = tokio::fs::read_to_string(&file_path).await.unwrap();
+        assert_eq!(content, "baz bar foo bar foo");
+    }
+
+    #[tokio::test]
+    async fn test_replace_in_file_all_occurrences() {
+        let temp_dir = TempDir::new().unwrap();
+        let sandboxed_path = SandboxedPath::new(temp_dir.path().to_path_buf()).unwrap();
+        let sandbox = Arc::new(sandboxed_path);
+
+        let file_path = sandbox.join("replace.txt").unwrap();
+        tokio::fs::write(&file_path, "foo bar foo bar foo")
+            .await
+            .unwrap();
+
+        let tool = ReplaceInFileTool::new(Arc::clone(&sandbox));
+        let args = json!({
+            "path": "replace.txt",
+            "old_string": "foo",
+            "new_string": "baz",
+            "replace_all": true
+        });
+        let result = tool.execute(args).await;
+
+        assert!(result.is_ok());
+
+        let content = tokio::fs::read_to_string(&file_path).await.unwrap();
+        assert_eq!(content, "baz bar baz bar baz");
+    }
+
+    #[tokio::test]
+    async fn test_path_traversal_prevention() {
+        let temp_dir = TempDir::new().unwrap();
+        let sandboxed_path = SandboxedPath::new(temp_dir.path().to_path_buf()).unwrap();
+        let sandbox = Arc::new(sandboxed_path);
+
+        let tool = ReadFileTool::new(Arc::clone(&sandbox));
+        let args = json!({"path": "../../../etc/passwd"});
+        let result = tool.execute(args).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_absolute_path_rejection() {
+        let temp_dir = TempDir::new().unwrap();
+        let sandboxed_path = SandboxedPath::new(temp_dir.path().to_path_buf()).unwrap();
+        let sandbox = Arc::new(sandboxed_path);
+
+        let tool = WriteFileTool::new(Arc::clone(&sandbox));
+        let args = json!({"path": "/tmp/test.txt", "content": "content"});
+        let result = tool.execute(args).await;
+
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_empty_old_string_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let sandboxed_path = SandboxedPath::new(temp_dir.path().to_path_buf()).unwrap();
+        let sandbox = Arc::new(sandboxed_path);
+
+        let file_path = sandbox.join("test.txt").unwrap();
+        tokio::fs::write(&file_path, "some content").await.unwrap();
+
+        let tool = ReplaceInFileTool::new(Arc::clone(&sandbox));
+        let args = json!({
+            "path": "test.txt",
+            "old_string": "",
+            "new_string": "new"
+        });
+        let result = tool.execute(args).await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("old_string cannot be empty"));
+    }
+
+    #[tokio::test]
+    async fn test_pattern_not_found_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let sandboxed_path = SandboxedPath::new(temp_dir.path().to_path_buf()).unwrap();
+        let sandbox = Arc::new(sandboxed_path);
+
+        let file_path = sandbox.join("test.txt").unwrap();
+        tokio::fs::write(&file_path, "some content").await.unwrap();
+
+        let tool = ReplaceInFileTool::new(Arc::clone(&sandbox));
+        let args = json!({
+            "path": "test.txt",
+            "old_string": "nonexistent",
+            "new_string": "new"
+        });
+        let result = tool.execute(args).await;
+
+        assert!(result.is_err());
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("Pattern not found"));
+    }
+
+    #[tokio::test]
+    async fn test_missing_path_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let sandboxed_path = SandboxedPath::new(temp_dir.path().to_path_buf()).unwrap();
+        let sandbox = Arc::new(sandboxed_path);
+
+        let tool = ReadFileTool::new(Arc::clone(&sandbox));
+        let args = json!({});
+        let result = tool.execute(args).await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Missing path"));
+    }
+
+    #[tokio::test]
+    async fn test_missing_content_error() {
+        let temp_dir = TempDir::new().unwrap();
+        let sandboxed_path = SandboxedPath::new(temp_dir.path().to_path_buf()).unwrap();
+        let sandbox = Arc::new(sandboxed_path);
+
+        let tool = WriteFileTool::new(Arc::clone(&sandbox));
+        let args = json!({"path": "test.txt"});
+        let result = tool.execute(args).await;
+
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("Missing content"));
     }
 }

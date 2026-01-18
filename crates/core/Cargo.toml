@@ -21,6 +21,9 @@ minijinja = { version = "2.0", features = ["builtins"] }
 [dev-dependencies]
 futures.workspace = true
 tempfile = "3.10"
+mockall.workspace = true
+insta = "1.34"
+tokio-test = "0.4"
 
 [features]
 dev_debug = []

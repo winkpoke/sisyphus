@@ -18,3 +18,8 @@ bytes = { workspace = true }
 
 [features]
 dev_debug = []
+
+[dev-dependencies]
+mockall.workspace = true
+insta = "1.34"
+wiremock = "0.6"

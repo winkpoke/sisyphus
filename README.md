@@ -15,6 +15,9 @@
   <a href="https://rust-lang.org">
     <img alt="Rust" src="https://img.shields.io/badge/rust-1.75+-orange.svg?style=flat-square">
   </a>
+  <a href="https://codecov.io/gh/your-org/sisyphus">
+    <img alt="Coverage" src="https://codecov.io/gh/your-org/sisyphus/branch/main/graph/badge.svg">
+  </a>
 </p>
 
 <p align="center">
@@ -169,6 +172,27 @@ cargo build --release --features tui
 # Run all tests
 cargo test
 ```
+
+### Running Coverage
+
+Generate coverage report locally:
+
+```bash
+# Run coverage script (generates HTML and XML reports)
+./scripts/coverage.sh
+
+# Or run tarpaulin directly
+cargo tarpaulin --workspace --out Html --out Xml
+```
+
+Coverage reports are generated in `target/tarpaulin/`. To view the HTML report:
+
+```bash
+open target/tarpaulin/index.html  # macOS
+xdg-open target/tarpaulin/index.html  # Linux
+```
+
+CI/CD automatically runs tests and uploads coverage to Codecov on every push and PR.
 
 ### Adding a New Tool
 

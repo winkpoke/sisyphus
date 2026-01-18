@@ -201,7 +201,6 @@ impl LLMProvider for OpenAIProvider {
         let stream = res.bytes_stream();
         let parser = crate::sse::SSEParser::new(stream);
 
-        // Use unfold to allow terminating the stream early when [DONE] is received
         let stream =
             futures::stream::unfold((parser, false), |(mut parser, finished)| async move {
                 if finished {
@@ -232,5 +231,677 @@ impl LLMProvider for OpenAIProvider {
 
     fn model(&self) -> String {
         self.model.clone()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use common::llm::{
+        CompletionRequest, FunctionCall, ToolCall, ToolDefinition, ToolFunctionDefinition,
+    };
+    use wiremock::matchers::{header, method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[tokio::test]
+    async fn test_openai_model_method() {
+        let provider =
+            OpenAIProvider::new("test-key".to_string(), None, "gpt-3.5-turbo".to_string());
+
+        assert_eq!(provider.model(), "gpt-3.5-turbo");
+    }
+
+    #[tokio::test]
+    async fn test_openai_default_base_url() {
+        let provider = OpenAIProvider::new("test-key".to_string(), None, "gpt-4".to_string());
+
+        assert_eq!(provider.base_url, "https://api.openai.com/v1");
+    }
+
+    #[tokio::test]
+    async fn test_openai_custom_base_url() {
+        let custom_url = "https://custom.api.com/v1".to_string();
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(custom_url.clone()),
+            "gpt-4".to_string(),
+        );
+
+        assert_eq!(provider.base_url, custom_url);
+    }
+
+    #[tokio::test]
+    async fn test_completion_request_serialization() {
+        let mock_server = MockServer::start().await;
+
+        let expected_response = json!({
+            "id": "chatcmpl-123",
+            "object": "chat.completion",
+            "created": 1677652288,
+            "choices": [{
+                "index": 0,
+                "message": {
+                    "role": "assistant",
+                    "content": "Hello, world!"
+                },
+                "finish_reason": "stop"
+            }],
+            "usage": {
+                "prompt_tokens": 9,
+                "completion_tokens": 12,
+                "total_tokens": 21
+            }
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .and(header("Authorization", "Bearer test-key"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&expected_response))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![Message {
+                role: Role::User,
+                content: Some("Say hello".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+            }],
+            temperature: Some(0.7),
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_ok());
+        let message = result.unwrap();
+        assert_eq!(message.content, Some("Hello, world!".to_string()));
+        assert_eq!(message.role, Role::Assistant);
+    }
+
+    #[tokio::test]
+    async fn test_text_response_parsing() {
+        let mock_server = MockServer::start().await;
+
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "This is a text response"
+                }
+            }]
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_ok());
+        let message = result.unwrap();
+        assert_eq!(message.content, Some("This is a text response".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_tool_call_response_parsing() {
+        let mock_server = MockServer::start().await;
+
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [
+                        {
+                            "id": "call_abc123",
+                            "type": "function",
+                            "function": {
+                                "name": "search",
+                                "arguments": "{\"query\": \"test\"}"
+                            }
+                        }
+                    ]
+                }
+            }]
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_ok());
+        let message = result.unwrap();
+        assert!(message.content.is_none());
+        assert!(message.tool_calls.is_some());
+
+        let tool_calls = message.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 1);
+        assert_eq!(tool_calls[0].id, "call_abc123");
+        assert_eq!(tool_calls[0].function.name, "search");
+        assert_eq!(tool_calls[0].function.arguments, "{\"query\": \"test\"}");
+    }
+
+    #[tokio::test]
+    async fn test_request_with_tools() {
+        let mock_server = MockServer::start().await;
+
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": null
+                }
+            }]
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let tools = vec![ToolDefinition {
+            kind: "function".to_string(),
+            function: ToolFunctionDefinition {
+                name: "search".to_string(),
+                description: "Search the web".to_string(),
+                parameters: json!({
+                    "type": "object",
+                    "properties": {
+                        "query": {"type": "string"}
+                    },
+                    "required": ["query"]
+                }),
+            },
+        }];
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: Some(tools),
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_request_with_max_tokens() {
+        let mock_server = MockServer::start().await;
+
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "Response"
+                }
+            }]
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: Some(100),
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_network_error_handling() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(502).set_body_string("Bad Gateway"))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OpenAI API error"));
+    }
+
+    #[tokio::test]
+    async fn test_rate_limit_error_handling() {
+        let mock_server = MockServer::start().await;
+
+        let error_response = json!({
+            "error": {
+                "message": "Rate limit exceeded",
+                "type": "rate_limit_error",
+                "code": "rate_limit_exceeded"
+            }
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(429).set_body_json(&error_response))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_server_error_handling() {
+        let mock_server = MockServer::start().await;
+
+        let error_response = json!({
+            "error": {
+                "message": "Internal server error",
+                "type": "server_error",
+                "code": "internal_error"
+            }
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(500).set_body_json(&error_response))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_authentication_error_handling() {
+        let mock_server = MockServer::start().await;
+
+        let error_response = json!({
+            "error": {
+                "message": "Invalid API key",
+                "type": "invalid_request_error",
+                "code": "invalid_api_key"
+            }
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(401).set_body_json(&error_response))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "invalid-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("OpenAI API error"));
+    }
+
+    #[tokio::test]
+    async fn test_invalid_json_response_handling() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_string("invalid json"))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_stream_request_formatting() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"}]}\n\n\
+                 data: {\"choices\":[{\"delta\":{\"content\":\" world\"}]}\n\n\
+                 data: [DONE]\n\n",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: Some(0.5),
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.stream(request).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_stream_with_tools() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "data: {\"choices\":[{\"delta\":{\"content\":\"test\"}]}\n\n\
+                 data: [DONE]\n\n",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let tools = vec![ToolDefinition {
+            kind: "function".to_string(),
+            function: ToolFunctionDefinition {
+                name: "tool_name".to_string(),
+                description: "Test tool".to_string(),
+                parameters: json!({}),
+            },
+        }];
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: Some(tools),
+        };
+
+        let result = provider.stream(request).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_empty_tool_calls() {
+        let mock_server = MockServer::start().await;
+
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": "No tools needed"
+                }
+            }]
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_ok());
+        let message = result.unwrap();
+        assert!(message.tool_calls.is_none());
+        assert_eq!(message.content, Some("No tools needed".to_string()));
+    }
+
+    #[tokio::test]
+    async fn test_multiple_tool_calls() {
+        let mock_server = MockServer::start().await;
+
+        let response = json!({
+            "choices": [{
+                "message": {
+                    "role": "assistant",
+                    "content": null,
+                    "tool_calls": [
+                        {
+                            "id": "call_1",
+                            "type": "function",
+                            "function": {
+                                "name": "tool1",
+                                "arguments": "{\"arg1\":\"value1\"}"
+                            }
+                        },
+                        {
+                            "id": "call_2",
+                            "type": "function",
+                            "function": {
+                                "name": "tool2",
+                                "arguments": "{\"arg2\":\"value2\"}"
+                            }
+                        }
+                    ]
+                }
+            }]
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_ok());
+        let message = result.unwrap();
+        assert!(message.tool_calls.is_some());
+
+        let tool_calls = message.tool_calls.unwrap();
+        assert_eq!(tool_calls.len(), 2);
+        assert_eq!(tool_calls[0].id, "call_1");
+        assert_eq!(tool_calls[0].function.name, "tool1");
+        assert_eq!(tool_calls[1].id, "call_2");
+        assert_eq!(tool_calls[1].function.name, "tool2");
+    }
+
+    #[tokio::test]
+    async fn test_default_temperature_value() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_string(
+                "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"test\"}}]}",
+            ))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+        assert!(result.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_malformed_response_missing_choices() {
+        let mock_server = MockServer::start().await;
+
+        let response = json!({
+            "id": "chatcmpl-123",
+            "object": "chat.completion",
+            "choices": []
+        });
+
+        Mock::given(method("POST"))
+            .and(path("/chat/completions"))
+            .respond_with(ResponseTemplate::new(200).set_body_json(&response))
+            .mount(&mock_server)
+            .await;
+
+        let provider = OpenAIProvider::new(
+            "test-key".to_string(),
+            Some(mock_server.uri()),
+            "gpt-3.5-turbo".to_string(),
+        );
+
+        let request = CompletionRequest {
+            messages: vec![],
+            temperature: None,
+            max_tokens: None,
+            tools: None,
+        };
+
+        let result = provider.complete(request).await;
+
+        let result_value = result.is_ok() && result.unwrap().content.is_none();
+        assert!(
+            result_value,
+            "Expected empty result or error for missing choices"
+        );
     }
 }

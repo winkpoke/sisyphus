@@ -29,6 +29,9 @@ url = "2.5"
 bytes = "1.5"
 chrono = "0.4"
 
+# Mocking
+mockall = "0.12"
+
  # Internal dependencies
 common = { path = "crates/common" }
 tools = { path = "crates/tools" }
@@ -36,4 +39,14 @@ provider = { path = "crates/provider" }
 sisyphus_core = { path = "crates/core" }
 client = { path = "crates/client", package = "sisyphus_client" }
  sisyphus_cli_core = { path = "crates/cli-core", package = "sisyphus-cli-core" }
-tui = { path = "crates/tui" }
+ tui = { path = "crates/tui" }
+
+[workspace.metadata.tarpaulin]
+# Output directory for coverage reports
+out-dir = "target/tarpaulin"
+
+[workspace.dev-dependencies]
+# Coverage tracking
+cargo-tarpaulin = "0.27"
+# Mocking
+mockall = "0.12"

@@ -98,6 +98,107 @@ sisyphus/
 - **[README.md](README.md)** - Project overview and quick start
 - **[openspec/specs/](openspec/specs/)** - Detailed technical specifications with scenarios
 - **[TEST_STRATEGY.md](TEST_STRATEGY.md)** - Comprehensive testing strategy (unit, integration, E2E)
+- **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines and testing workflow
+
+## 🧪 Test Data Management
+
+### Directory Structure
+
+Tests use organized directories for maintainability:
+
+```
+crates/
+├── core/
+│   └── tests/
+│       ├── fixtures/         # Reusable test input data (JSON, YAML)
+│       ├── golden/          # Expected output files for comparison tests
+│       └── snapshots/       # Insta snapshots (managed by cargo insta)
+├── tools/
+│   └── tests/
+│       ├── fixtures/
+│       └── golden/
+├── provider/
+│   └── tests/
+│       ├── fixtures/
+│       └── golden/
+└── ...
+```
+
+### Guidelines
+
+- **Fixtures**: Reusable test inputs (request/response examples, configs)
+- **Golden files**: Expected outputs for file comparison tests
+- **Snapshots**: Managed automatically by `insta` (review with `cargo insta review`)
+- Keep fixtures small and focused on specific test cases
+- Document fixture purpose in file headers or README
+- Update golden files alongside code changes (version together)
+
+### Running Coverage
+
+```bash
+# Generate coverage reports
+./scripts/coverage.sh
+
+# View HTML report
+open target/tarpaulin/index.html
+```
+
+CI/CD automatically runs tests and uploads coverage to Codecov on every push and PR.
+
 - **[PRD.md](PRD.md)** - Product requirements and architecture (scope, functional requirements, user stories)
 - **[openspec/AGENTS.md](openspec/AGENTS.md)** - OpenSpec workflow instructions (Create → Implement → Archive)
 - **[openspec/project.md](openspec/project.md)** - Code conventions and architectural patterns
+
+## Testing Patterns
+
+### Unit Tests
+- Test single functions/modules in `#[cfg(test)]` modules
+- Use `tokio::test` for async tests
+- Use mocks (`mockall`, `wiremock`) to isolate dependencies
+- Keep tests focused and fast (<1s each)
+- Use descriptive test names: `test_<feature>_<scenario>`
+
+### Integration Tests
+- Test end-to-end flows in `tests/` directories
+- Use real dependencies for realistic scenarios
+- Test API contracts with `wiremock`
+- Verify request/response formats match specifications
+
+### Test Organization
+```
+crates/
+├── core/
+│   └── tests/
+│       ├── fixtures/     # Reusable test inputs
+│       ├── golden/      # Expected outputs
+│       └── *_test.rs    # Integration tests
+├── provider/
+│   └── src/*.rs
+│       └── #[cfg(test)] mod tests  # Unit tests
+└── tools/
+    └── src/*.rs
+        └── #[cfg(test)] mod tests  # Unit tests
+```
+
+### Mocking Guidelines
+- Use `wiremock` for HTTP endpoints (provider tests)
+- Use `mockall` for trait implementations (provider, tool traits)
+- Keep mock behavior close to real implementation
+- Test both success and error paths
+- Verify mock responses match API contracts
+
+### Snapshot Testing
+Use `insta` for testing generated content:
+```bash
+# Generate snapshots
+cargo test
+
+# Review snapshot changes
+cargo insta review
+```
+
+Snapshot targets:
+- System prompts (agent/prompt.rs)
+- Tool schemas (provider implementations)
+- JSON request/response formats
+- Error messages
