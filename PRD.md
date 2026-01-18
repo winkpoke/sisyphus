@@ -63,7 +63,7 @@ The scope includes the migration and generalization of the core business logic, 
 ### 3.5 Server & API
 - **RPC/HTTP Server**: Expose agent capabilities via an API.
 - **Event Bus**: Typed, topic-based event system with global auditing support and efficient distribution.
-- **Events**: Stream `SystemEvent` payloads to clients (including `PermissionRequest`) via the SSE endpoint.
+- **Events**: Stream `EventEnvelope<SystemEvent>` to clients (including `PermissionRequest`) via the SSE endpoint, with envelope `id` set as SSE `id` field for ordering and gap detection.
 - **Unified Chat Service**: All chat requests and command effects are handled by a single core application service to ensure consistent state transitions across all transports.
 - **Agent Discovery & Routing**: Expose endpoints to list available agents (`/api/v1/agents`) and assign specific agents to sessions, enabling multi-agent workflows.
 - **Permission Approvals API**: Provide an endpoint to submit approve/deny decisions for Ask-gated tool calls.

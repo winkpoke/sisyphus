@@ -29,9 +29,10 @@
 - **Default Agent**: `plan` is the default when no agent specified
 
 ### Streaming & Event Bus
-- **SSE Events**: Stream `SystemEvent` payloads to clients (including `PermissionRequest`) via the SSE endpoint
+- **SSE Events**: Stream `EventEnvelope<SystemEvent>` to clients with envelope `id` set as SSE `id` field
+- **Event Bus**: Components publish/subscribe `EventEnvelope<SystemEvent>` with stable metadata (`id`, `timestamp_ms`)
 - **LLM Streaming**: MUST use shared `SSEParser` (`crates/provider/src/sse.rs`) for correct handling of split network chunks and multi-byte characters
-- **Event Bus**: Components must use `subscribe_raw()` for global auditing or specific topics for efficiency
+- **Subscription Patterns**: Use `subscribe_raw()` for global auditing or specific topics for efficiency
 
 ## 🛠️ Development Quick Reference
 

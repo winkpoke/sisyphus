@@ -44,11 +44,11 @@ After deployment, create separate PR to:
 ## CLI Essentials
 
 ```bash
-openspec list                  # List active changes
-openspec list --specs          # List specifications
-openspec show [item]           # Display change or spec
-openspec validate [item]       # Validate changes or specs
-openspec archive <change-id> --yes   # Archive after deployment
+openspec list                         # List active changes
+openspec list --specs                 # List specifications
+openspec show [item]                  # Display change or spec
+openspec validate [item]                # Validate changes or specs
+openspec archive <change-id> --yes      # Archive after deployment
 openspec show [change] --json --deltas-only  # Debug delta parsing
 ```
 
@@ -83,7 +83,7 @@ openspec/
 - **THEN** return JWT token
 ```
 
-**WRONG** (don't use bullets or bold):
+**WRONG** (don't use bullets/bold/###):
 ```markdown
 - **Scenario: User login**  ❌
 **Scenario**: User login     ❌
@@ -95,27 +95,21 @@ Every requirement MUST have at least one scenario.
 ### Delta Operations
 
 - `## ADDED Requirements` - New capabilities
-- `## MODIFIED Requirements` - Changed behavior (paste full updated requirement)
+- `## MODIFIED Requirements` - Changed behavior (paste FULL requirement block)
 - `## REMOVED Requirements` - Deprecated features
 - `## RENAMED Requirements` - Name changes only
 
-#### When to use ADDED vs MODIFIED
-- **ADDED**: New capability that can stand alone. Prefer when change is orthogonal.
-- **MODIFIED**: Changes behavior/scope of existing requirement. Always paste the FULL requirement block (header + all scenarios).
-- **RENAMED**: Name change only. If behavior also changes, use RENAMED + MODIFIED.
+**When to use ADDED vs MODIFIED**: ADDED for orthogonal new features; MODIFIED for changed existing behavior (paste full block); RENAMED + MODIFIED if name changes with behavior change.
 
 ## Proposal Structure
 
 ```markdown
 # Change: [Brief description]
-
 ## Why
 [1-2 sentences on problem/opportunity]
-
 ## What Changes
 - [Bullet list]
 - [Mark breaking changes with **BREAKING**]
-
 ## Impact
 - Affected specs: [list capabilities]
 - Affected code: [key files/systems]
@@ -123,21 +117,18 @@ Every requirement MUST have at least one scenario.
 
 ## Design.md (only if needed)
 
-Create if: cross-cutting change, new architectural pattern, new external dependency, security/performance/migration complexity, or ambiguity needing technical decisions.
+Create for: cross-cutting changes, new patterns, external deps, security/performance complexity, or ambiguity.
 
 **Minimal skeleton:**
 ```markdown
 ## Context
 [Background, constraints, stakeholders]
-
 ## Goals / Non-Goals
 - Goals: [...]
 - Non-Goals: [...]
-
 ## Decisions
 - Decision: [What and why]
-- Alternatives considered: [Options + rationale]
-
+- Alternatives: [Options + rationale]
 ## Risks / Trade-offs
 - [Risk] → Mitigation
 ```
