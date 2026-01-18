@@ -1,6 +1,6 @@
 # agent-core Specification (Delta)
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: Agent Loop Testing
 The system SHALL provide comprehensive unit and integration tests for the agent loop to verify decision logic, tool execution flow, and error recovery.

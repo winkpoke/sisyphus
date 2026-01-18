@@ -418,3 +418,54 @@ The system SHALL allow initializing multiple built-in agents derived from the sa
 - **WHEN** both Plan and Build agents are initialized
 - **THEN** both agents use the same model configuration
 
+### Requirement: Agent Unit Test Organization
+The system SHALL organize agent tests into `#[cfg(test)]` modules for fast execution and integration tests in `tests/` directory for end-to-end flows.
+
+#### Scenario: Unit tests use mocks
+- **GIVEN** agent unit tests in `src/agent.rs`
+- **WHEN** tests are run
+- **THEN** all tests use mock LLM providers
+- **AND** all tests use mock tools
+- **AND** no external dependencies are required
+
+#### Scenario: Integration tests use real components
+- **GIVEN** agent integration tests in `tests/`
+- **WHEN** tests are run
+- **THEN** tests verify agent loop with real session
+- **AND** tests use scripted/mock providers
+- **AND** tests verify permission flows
+
+### Requirement: Mock Framework Adoption
+The system SHALL use `mockall` framework for creating mock LLM providers and tools in agent tests.
+
+#### Scenario: Mock LLM provider
+- **GIVEN** an agent test requiring mock provider
+- **WHEN** test sets up `MockLLMProvider::new()`
+- **THEN** mockall creates a valid mock object
+- **AND** expectations can be set on the mock
+- **AND** mock returns scripted responses
+
+#### Scenario: Mock tool expectations
+- **GIVEN** an agent test requiring mock tool
+- **WHEN** test configures mock tool expectations
+- **THEN** mockall verifies expected calls
+- **AND** mockall verifies call arguments
+- **AND** mockall returns specified results
+
+### Requirement: Snapshot Testing for Prompts
+The system SHALL use `insta` for snapshot testing of generated system prompts to detect unintended changes.
+
+#### Scenario: System prompt snapshot
+- **GIVEN** an agent configuration with instructions
+- **WHEN** system prompt is generated
+- **THEN** snapshot matches expected output
+- **AND** XML tags are correctly formatted
+- **AND** environment variables are included
+
+#### Scenario: Template prompt snapshot
+- **GIVEN** an agent configuration with custom template
+- **WHEN** system prompt is generated from template
+- **THEN** snapshot matches expected output
+- **AND** template variables are interpolated correctly
+- **AND** conditional sections work as expected
+

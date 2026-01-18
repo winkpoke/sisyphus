@@ -1,6 +1,6 @@
 # workspace Specification (Delta)
 
-## MODIFIED Requirements
+## ADDED Requirements
 
 ### Requirement: CI/CD Pipeline
 The workspace SHALL provide automated CI/CD pipeline for testing, linting, and coverage tracking on every push and pull request.
@@ -93,8 +93,6 @@ The workspace SHALL provide comprehensive documentation for running tests locall
 - **AND** it describes when to add tests
 - **AND** it describes test organization (unit vs integration)
 - **AND** it references TEST_STRATEGY.md
-
-## ADDED Requirements
 
 ### Requirement: Coverage Targets
 The workspace SHALL define tiered coverage targets to prioritize testing effort and ensure critical code paths are adequately tested.

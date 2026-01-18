@@ -10,22 +10,7 @@
 | **[TEST_STRATEGY.md](TEST_STRATEGY.md)** | Testing strategy & guidelines | Writing tests |
 | **[openspec/project.md](openspec/project.md)** | Code conventions & patterns | Following project standards |
 
-## 📚 Document Hierarchy
-
-```
-Sisyphus Project
-├── PRD.md                      # WHY: Product vision & requirements
-├── AGENTS.md (this file)       # HOW: Central navigation hub
-├── TEST_STRATEGY.md            # VERIFY: Testing approach
-└── openspec/
-    ├── AGENTS.md              # WORKFLOW: Change proposal process
-    ├── project.md             # CONVENTIONS: Code style & patterns
-    └── specs/                 # TRUTH: Detailed technical specs
-```
-
 ## ⚡ Critical Runtime Behaviors
-
-These are the most important behaviors that agents must know. For detailed specs, see [openspec/specs/](openspec/specs/).
 
 ### Permission System
 - **Ask-gated tool execution**: Emits `PermissionRequest` and blocks current turn
@@ -100,42 +85,13 @@ sisyphus/
 - **[TEST_STRATEGY.md](TEST_STRATEGY.md)** - Comprehensive testing strategy (unit, integration, E2E)
 - **[CONTRIBUTING.md](CONTRIBUTING.md)** - Contribution guidelines and testing workflow
 
-## 🧪 Test Data Management
+## 🧪 Testing Quick Reference
 
-### Directory Structure
-
-Tests use organized directories for maintainability:
-
-```
-crates/
-├── core/
-│   └── tests/
-│       ├── fixtures/         # Reusable test input data (JSON, YAML)
-│       ├── golden/          # Expected output files for comparison tests
-│       └── snapshots/       # Insta snapshots (managed by cargo insta)
-├── tools/
-│   └── tests/
-│       ├── fixtures/
-│       └── golden/
-├── provider/
-│   └── tests/
-│       ├── fixtures/
-│       └── golden/
-└── ...
-```
-
-### Guidelines
-
-- **Fixtures**: Reusable test inputs (request/response examples, configs)
-- **Golden files**: Expected outputs for file comparison tests
-- **Snapshots**: Managed automatically by `insta` (review with `cargo insta review`)
-- Keep fixtures small and focused on specific test cases
-- Document fixture purpose in file headers or README
-- Update golden files alongside code changes (version together)
-
-### Running Coverage
-
+### Running Tests & Coverage
 ```bash
+# Run all tests
+cargo test
+
 # Generate coverage reports
 ./scripts/coverage.sh
 
@@ -143,74 +99,19 @@ crates/
 open target/tarpaulin/index.html
 ```
 
-CI/CD automatically runs tests and uploads coverage to Codecov on every push and PR.
-
-- **[PRD.md](PRD.md)** - Product requirements and architecture (scope, functional requirements, user stories)
-- **[openspec/AGENTS.md](openspec/AGENTS.md)** - OpenSpec workflow instructions (Create → Implement → Archive)
-- **[openspec/project.md](openspec/project.md)** - Code conventions and architectural patterns
-
-## Testing Patterns
-
-### Unit Tests
-- Test single functions/modules in `#[cfg(test)]` modules
-- Use `tokio::test` for async tests
-- Use mocks (`mockall`, `wiremock`) to isolate dependencies
-- Keep tests focused and fast (<1s each)
-- Use descriptive test names: `test_<feature>_<scenario>`
-
-### Integration Tests
-- Test end-to-end flows in `tests/` directories
-- Use real dependencies for realistic scenarios
-- Test API contracts with `wiremock`
-- Verify request/response formats match specifications
-
 ### Test Organization
-```
-crates/
-├── core/
-│   └── tests/
-│       ├── fixtures/     # Reusable test inputs
-│       ├── golden/      # Expected outputs
-│       └── *_test.rs    # Integration tests
-├── provider/
-│   └── src/*.rs
-│       └── #[cfg(test)] mod tests  # Unit tests
-└── tools/
-    └── src/*.rs
-        └── #[cfg(test)] mod tests  # Unit tests
-```
+- **Unit tests**: `#[cfg(test)]` modules within source files
+- **Integration tests**: `tests/` directories at crate level
+- **Test fixtures**: `tests/fixtures/` for reusable inputs
+- **Golden files**: `tests/golden/` for expected outputs
+- **Snapshots**: Managed by `insta` (review with `cargo insta review`)
 
-### Mocking Guidelines
-- Use `wiremock` for HTTP endpoints (provider tests)
-- Use `mockall` for trait implementations (provider, tool traits)
-- Keep mock behavior close to real implementation
-- Test both success and error paths
-- Verify mock responses match API contracts
+### Coverage Targets
+- **Critical (90%+)**: `tools/src/fs.rs`, `tools/src/cmd.rs`, `core/src/agent.rs`, `core/src/session.rs`
+- **High (80%+)**: `provider/src/openai.rs`, `server/src/lib.rs`, `core/src/session/context.rs`
+- **Medium (70%+)**: `cli-core/`, `common/src/`, `client/`
+- **Low (60%+)**: `tui/` (logic only)
 
-### Snapshot Testing
-Use `insta` for testing generated content:
-```bash
-# Generate snapshots
-cargo test
+> See [TEST_STRATEGY.md](TEST_STRATEGY.md) for detailed testing patterns and [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow.
 
-# Review snapshot changes
-cargo insta review
-```
-Snapshot targets:
-- System prompts (agent/prompt.rs)
-- Tool schemas (provider implementations)
-- JSON request/response formats
-- Error messages
-
-**Review Process**:
-1. Run `cargo test` to generate new snapshots (`.snap.new` files created)
-2. Run `cargo insta review` to review changes interactively
-3. For automated review: Check `.snap.new` file content matches expectations
-4. Accept snapshot: Rename `.snap.new` → `.snap`
-5. Reject snapshot: Manually edit to match expectations, then rename
-
-**Best Practices**:
-- Keep snapshots in version control
-- Add commit messages explaining intentional snapshot changes
-- Review snapshot diffs carefully before accepting
-- Use descriptive snapshot names for clarity
+---
