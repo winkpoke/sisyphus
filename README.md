@@ -68,7 +68,7 @@ sisyphus/
 │   ├── tools/       # Standard tools (fs, shell)
 │   ├── server/      # HTTP/WebSocket API server
 │   ├── cli/         # CLI entry point
- │   ├── cli-core/    # Shared CLI library (commands, REPL, completer)
+│   ├── cli-core/    # Shared CLI library (commands, REPL, completer)
 │   └── tui/         # Optional TUI frontend (requires `--features tui`)
 └── Cargo.toml       # Workspace configuration
 ```
@@ -78,6 +78,11 @@ sisyphus/
 ### Current Capabilities
 -   **Interactive CLI**: Chat with the agent directly in your terminal.
 -   **Optional TUI**: Rich interactive terminal UI for chat sessions (build with `--features tui`).
+    -   **Modern Layout**: Full-screen pane-based interface with context bar and unified input/status.
+    -   **Rich Content**: Styled message blocks with headers and separators.
+    -   **Context Awareness**: Persistent display of working directory and active model.
+    -   **Accessibility**: Colorblind-friendly design with structural cues (borders, distinct separators).
+    -   **Responsive**: Degraded mode for smaller terminal windows.
 -   **LLM Support**:
     -   OpenAI (GPT-4, etc.)
     -   Mock Provider (for testing)
@@ -98,114 +103,3 @@ sisyphus/
 -   **Skills System**:
     -   Declarative skills via `SKILL.md`.
     -   Dynamic skill injection and discovery.
--   **MCP Support**: Native integration with Model Context Protocol (Web Search, Database, APIs).
--   **Internationalization (i18n)**: Multi-language support for system messages.
-
-## 🚀 Quick Start
-
-### Prerequisites
-
--   Rust 1.75 or higher
--   Cargo package manager
-
-### Installation
-
-```bash
-# Clone the repository
-git clone https://github.com/your-org/sisyphus.git
-cd sisyphus
-
-# Build the project
-cargo build --release
-```
-
-### Configuration
-
-Create a `.env` file in the project root:
-
-```env
-# LLM Provider Configuration
-LLM_PROVIDER=openai
-OPENAI_API_KEY=your-api-key
-
-# Optional
-LLM_MODEL=gpt-4
-# LLM_BASE_URL=...
-```
-
-### Usage
-
-Run the CLI in chat mode:
-
-```bash
-cargo run --release --bin sisyphus
-```
-
-Or with the TUI (rich interactive terminal interface):
-
-```bash
-cargo run --release --bin sisyphus --features tui
-sisyphus chat --tui
-```
-
-Or if installed:
-
-```bash
-sisyphus chat
-```
-
-## 📚 Documentation
-
--   **[PRD.md](PRD.md)** - Product requirements and feature specifications.
--   **[AGENTS.md](AGENTS.md)** - Development guidelines and agent instructions.
-
-## 🛠️ Development
-
-### Building and Testing
-
-```bash
-# Build CLI-only (default)
-cargo build --release
-
-# Build with TUI support
-cargo build --release --features tui
-
-# Run all tests
-cargo test
-```
-
-### Running Coverage
-
-Generate coverage report locally:
-
-```bash
-# Run coverage script (generates HTML and XML reports)
-./scripts/coverage.sh
-
-# Or run tarpaulin directly
-cargo tarpaulin --workspace --out Html --out Xml
-```
-
-Coverage reports are generated in `target/tarpaulin/`. To view the HTML report:
-
-```bash
-open target/tarpaulin/index.html  # macOS
-xdg-open target/tarpaulin/index.html  # Linux
-```
-
-CI/CD automatically runs tests and uploads coverage to Codecov on every push and PR.
-
-### Adding a New Tool
-
-1.  Implement the `Tool` trait in `crates/tools/src/`.
-2.  Register the tool in `crates/tools/src/lib.rs`.
-3.  Add it to the agent in `crates/cli/src/main.rs`.
-
-## 📄 License
-
-This project is licensed under the Apache License, Version 2.0 - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
--   **OpenCode** - Core logic and inspiration.
--   **Rust Community** - For the amazing ecosystem.

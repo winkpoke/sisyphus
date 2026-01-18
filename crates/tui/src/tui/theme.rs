@@ -9,6 +9,8 @@ pub struct Theme {
     pub border: Color,
     pub highlight: Color,
     pub reasoning: Color,
+    pub context_bar_bg: Color,
+    pub context_bar_fg: Color,
 }
 
 impl Default for Theme {
@@ -22,6 +24,8 @@ impl Default for Theme {
             border: Color::DarkGray,
             highlight: Color::Yellow,
             reasoning: Color::Rgb(100, 100, 100), // Dark Grey for thinking
+            context_bar_bg: Color::Rgb(40, 44, 52), // Dark grey
+            context_bar_fg: Color::White,
         }
     }
 }

@@ -12,25 +12,62 @@ use std::time::Instant;
 pub mod components;
 pub mod utils;
 
-use components::{agent_selection, command_palette, input, overlay, status, transcript};
+use components::{agent_selection, command_palette, context_bar, input, overlay, transcript};
 
 pub fn draw(f: &mut Frame, app: &App) {
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(1)
-        .constraints(
-            [
-                Constraint::Min(1),
-                Constraint::Length(3),
-                Constraint::Length(1),
-            ]
-            .as_ref(),
-        )
-        .split(f.size());
+    let size = f.size();
+    
+    // Critical size check: < 40x10
+    if size.width < 40 || size.height < 10 {
+        let warning_block = Paragraph::new("Terminal too small.\nPlease resize to at least 40x10.")
+            .style(Style::default().fg(app.theme.error))
+            .alignment(ratatui::layout::Alignment::Center)
+            .block(Block::default().borders(Borders::ALL));
+        f.render_widget(warning_block, size);
+        return;
+    }
 
-    transcript::draw(f, app, chunks[0]);
-    input::draw(f, app, chunks[1]);
-    status::draw(f, app, chunks[2]);
+    // Degraded mode check: < 80x24
+    let degraded_mode = size.width < 80 || size.height < 24;
+
+    let chunks = if degraded_mode {
+        // Degraded layout: No ContextBar, just Transcript and Input
+        Layout::default()
+            .direction(Direction::Vertical)
+            .margin(0)
+            .constraints(
+                [
+                    Constraint::Min(1), // Transcript
+                    Constraint::Length(1), // Input
+                ]
+                .as_ref(),
+            )
+            .split(size)
+    } else {
+        // Full layout
+        Layout::default()
+            .direction(Direction::Vertical)
+            .margin(0)
+            .constraints(
+                [
+                    Constraint::Length(1), // ContextBar
+                    Constraint::Min(1),    // Transcript
+                    Constraint::Length(1), // Input
+                ]
+                .as_ref(),
+            )
+            .split(size)
+    };
+
+    if degraded_mode {
+        transcript::draw(f, app, chunks[0]);
+        input::draw(f, app, chunks[1]);
+        // No ContextBar
+    } else {
+        context_bar::draw(f, app, chunks[0]);
+        transcript::draw(f, app, chunks[1]);
+        input::draw(f, app, chunks[2]);
+    }
 
     if app.state.mode == InputMode::CommandPalette {
         command_palette::draw(f, app);

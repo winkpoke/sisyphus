@@ -12,6 +12,7 @@ pub enum SystemEventKind {
     PermissionRequest,
     Error,
     Shutdown,
+    DirectoryChanged,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -40,6 +41,9 @@ pub enum SystemEvent {
         message: String,
     },
     Shutdown,
+    DirectoryChanged {
+        path: String,
+    },
 }
 
 impl SystemEvent {
@@ -51,6 +55,7 @@ impl SystemEvent {
             SystemEvent::PermissionRequest { .. } => SystemEventKind::PermissionRequest,
             SystemEvent::Error { .. } => SystemEventKind::Error,
             SystemEvent::Shutdown => SystemEventKind::Shutdown,
+            SystemEvent::DirectoryChanged { .. } => SystemEventKind::DirectoryChanged,
         }
     }
 }
@@ -103,6 +108,7 @@ impl EventBus {
             SystemEventKind::PermissionRequest,
             SystemEventKind::Error,
             SystemEventKind::Shutdown,
+            SystemEventKind::DirectoryChanged,
         ];
 
         for kind in kinds {

@@ -18,6 +18,24 @@ The CLI SHALL provide an interactive TUI for chat sessions when stdin and stdout
 - **Then** the CLI SHALL not enable raw terminal modes
 - **And** the CLI SHALL fall back to a non-TUI interaction mode
 
+### Requirement: Layout Components
+The TUI SHALL implement a full-screen layout consisting of a persistent Context Bar, a central Transcript area, and a unified Input/Status footer.
+
+#### Scenario: Persistent Context Bar
+- **Given** the TUI is running
+- **Then** a Context Bar SHALL be displayed at the top of the screen
+- **And** it SHALL display the application brand ("Sisyphus")
+- **And** it SHALL display the current working directory
+- **And** it SHALL display the active model name
+- **And** it SHALL have a bottom border for visual separation
+
+#### Scenario: Unified Input and Status Footer
+- **Given** the TUI is running
+- **Then** the bottom area SHALL contain the Input Composer and Status Indicator
+- **And** the Input Composer SHALL occupy approximately 70% of the width
+- **And** the Status Indicator SHALL occupy approximately 30% of the width
+- **And** they SHALL be visually merged into a single footer row
+
 ### Requirement: Terminal Mode Safety
 The TUI MUST restore the terminal to a usable state on normal exit and on panic.
 
@@ -66,6 +84,22 @@ The TUI MUST reflow wrapped transcript content when the terminal width changes.
 - **When** the terminal width changes
 - **Then** the transcript rendering MUST reflow to the new width
 - **And** the transcript MUST remain readable without truncated mid-grapheme output
+
+### Requirement: Degraded Mode for Small Terminals
+The TUI SHALL degrade gracefully when the terminal size is insufficient for the full layout.
+
+#### Scenario: Minimum Size Detection
+- **Given** the terminal size changes
+- **When** the width is less than 80 columns OR the height is less than 24 rows
+- **Then** the TUI SHALL switch to a degraded mode
+- **And** the Context Bar SHALL be hidden or simplified
+- **And** the Input/Status footer SHALL remain visible
+- **And** the Transcript SHALL remain visible
+
+#### Scenario: Critical Size Warning
+- **Given** the terminal size is critically small (e.g., < 40x10)
+- **Then** the TUI SHALL display a warning overlay
+- **And** the warning SHALL request the user to resize the terminal
 
 ### Requirement: Command Palette
 The TUI SHALL provide a command palette for both UiCommands and SlashCommands with keyboard navigation.
@@ -159,7 +193,20 @@ When the TUI receives a `PermissionRequest` event, it SHALL present a permission
 - **AND** the overlay MUST remain available to present the next pending request
 
 ### Requirement: Transcript Visuals
-The transcript view MUST provide adequate whitespace and context.
+The transcript view MUST provide adequate whitespace, context, and visual distinction between message types.
+
+#### Scenario: Message Blocks
+- **Given** the transcript displays messages
+- **Then** each message SHALL be rendered as a distinct block
+- **And** each block SHALL have a header indicating the sender (User, Assistant, System)
+- **And** the header SHALL include a timestamp
+
+#### Scenario: Kind-Specific Headers
+- **Given** a message block is rendered
+- **Then** the header visuals SHALL differ based on the message kind
+- **And** User messages SHALL use a specific separator style (e.g., "─")
+- **And** Assistant messages SHALL use a specific separator style (e.g., "╌")
+- **And** System messages SHALL use a specific separator style (e.g., "·")
 
 #### Scenario: Dynamic Header
 Given a session is active
@@ -226,6 +273,19 @@ The TUI SHALL use a semantic color palette to distinguish message types and stat
 - **Then** User messages SHALL be rendered in Soft Blue
 - **And** Assistant messages SHALL be rendered in Lavender or Mint
 - **And** System messages SHALL be rendered in Muted Grey
+
+### Requirement: Accessibility Support
+The TUI MUST support accessibility for users with color vision deficiencies by relying on structural and symbolic cues in addition to color.
+
+#### Scenario: Colorblind-friendly separators
+- **Given** messages are rendered in the transcript
+- **Then** message kinds MUST be distinguishable by their header separator characters
+- **And** relying solely on color for distinction is PROHIBITED
+
+#### Scenario: Context Bar borders
+- **Given** the Context Bar is displayed
+- **Then** it MUST include a visible bottom border
+- **And** the border MUST ensure separation from the transcript regardless of color contrast
 
 ### Requirement: Visual Feedback for Actions
 The TUI SHALL provide ephemeral visual feedback for user actions.

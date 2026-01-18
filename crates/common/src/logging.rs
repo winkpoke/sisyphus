@@ -150,6 +150,15 @@ pub async fn start_event_logger(bus: &EventBus) {
                 event = "shutdown"
             );
         }
+        SystemEvent::DirectoryChanged { path } => {
+            info!(
+                target: "bus",
+                event_id = envelope.id,
+                timestamp_ms = envelope.timestamp_ms,
+                event = "directory_changed",
+                path = %path
+            );
+        }
     });
 
     std::mem::forget(sub);

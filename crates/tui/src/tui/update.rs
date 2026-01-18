@@ -198,6 +198,13 @@ fn handle_system_event(app: &mut App, event: SystemEvent) {
                 "Server shutting down".to_string(),
             );
         }
+        SystemEvent::DirectoryChanged { path } => {
+            app.state.current_working_directory = path.clone();
+            app.state.add_message(
+                TranscriptItemKind::System,
+                format!("Directory changed to: {}", path),
+            );
+        }
     }
 }
 
@@ -421,6 +428,9 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
             }
             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 return TuiInstruction::Quit;
+            }
+            KeyCode::Char('l') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+                app.state.transcript.clear();
             }
             KeyCode::Char(c) => {
                 if c == '/' && app.state.input_buffer.is_empty() {

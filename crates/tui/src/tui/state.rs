@@ -234,6 +234,7 @@ pub struct TuiState {
     pub toast: Option<Toast>,
     pub context_title: String,
     pub show_reasoning_summary: bool,
+    pub current_working_directory: String,
 }
 
 impl TuiState {
@@ -255,15 +256,34 @@ impl TuiState {
             toast: None,
             context_title: "Context".to_string(),
             show_reasoning_summary: false,
+            current_working_directory: std::env::current_dir()
+                .map(|p| p.to_string_lossy().to_string())
+                .unwrap_or_else(|_| ".".to_string()),
         }
     }
 
     pub fn add_message(&mut self, kind: TranscriptItemKind, content: String) {
+        // Optimize streaming: Merge consecutive Assistant messages
+        if matches!(kind, TranscriptItemKind::Assistant) {
+            if let Some(last) = self.transcript.items.last_mut() {
+                if matches!(last.kind, TranscriptItemKind::Assistant) {
+                    last.content.push_str(&content);
+                    last.is_streaming = true;
+                    return;
+                }
+            }
+        }
+
+        // When adding a new distinct message, ensure the previous one is marked as done
+        if let Some(last) = self.transcript.items.last_mut() {
+            last.is_streaming = false;
+        }
+
         self.transcript.items.push(TranscriptItem {
+            is_streaming: matches!(kind, TranscriptItemKind::Assistant),
             kind,
             content,
             timestamp: Instant::now(),
-            is_streaming: false,
         });
     }
 

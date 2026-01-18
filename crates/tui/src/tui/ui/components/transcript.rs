@@ -1,20 +1,14 @@
 use crate::tui::app::App;
 use crate::tui::state::{InputMode, TranscriptItemKind};
+use crate::tui::ui::components::message_block::MessageBlock;
 use ratatui::{
     layout::Rect,
-    style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{Block, Borders, Paragraph, Wrap},
+    widgets::{Block, Paragraph, Wrap},
     Frame,
 };
 
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
-    let transcript_block = Block::default()
-        .title(app.state.context_title.clone())
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(app.theme.border))
-        .padding(ratatui::widgets::Padding::new(2, 2, 1, 1));
-
+    let transcript_block = Block::default();
     let inner_area = transcript_block.inner(area);
     let width = inner_area.width as usize;
 
@@ -32,81 +26,52 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
             continue;
         }
 
-        if matches!(item.kind, TranscriptItemKind::ReasoningSummary) {
-            let base_style = Style::default().fg(app.theme.reasoning);
-            let header_style = base_style.add_modifier(Modifier::BOLD);
-            let content_style = base_style.add_modifier(Modifier::ITALIC);
+        let message_block = MessageBlock::new(
+            app,
+            &item.content,
+            item.kind.clone(),
+            item.is_streaming,
+            width,
+        );
 
-            lines.push(Line::from(Span::styled(
-                "  💭 Thinking Process:",
-                header_style,
-            )));
-
-            let content = item.content.clone();
-            let sub_lines: Vec<&str> = content.split('\n').collect();
-
-            for (j, sub_line) in sub_lines.iter().enumerate() {
-                let mut line_text = format!("  │ {}", sub_line);
-
-                if item.is_streaming && j == sub_lines.len() - 1 {
-                    let spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-                    let frame = app.state.spinner_frame % spinner_chars.len();
-                    line_text.push_str(spinner_chars[frame]);
-                }
-
-                lines.push(Line::from(Span::styled(line_text, content_style)));
-            }
-            continue;
-        }
-
-        let prefix = match item.kind {
-            TranscriptItemKind::User => "You: ",
-            TranscriptItemKind::Assistant => "Assistant: ",
-            TranscriptItemKind::System => "System: ",
-            TranscriptItemKind::Error => "Error: ",
-            TranscriptItemKind::ReasoningSummary => unreachable!(),
-            TranscriptItemKind::ReasoningRaw => "Debug Thinking: ",
-        };
-        let mut style = match item.kind {
-            TranscriptItemKind::User => Style::default().fg(app.theme.user),
-            TranscriptItemKind::Assistant => Style::default().fg(app.theme.assistant),
-            TranscriptItemKind::System => Style::default().fg(app.theme.system),
-            TranscriptItemKind::Error => Style::default().fg(app.theme.error),
-            TranscriptItemKind::ReasoningSummary => unreachable!(),
-            TranscriptItemKind::ReasoningRaw => Style::default()
-                .fg(app.theme.system)
-                .add_modifier(Modifier::DIM),
-        };
-
+        let mut block_lines = message_block.render_to_lines();
+        
+        // Handle selection highlighting
         if app.state.mode == InputMode::Selection
             && Some(i) == app.state.selection.selected_message_index
         {
-            style = style.add_modifier(Modifier::REVERSED);
+            for line in &mut block_lines {
+                for span in &mut line.spans {
+                    span.style = span.style.add_modifier(ratatui::style::Modifier::REVERSED);
+                }
+            }
         }
 
-        let content = item.content.clone();
-        let sub_lines: Vec<&str> = content.split('\n').collect();
-
-        for (j, sub_line) in sub_lines.iter().enumerate() {
-            let mut line_text = String::new();
-            if j == 0 {
-                line_text.push_str(prefix);
-            }
-            line_text.push_str(sub_line);
-
-            if item.is_streaming && j == sub_lines.len() - 1 {
-                let spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-                let frame = app.state.spinner_frame % spinner_chars.len();
-                line_text.push_str(spinner_chars[frame]);
-            }
-
-            lines.push(Line::from(Span::styled(line_text, style)));
-        }
+        lines.extend(block_lines);
     }
 
     // Calculate total lines for scrolling
+    let total_lines = calculate_total_lines(&lines, width);
+
+    let height = inner_area.height as usize;
+    let scroll_y = calculate_scroll_offset(
+        total_lines,
+        height,
+        app.state.transcript.stick_to_bottom,
+        app.state.transcript.scroll_offset,
+    );
+
+    let transcript = Paragraph::new(lines)
+        .block(transcript_block)
+        .wrap(Wrap { trim: false }) // Use false to preserve code block indentation
+        .scroll((scroll_y, 0));
+
+    f.render_widget(transcript, area);
+}
+
+fn calculate_total_lines(lines: &[ratatui::text::Line], width: usize) -> usize {
     let mut total_lines = 0;
-    for line in &lines {
+    for line in lines {
         let content_len = line.width();
         if width > 0 {
             total_lines += content_len.div_ceil(width);
@@ -114,22 +79,54 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
             total_lines += 1;
         }
     }
+    total_lines
+}
 
-    let height = inner_area.height as usize;
-    let scroll_y = if app.state.transcript.stick_to_bottom {
+fn calculate_scroll_offset(
+    total_lines: usize,
+    height: usize,
+    stick_to_bottom: bool,
+    manual_offset: u16,
+) -> u16 {
+    if stick_to_bottom {
         if total_lines > height {
             (total_lines - height) as u16
         } else {
             0
         }
     } else {
-        app.state.transcript.scroll_offset
-    };
+        manual_offset
+    }
+}
 
-    let transcript = Paragraph::new(lines)
-        .block(transcript_block)
-        .wrap(Wrap { trim: true })
-        .scroll((scroll_y, 0));
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use ratatui::text::Line;
 
-    f.render_widget(transcript, area);
+    #[test]
+    fn test_calculate_total_lines() {
+        let lines = vec![
+            Line::from("Short line"),
+            Line::from("A very long line that should wrap around because it is wider than the width provided"),
+        ];
+        
+        // Width 10
+        // "Short line" -> 10 chars -> 1 line
+        // "A very long..." -> 86 chars -> ceil(86/10) = 9 lines
+        // Total = 10
+        assert_eq!(calculate_total_lines(&lines, 10), 10);
+    }
+
+    #[test]
+    fn test_scroll_stick_to_bottom() {
+        assert_eq!(calculate_scroll_offset(20, 10, true, 0), 10);
+        assert_eq!(calculate_scroll_offset(5, 10, true, 0), 0);
+    }
+
+    #[test]
+    fn test_scroll_manual() {
+        assert_eq!(calculate_scroll_offset(20, 10, false, 5), 5);
+        assert_eq!(calculate_scroll_offset(5, 10, false, 2), 2);
+    }
 }

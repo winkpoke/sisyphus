@@ -17,6 +17,7 @@ chrono = { version = "0.4.42", features = ["serde"] }
 dashmap = "5.5"
 gray_matter = { version = "0.3.2", features = ["yaml"] }
 minijinja = { version = "2.0", features = ["builtins"] }
+dirs = "6.0.0"
 
 [dev-dependencies]
 futures.workspace = true

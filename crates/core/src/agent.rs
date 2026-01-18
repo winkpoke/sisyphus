@@ -4,7 +4,7 @@ pub mod registry;
 
 use self::config::{AgentConfig, PermissionLevel};
 use self::prompt::SystemPromptBuilder;
-use crate::command::builtins::HelpCommand;
+use crate::command::builtins::{CdCommand, HelpCommand};
 use crate::command::loader::CommandLoader;
 use crate::command::parser::parse_command;
 use crate::command::{CommandContext, CommandOutcome, CommandRegistry, CommandType};
@@ -80,6 +80,7 @@ impl Agent {
 
     fn register_builtins(&mut self) {
         self.commands.register_builtin(Box::new(HelpCommand));
+        self.commands.register_builtin(Box::new(CdCommand));
     }
 
     pub fn list_commands(&self) -> Vec<crate::command::CommandInfo> {
