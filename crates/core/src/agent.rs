@@ -526,8 +526,14 @@ impl Agent {
                 });
             }
 
-            if let Some(reasoning_summary) = &response_msg.reasoning_summary {
-                if self.reasoning_config.expose == ReasoningExposure::Summary {
+            if self.reasoning_config.expose == ReasoningExposure::Summary {
+                if let Some(reasoning_content) = &response_msg.reasoning_raw {
+                    self.bus.publish(SystemEvent::MessageReceived {
+                        content: reasoning_content.clone(),
+                        role: "system".to_string(),
+                        kind: Some("reasoning_summary".to_string()),
+                    });
+                } else if let Some(reasoning_summary) = &response_msg.reasoning_summary {
                     self.bus.publish(SystemEvent::MessageReceived {
                         content: reasoning_summary.clone(),
                         role: "system".to_string(),

@@ -477,6 +477,19 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
                                             return TuiInstruction::Quit;
                                         }
                                         "debug" => return TuiInstruction::ToggleDebug,
+                                        "think" => {
+                                            app.state.show_reasoning_summary =
+                                                !app.state.show_reasoning_summary;
+                                            let status = if app.state.show_reasoning_summary {
+                                                "enabled"
+                                            } else {
+                                                "disabled"
+                                            };
+                                            return TuiInstruction::DispatchCommand(format!(
+                                                "/think (reasoning summary visibility: {})",
+                                                status
+                                            ));
+                                        }
                                         "clear" => return TuiInstruction::ClearSession,
                                         "new" => return TuiInstruction::NewSession,
                                         "agents" => return TuiInstruction::ShowAgentList,

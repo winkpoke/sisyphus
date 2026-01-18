@@ -8,6 +8,7 @@ pub struct Theme {
     pub error: Color,
     pub border: Color,
     pub highlight: Color,
+    pub reasoning: Color,
 }
 
 impl Default for Theme {
@@ -20,6 +21,7 @@ impl Default for Theme {
             error: Color::Rgb(231, 76, 60),       // #e74c3c Soft Red
             border: Color::DarkGray,
             highlight: Color::Yellow,
+            reasoning: Color::Rgb(100, 100, 100), // Dark Grey for thinking
         }
     }
 }

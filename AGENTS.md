@@ -19,7 +19,7 @@
 
 ### Command System
 - **SlashCommand**: Server-side prompt templates (expanded by agent, e.g., custom prompts)
-- **UiCommand**: Client-side UI actions (handled locally: `/clear`, `/debug`)
+- **UiCommand**: Client-side UI actions (handled locally: `/clear`, `/debug`, `/think`)
 - **Routing**: Clients route UiCommands locally, forward SlashCommands to server
 - **No Command Effects**: Chat responses MUST NOT carry UI/session lifecycle effects
 

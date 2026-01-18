@@ -84,6 +84,7 @@ sisyphus/
 -   **Tools**:
     -   **Shell Execution**: Run system commands safely.
     -   **File System**: Read and write files within a sandboxed environment.
+-   **Reasoning Process**: View the model's internal thinking process (toggle with `/think`).
 -   **Event System**: Internal event bus for observability.
 
 ### Planned Features

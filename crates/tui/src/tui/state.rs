@@ -254,7 +254,7 @@ impl TuiState {
             spinner_frame: 0,
             toast: None,
             context_title: "Context".to_string(),
-            show_reasoning_summary: true,
+            show_reasoning_summary: false,
         }
     }
 

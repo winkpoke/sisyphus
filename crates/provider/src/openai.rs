@@ -86,6 +86,10 @@ impl LLMProvider for OpenAIProvider {
                         obj.insert("reasoning_effort".to_string(), json!("high"));
                     }
                 }
+
+                obj.insert("thinking".to_string(), json!({
+                    "type": "enabled"
+                }));
             }
 
             // Apply request_overrides with reserved-key protection
@@ -166,8 +170,11 @@ impl LLMProvider for OpenAIProvider {
         // Extract reasoning_summary from OpenAI-compatible responses
         let reasoning_summary = choice["reasoning_summary"].as_str().map(|s| s.to_string());
 
-        // Extract reasoning_raw from OpenAI-compatible responses (for debug mode)
-        let reasoning_raw = choice["reasoning"].as_str().map(|s| s.to_string());
+        // Extract reasoning_content (new standard) or reasoning_raw (older/custom)
+        let reasoning_raw = choice["reasoning_content"]
+            .as_str()
+            .or_else(|| choice["reasoning"].as_str())
+            .map(|s| s.to_string());
 
         Ok(Message {
             role: Role::Assistant,
@@ -213,6 +220,10 @@ impl LLMProvider for OpenAIProvider {
                         obj.insert("reasoning_effort".to_string(), json!("high"));
                     }
                 }
+
+                obj.insert("thinking".to_string(), json!({
+                    "type": "enabled"
+                }));
             }
 
             // Apply request_overrides with reserved-key protection

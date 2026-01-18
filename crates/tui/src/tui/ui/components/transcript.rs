@@ -32,12 +32,39 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
             continue;
         }
 
+        if matches!(item.kind, TranscriptItemKind::ReasoningSummary) {
+            let base_style = Style::default().fg(app.theme.reasoning);
+            let header_style = base_style.add_modifier(Modifier::BOLD);
+            let content_style = base_style.add_modifier(Modifier::ITALIC);
+
+            lines.push(Line::from(Span::styled(
+                "  💭 Thinking Process:",
+                header_style,
+            )));
+
+            let content = item.content.clone();
+            let sub_lines: Vec<&str> = content.split('\n').collect();
+
+            for (j, sub_line) in sub_lines.iter().enumerate() {
+                let mut line_text = format!("  │ {}", sub_line);
+
+                if item.is_streaming && j == sub_lines.len() - 1 {
+                    let spinner_chars = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+                    let frame = app.state.spinner_frame % spinner_chars.len();
+                    line_text.push_str(spinner_chars[frame]);
+                }
+
+                lines.push(Line::from(Span::styled(line_text, content_style)));
+            }
+            continue;
+        }
+
         let prefix = match item.kind {
             TranscriptItemKind::User => "You: ",
             TranscriptItemKind::Assistant => "Assistant: ",
             TranscriptItemKind::System => "System: ",
             TranscriptItemKind::Error => "Error: ",
-            TranscriptItemKind::ReasoningSummary => "Thinking: ",
+            TranscriptItemKind::ReasoningSummary => unreachable!(),
             TranscriptItemKind::ReasoningRaw => "Debug Thinking: ",
         };
         let mut style = match item.kind {
@@ -45,7 +72,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
             TranscriptItemKind::Assistant => Style::default().fg(app.theme.assistant),
             TranscriptItemKind::System => Style::default().fg(app.theme.system),
             TranscriptItemKind::Error => Style::default().fg(app.theme.error),
-            TranscriptItemKind::ReasoningSummary => Style::default().fg(app.theme.system),
+            TranscriptItemKind::ReasoningSummary => unreachable!(),
             TranscriptItemKind::ReasoningRaw => Style::default()
                 .fg(app.theme.system)
                 .add_modifier(Modifier::DIM),
