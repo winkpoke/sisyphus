@@ -16,7 +16,7 @@ use components::{agent_selection, command_palette, context_bar, input, overlay, 
 
 pub fn draw(f: &mut Frame, app: &App) {
     let size = f.size();
-    
+
     // Critical size check: < 40x10
     if size.width < 40 || size.height < 10 {
         let warning_block = Paragraph::new("Terminal too small.\nPlease resize to at least 40x10.")
@@ -37,7 +37,7 @@ pub fn draw(f: &mut Frame, app: &App) {
             .margin(0)
             .constraints(
                 [
-                    Constraint::Min(1), // Transcript
+                    Constraint::Min(1),    // Transcript
                     Constraint::Length(1), // Input
                 ]
                 .as_ref(),

@@ -87,9 +87,12 @@ impl LLMProvider for OpenAIProvider {
                     }
                 }
 
-                obj.insert("thinking".to_string(), json!({
-                    "type": "enabled"
-                }));
+                obj.insert(
+                    "thinking".to_string(),
+                    json!({
+                        "type": "enabled"
+                    }),
+                );
             }
 
             // Apply request_overrides with reserved-key protection
@@ -98,13 +101,117 @@ impl LLMProvider for OpenAIProvider {
             }
         }
 
-        let res = self
+        let mut res = self
             .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&payload)
             .send()
             .await?;
+
+        // Fallback mechanism: check for client errors and retry without reasoning if needed
+        if res.status().is_client_error() {
+            let status = res.status();
+            let error_text = res.text().await?;
+
+            #[cfg(feature = "dev_debug")]
+            eprintln!(
+                "OpenAI Provider: Request failed with status {}. Error: {}",
+                status, error_text
+            );
+
+            if status == reqwest::StatusCode::BAD_REQUEST
+                || status.as_u16() == 422
+                || error_text.contains("Param Incorrect")
+            {
+                let mut new_res = None;
+
+                // Attempt 1: Remove reasoning_effort first
+                if let Some(obj) = payload.as_object_mut() {
+                    if obj.remove("reasoning_effort").is_some() {
+                        #[cfg(feature = "dev_debug")]
+                        {
+                            eprintln!("OpenAI Provider: Retrying without reasoning_effort...");
+                            if let Ok(mut file) = OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open("openai_debug.log")
+                            {
+                                let _ = writeln!(
+                                    file,
+                                    "Retrying without reasoning_effort due to error: {}",
+                                    error_text
+                                );
+                            }
+                        }
+
+                        let r = self
+                            .client
+                            .post(&url)
+                            .header("Authorization", format!("Bearer {}", self.api_key))
+                            .json(&payload)
+                            .send()
+                            .await?;
+
+                        new_res = Some(r);
+                    }
+                }
+
+                // Check if we need Attempt 2
+                let need_attempt_2 = if let Some(ref r) = new_res {
+                    r.status().is_client_error()
+                } else {
+                    true
+                };
+
+                if need_attempt_2 {
+                    let mut can_retry_2 = false;
+                    if let Some(obj) = payload.as_object_mut() {
+                        if obj.remove("thinking").is_some() {
+                            can_retry_2 = true;
+                        }
+                    }
+
+                    if can_retry_2 {
+                        #[cfg(feature = "dev_debug")]
+                        {
+                            eprintln!("OpenAI Provider: Retrying without thinking...");
+                            if let Ok(mut file) = OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open("openai_debug.log")
+                            {
+                                let _ = writeln!(file, "Retrying without thinking due to error");
+                            }
+                        }
+
+                        let r = self
+                            .client
+                            .post(&url)
+                            .header("Authorization", format!("Bearer {}", self.api_key))
+                            .json(&payload)
+                            .send()
+                            .await?;
+
+                        new_res = Some(r);
+                    }
+                }
+
+                if let Some(r) = new_res {
+                    res = r;
+                } else {
+                    return Err(anyhow!("OpenAI API error: {}", error_text));
+                }
+
+                // If we retried, check final result
+                if res.status().is_client_error() {
+                    let final_error = res.text().await?;
+                    return Err(anyhow!("OpenAI API error: {}", final_error));
+                }
+            } else {
+                return Err(anyhow!("OpenAI API error: {}", error_text));
+            }
+        }
 
         #[cfg(feature = "dev_debug")]
         let mut debug_file = OpenOptions::new()
@@ -159,7 +266,8 @@ impl LLMProvider for OpenAIProvider {
         }
         let choice = &json["choices"][0]["message"];
 
-        let content = choice["content"].as_str().map(|s| s.to_string());
+        // Ensure content is never null - convert to empty string if needed
+        let content = Some(choice["content"].as_str().unwrap_or("").to_string());
 
         let tool_calls = if let Some(calls) = choice["tool_calls"].as_array() {
             Some(serde_json::from_value(json!(calls))?)
@@ -221,9 +329,12 @@ impl LLMProvider for OpenAIProvider {
                     }
                 }
 
-                obj.insert("thinking".to_string(), json!({
-                    "type": "enabled"
-                }));
+                obj.insert(
+                    "thinking".to_string(),
+                    json!({
+                        "type": "enabled"
+                    }),
+                );
             }
 
             // Apply request_overrides with reserved-key protection
@@ -232,13 +343,120 @@ impl LLMProvider for OpenAIProvider {
             }
         }
 
-        let res = self
+        let mut res = self
             .client
             .post(&url)
             .header("Authorization", format!("Bearer {}", self.api_key))
             .json(&payload)
             .send()
             .await?;
+
+        // Fallback mechanism: check for client errors and retry without reasoning if needed
+        if res.status().is_client_error() {
+            let status = res.status();
+            let error_text = res.text().await?;
+
+            #[cfg(feature = "dev_debug")]
+            eprintln!(
+                "OpenAI Provider: Stream request failed with status {}. Error: {}",
+                status, error_text
+            );
+
+            if status == reqwest::StatusCode::BAD_REQUEST
+                || status.as_u16() == 422
+                || error_text.contains("Param Incorrect")
+            {
+                let mut new_res = None;
+
+                // Attempt 1: Remove reasoning_effort first
+                if let Some(obj) = payload.as_object_mut() {
+                    if obj.remove("reasoning_effort").is_some() {
+                        #[cfg(feature = "dev_debug")]
+                        {
+                            eprintln!(
+                                "OpenAI Provider: Retrying stream without reasoning_effort..."
+                            );
+                            if let Ok(mut file) = OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open("openai_debug.log")
+                            {
+                                let _ = writeln!(
+                                    file,
+                                    "Retrying stream without reasoning_effort due to error: {}",
+                                    error_text
+                                );
+                            }
+                        }
+
+                        let r = self
+                            .client
+                            .post(&url)
+                            .header("Authorization", format!("Bearer {}", self.api_key))
+                            .json(&payload)
+                            .send()
+                            .await?;
+
+                        new_res = Some(r);
+                    }
+                }
+
+                // Check if we need Attempt 2
+                let need_attempt_2 = if let Some(ref r) = new_res {
+                    r.status().is_client_error()
+                } else {
+                    true
+                };
+
+                if need_attempt_2 {
+                    let mut can_retry_2 = false;
+                    if let Some(obj) = payload.as_object_mut() {
+                        if obj.remove("thinking").is_some() {
+                            can_retry_2 = true;
+                        }
+                    }
+
+                    if can_retry_2 {
+                        #[cfg(feature = "dev_debug")]
+                        {
+                            eprintln!("OpenAI Provider: Retrying stream without thinking...");
+                            if let Ok(mut file) = OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open("openai_debug.log")
+                            {
+                                let _ =
+                                    writeln!(file, "Retrying stream without thinking due to error");
+                            }
+                        }
+
+                        let r = self
+                            .client
+                            .post(&url)
+                            .header("Authorization", format!("Bearer {}", self.api_key))
+                            .json(&payload)
+                            .send()
+                            .await?;
+
+                        new_res = Some(r);
+                    }
+                }
+
+                if let Some(r) = new_res {
+                    res = r;
+                } else {
+                    return Err(anyhow!("OpenAI API error: {}", error_text));
+                }
+
+                // If we retried, check final result
+                if res.status().is_client_error() {
+                    let final_error = res.text().await?;
+                    return Err(anyhow!("OpenAI API error: {}", final_error));
+                }
+            } else {
+                return Err(anyhow!("OpenAI API error: {}", error_text));
+            }
+        }
 
         #[cfg(feature = "dev_debug")]
         let mut debug_file = OpenOptions::new()

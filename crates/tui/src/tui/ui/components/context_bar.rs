@@ -41,20 +41,17 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let brand_width = brand_text.len() as u16;
     let model_width = model_text.len() as u16;
     let available_width = area.width.saturating_sub(brand_width + model_width);
-    
+
     let cwd = &app.state.current_working_directory;
     let cwd_display = truncate_path(cwd, available_width.saturating_sub(2) as usize); // -2 for padding
 
-    let cwd_span = Span::styled(
-        cwd_display,
-        Style::default().fg(app.theme.context_bar_fg),
-    );
+    let cwd_span = Span::styled(cwd_display, Style::default().fg(app.theme.context_bar_fg));
 
     // We render 3 paragraphs or 1 paragraph with specific spacing?
     // Paragraph with Left alignment, but we want center and right too.
     // Easier to render 3 separate widgets or construct a single line with spacing.
     // Since we have a solid background, we can just render the text.
-    
+
     // Left
     let left_para = Paragraph::new(Line::from(brand)).alignment(Alignment::Left);
     f.render_widget(left_para, area);
@@ -79,10 +76,10 @@ fn truncate_path(path: &str, max_len: usize) -> String {
 
     let ellipsis = "...";
     let part_len = (max_len - ellipsis.len()) / 2;
-    
+
     let start = &path[0..part_len];
     let end = &path[path.len() - part_len..];
-    
+
     format!("{}{}{}", start, ellipsis, end)
 }
 
@@ -92,7 +89,10 @@ mod tests {
 
     #[test]
     fn test_truncate_path() {
-        assert_eq!(truncate_path("/home/user/project", 20), "/home/user/project");
+        assert_eq!(
+            truncate_path("/home/user/project", 20),
+            "/home/user/project"
+        );
         assert_eq!(truncate_path("/home/user/project", 10), "/ho...ect");
         assert_eq!(truncate_path("short", 5), "short");
         assert_eq!(truncate_path("longpath", 4), "...");

@@ -64,7 +64,7 @@ impl Command for CdCommand {
         }
 
         let new_cwd = env::current_dir()?.to_string_lossy().to_string();
-        
+
         // Publish directory changed event
         ctx.event_bus.publish(SystemEvent::DirectoryChanged {
             path: new_cwd.clone(),

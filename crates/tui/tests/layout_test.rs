@@ -16,12 +16,12 @@ fn test_layout_rendering() {
         .unwrap();
 
     let buffer = terminal.backend().buffer();
-    
+
     // Check for ContextBar elements
     // We expect " SISYPHUS " in the header (ContextBar)
     // The exact position depends on the layout, but it should be there.
     // " SISYPHUS " is in bold, possibly with specific colors.
-    
+
     // Simple check: iterate over cells and look for content
     let mut found_title = false;
     for y in 0..30 {
@@ -62,7 +62,7 @@ fn test_small_terminal_warning() {
         .unwrap();
 
     let buffer = terminal.backend().buffer();
-    
+
     let mut found_warning = false;
     for y in 0..5 {
         let line_text: String = (0..30)
@@ -73,7 +73,10 @@ fn test_small_terminal_warning() {
             break;
         }
     }
-    assert!(found_warning, "Warning message not found in critically small terminal");
+    assert!(
+        found_warning,
+        "Warning message not found in critically small terminal"
+    );
 }
 
 #[test]
@@ -89,7 +92,7 @@ fn test_degraded_mode() {
         .unwrap();
 
     let buffer = terminal.backend().buffer();
-    
+
     // Should NOT have "Terminal too small"
     let mut found_warning = false;
     for y in 0..20 {
@@ -101,7 +104,10 @@ fn test_degraded_mode() {
             break;
         }
     }
-    assert!(!found_warning, "Warning message should not appear in degraded mode");
+    assert!(
+        !found_warning,
+        "Warning message should not appear in degraded mode"
+    );
 
     // Should NOT have ContextBar ("Sisyphus")
     let mut found_title = false;
@@ -127,5 +133,8 @@ fn test_degraded_mode() {
             break;
         }
     }
-    assert!(found_prompt, "Input prompt should be visible in degraded mode");
+    assert!(
+        found_prompt,
+        "Input prompt should be visible in degraded mode"
+    );
 }

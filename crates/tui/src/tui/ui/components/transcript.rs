@@ -35,7 +35,7 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
         );
 
         let mut block_lines = message_block.render_to_lines();
-        
+
         // Handle selection highlighting
         if app.state.mode == InputMode::Selection
             && Some(i) == app.state.selection.selected_message_index
@@ -110,7 +110,7 @@ mod tests {
             Line::from("Short line"),
             Line::from("A very long line that should wrap around because it is wider than the width provided"),
         ];
-        
+
         // Width 10
         // "Short line" -> 10 chars -> 1 line
         // "A very long..." -> 86 chars -> ceil(86/10) = 9 lines

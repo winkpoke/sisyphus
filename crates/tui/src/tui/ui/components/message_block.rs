@@ -56,7 +56,7 @@ impl<'a> MessageBlock<'a> {
             TranscriptItemKind::System => "·",
             _ => "-",
         };
-        
+
         let separator_len = self.width.saturating_sub(label_len + 1);
         let separator = separator_char.repeat(separator_len);
         let separator_span = Span::styled(separator, Style::default().fg(self.app.theme.border));
@@ -157,7 +157,7 @@ mod tests {
 
         assert_eq!(lines[0].spans[0].content, "[ Assistant ]");
         assert_eq!(lines[0].spans[0].style.fg, Some(app.theme.assistant));
-        
+
         // Check separator (Assistant uses "╌")
         let separator = &lines[0].spans[2];
         assert!(separator.content.contains("╌"));

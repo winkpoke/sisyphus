@@ -93,6 +93,9 @@ async fn test_reasoning_event_publishing() {
         }
     }
 
-    assert!(found_reasoning, "Should have received reasoning event with raw content");
+    assert!(
+        found_reasoning,
+        "Should have received reasoning event with raw content"
+    );
     assert!(found_answer, "Should have received final answer event");
 }
