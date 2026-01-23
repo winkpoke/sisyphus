@@ -154,7 +154,7 @@ The transcript view MUST render messages as distinct visual blocks with styled h
 - **And** System message headers SHALL use a dotted border pattern
 - **And** the patterns SHALL be distinguishable independently of color
 
-### Requirement: Status Indicators
+### Requirement: Status Indicators and Key Hints
 The status indicators SHALL be integrated into a unified footer in the same line as the input area and MUST NOT occupy a separate status bar section, while providing unobtrusive status indicators and key hints for discoverability.
 
 #### Scenario: Unified Status Footer Layout
@@ -175,10 +175,9 @@ The status indicators SHALL be integrated into a unified footer in the same line
 - **Then** the Session ID SHALL be displayed in either the Context Header (right side) or Status Footer
 - **And** the location SHALL be consistent with the design specification
 
-## REMOVED Requirements
+#### Scenario: New content indicator while scrolled
+- **Given** the user has scrolled away from the bottom
+- **When** new transcript content arrives
+- **Then** the UI SHALL indicate that new content is available off-screen
 
-### Requirement: Dynamic Header
-This requirement is removed because the persistent ContextBar now provides session context.
 
-### Requirement: Content Padding
-This requirement is removed because MessageBlock headers provide visual separation instead of block borders.

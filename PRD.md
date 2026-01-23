@@ -80,10 +80,14 @@ The scope includes the migration and generalization of the core business logic, 
 - **Polish**:
   - **Overlays**: Safe rendering of help, errors, and long content (pager) without corrupting the terminal.
   - **Visual Feedback**: Toast notifications for actions (e.g., copy) and loading indicators for active processing.
-  - **Theming**: Semantic color palette (Soft Blue, Lavender, Muted Grey) for reduced visual fatigue.
+  - **Theming**: Semantic color palette (Soft Blue, Lavender, Muted Grey) for reduced visual fatigue; colorblind-friendly design with structural cues.
   - **Selection**: Ability to select and copy transcript text.
-  - **Status**: Structured status bar with session/model/connectivity indicators and a processing spinner.
-  - **Layout**: Dynamic transcript header (context name or session ID) and content padding for readability.
+  - **Status**: Unified footer with input composer (70%) and status indicators (30%); includes session/model/connectivity status and processing spinner.
+  - **Layout**: Full-screen pane-based interface with:
+    - Persistent Context Header at top (brand, working directory, active model)
+    - Message Blocks in transcript with styled headers and separators
+    - Minimalist input composer with `> ` prompt (no block borders)
+    - Degraded mode for terminals < 24×80 columns
 - **Permission Prompts**: Decode `PermissionRequest` events into a first-class overlay with Approve/Deny actions to resume the blocked turn; multiple requests are queued FIFO.
 - **Debug Mode**: `/debug` toggles raw backend event payload visibility; raw payloads are redacted and truncated when shown.
 - **Startup Banner**: Display a branded ASCII banner with version and configuration info on startup.
