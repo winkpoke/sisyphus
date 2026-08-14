@@ -177,8 +177,11 @@ impl Agent {
             return *level;
         }
 
+        // Map each tool name to its permission category. These names MUST match
+        // the `name()` returned by the tool implementation (e.g. `CommandTool`
+        // returns "execute_command", not "run_command").
         match tool_name {
-            "run_command" => self.config.permissions.bash,
+            "execute_command" => self.config.permissions.bash,
             "write_file" | "replace_in_file" | "delete_file" => self.config.permissions.edit,
             _ => self.config.permissions.skill,
         }
@@ -555,5 +558,108 @@ impl Agent {
                 return Ok(response_msg.content.unwrap_or_default());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Agent;
+    use crate::agent::config::{AgentConfig, AgentPermissions, PermissionLevel};
+    use async_trait::async_trait;
+    use common::bus::EventBus;
+    use common::llm::{CompletionRequest, LLMProvider, Message};
+    use futures::Stream;
+    use std::path::PathBuf;
+    use std::pin::Pin;
+    use std::sync::Arc;
+
+    // A no-op provider is sufficient: permission routing is pure and never
+    // invokes the provider.
+    struct StubProvider;
+    #[async_trait]
+    impl LLMProvider for StubProvider {
+        fn model(&self) -> String {
+            "stub".to_string()
+        }
+        async fn complete(&self, _req: CompletionRequest) -> anyhow::Result<Message> {
+            unreachable!("StubProvider::complete is not invoked by these tests")
+        }
+        async fn stream(
+            &self,
+            _req: CompletionRequest,
+        ) -> anyhow::Result<Pin<Box<dyn Stream<Item = anyhow::Result<String>> + Send>>> {
+            unreachable!("StubProvider::stream is not invoked by these tests")
+        }
+    }
+
+    fn build_agent(permissions: AgentPermissions) -> Agent {
+        Agent::new(
+            Box::new(StubProvider),
+            Arc::new(EventBus::new(16)),
+            AgentConfig {
+                permissions,
+                ..AgentConfig::default()
+            },
+            PathBuf::from("."),
+        )
+    }
+
+    #[test]
+    fn bash_permission_gates_execute_command_tool() {
+        // Regression: `CommandTool` reports its name as "execute_command", not
+        // "run_command". Previously the `bash` level was never applied and the
+        // command tool silently fell through to the `skill` level.
+        let agent = build_agent(AgentPermissions {
+            bash: PermissionLevel::Ask,
+            edit: PermissionLevel::Deny,
+            skill: PermissionLevel::Allow,
+            ..AgentPermissions::default()
+        });
+        assert_eq!(
+            agent.get_permission_level("execute_command"),
+            PermissionLevel::Ask
+        );
+    }
+
+    #[test]
+    fn edit_permission_gates_write_tools() {
+        let agent = build_agent(AgentPermissions {
+            edit: PermissionLevel::Deny,
+            ..AgentPermissions::default()
+        });
+        assert_eq!(agent.get_permission_level("write_file"), PermissionLevel::Deny);
+        assert_eq!(
+            agent.get_permission_level("replace_in_file"),
+            PermissionLevel::Deny
+        );
+        assert_eq!(agent.get_permission_level("delete_file"), PermissionLevel::Deny);
+    }
+
+    #[test]
+    fn unknown_tools_fall_back_to_skill() {
+        let agent = build_agent(AgentPermissions {
+            skill: PermissionLevel::Deny,
+            ..AgentPermissions::default()
+        });
+        assert_eq!(
+            agent.get_permission_level("some_skill_tool"),
+            PermissionLevel::Deny
+        );
+    }
+
+    #[test]
+    fn per_tool_overrides_take_precedence() {
+        use std::collections::HashMap;
+        let mut overrides = HashMap::new();
+        overrides.insert("execute_command".to_string(), PermissionLevel::Deny);
+        let agent = build_agent(AgentPermissions {
+            bash: PermissionLevel::Allow,
+            overrides,
+            ..AgentPermissions::default()
+        });
+        assert_eq!(
+            agent.get_permission_level("execute_command"),
+            PermissionLevel::Deny
+        );
     }
 }

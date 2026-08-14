@@ -9,6 +9,7 @@ resolver = "2"
     "crates/cli",
     "crates/cli-core",
     "crates/tui",
+    "crates/client",
   ]
 
 [workspace.dependencies]
@@ -45,8 +46,4 @@ client = { path = "crates/client", package = "sisyphus_client" }
 # Output directory for coverage reports
 out-dir = "target/tarpaulin"
 
-[workspace.dev-dependencies]
-# Coverage tracking
-cargo-tarpaulin = "0.27"
-# Mocking
-mockall = "0.12"
+

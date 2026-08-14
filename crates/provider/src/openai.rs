@@ -1,10 +1,23 @@
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
-use common::llm::{CompletionRequest, LLMProvider, Message, Role, RESERVED_REQUEST_KEYS};
+use common::llm::{
+    CompletionRequest, LLMProvider, Message, ReasoningEffort, ReasoningMode, Role,
+    RESERVED_REQUEST_KEYS,
+};
 use futures::{Stream, StreamExt};
-use reqwest::Client;
+use reqwest::{Client, Response};
 use serde_json::{json, Value};
 use std::pin::Pin;
+
+#[cfg(feature = "dev_debug")]
+use std::fs::OpenOptions;
+
+#[cfg(feature = "dev_debug")]
+use std::io::Write;
+
+/// File the `dev_debug` feature appends request/response traces to.
+#[cfg(feature = "dev_debug")]
+const DEBUG_LOG_PATH: &str = "openai_debug.log";
 
 /// Deep merge JSON values, excluding reserved keys from overrides
 fn merge_with_reserved_protection(base: &mut Value, overrides: &Value, reserved_keys: &[&str]) {
@@ -29,11 +42,21 @@ fn merge_with_reserved_protection(base: &mut Value, overrides: &Value, reserved_
     }
 }
 
-#[cfg(feature = "dev_debug")]
-use std::fs::OpenOptions;
-
-#[cfg(feature = "dev_debug")]
-use std::io::Write;
+/// Render an `Authorization` header value safe for logging by redacting the
+/// secret material. Returns a description of the redacted value rather than the
+/// value itself, so logs can never leak credentials.
+#[allow(dead_code)] // referenced only under the `dev_debug` feature
+fn redact_auth(header_value: &str) -> String {
+    if let Some(secret) = header_value.strip_prefix("Bearer ") {
+        if secret.is_empty() {
+            "Bearer <empty>".to_string()
+        } else {
+            format!("Bearer ***REDACTED*** ({} chars)", secret.chars().count())
+        }
+    } else {
+        "***REDACTED***".to_string()
+    }
+}
 
 pub struct OpenAIProvider {
     client: Client,
@@ -51,223 +74,246 @@ impl OpenAIProvider {
             model,
         }
     }
+
+    /// Build the OpenAI chat-completions request payload from a
+    /// [`CompletionRequest`]. Shared by both the streaming and non-streaming
+    /// paths.
+    fn build_payload(&self, request: CompletionRequest, stream: bool) -> Value {
+        let CompletionRequest {
+            messages,
+            temperature,
+            max_tokens,
+            tools,
+            reasoning,
+            request_overrides,
+        } = request;
+
+        let mut payload = json!({
+            "model": self.model,
+            "messages": messages,
+            "temperature": temperature.unwrap_or(0.7),
+            "stream": stream,
+        });
+
+        if let Some(obj) = payload.as_object_mut() {
+            if let Some(max_tokens) = max_tokens {
+                obj.insert("max_tokens".to_string(), json!(max_tokens));
+            }
+            if let Some(tools) = tools {
+                obj.insert("tools".to_string(), json!(tools));
+            }
+
+            // Add reasoning settings if mode is not Off
+            if reasoning.mode != ReasoningMode::Off {
+                let effort = match reasoning.effort {
+                    ReasoningEffort::Low => "low",
+                    ReasoningEffort::Medium => "medium",
+                    ReasoningEffort::High => "high",
+                };
+                obj.insert("reasoning_effort".to_string(), json!(effort));
+                obj.insert("thinking".to_string(), json!({ "type": "enabled" }));
+            }
+
+            // Apply request_overrides with reserved-key protection
+            if let Some(overrides) = request_overrides {
+                merge_with_reserved_protection(&mut payload, &overrides, RESERVED_REQUEST_KEYS);
+            }
+        }
+
+        payload
+    }
+
+    /// Issue a POST to the completions endpoint with the bearer token set.
+    async fn send(&self, url: &str, payload: &Value) -> Result<Response> {
+        self.client
+            .post(url)
+            .header("Authorization", format!("Bearer {}", self.api_key))
+            .json(payload)
+            .send()
+            .await
+            .map_err(Into::into)
+    }
+
+    /// Send the payload and, on a retryable client error (HTTP 400/422 or a
+    /// body containing "Param Incorrect"), progressively strip the
+    /// `reasoning_effort` and `thinking` fields and resend. This keeps the
+    /// provider working against endpoints that reject one or both of those
+    /// non-standard fields.
+    ///
+    /// `label` ("complete" / "stream") is used only for `dev_debug` traces.
+    ///
+    /// Returns a successful [`Response`], or the first non-retryable / final
+    /// error.
+    async fn post_with_reasoning_fallback(
+        &self,
+        url: &str,
+        mut payload: Value,
+        label: &str,
+    ) -> Result<Response> {
+        let mut res = self.send(url, &payload).await?;
+
+        if res.status().is_client_error() {
+            let status = res.status();
+            // Consume the body to read the error text; `res` is now exhausted
+            // and must not be used again unless reassigned by a resend.
+            let error_text = res.text().await?;
+            self.debug_log_error(label, status, &error_text);
+
+            let retryable = matches!(status.as_u16(), 400 | 422)
+                || error_text.contains("Param Incorrect");
+            if !retryable {
+                return Err(anyhow!("OpenAI API error: {}", error_text));
+            }
+
+            // Two-stage fallback, preserving the original preference of keeping
+            // `thinking` when dropping `reasoning_effort` alone is enough.
+            // `next_res` stays `None` until a resend actually happens, which
+            // lets us tell whether `res` is still a valid response.
+            let mut next_res: Option<Response> = None;
+
+            // Attempt 1: remove reasoning_effort first
+            if let Some(obj) = payload.as_object_mut() {
+                if obj.remove("reasoning_effort").is_some() {
+                    self.debug_log_retry(label, "reasoning_effort", &error_text);
+                    next_res = Some(self.send(url, &payload).await?);
+                }
+            }
+
+            // Attempt 2: only needed if we're still erroring (or attempt 1
+            // never ran because reasoning_effort was absent).
+            let need_attempt_2 = match &next_res {
+                Some(r) => r.status().is_client_error(),
+                None => true,
+            };
+            if need_attempt_2 {
+                if let Some(obj) = payload.as_object_mut() {
+                    if obj.remove("thinking").is_some() {
+                        self.debug_log_retry(label, "thinking", &error_text);
+                        next_res = Some(self.send(url, &payload).await?);
+                    }
+                }
+            }
+
+            res = match next_res {
+                Some(r) => r,
+                // Retryable but nothing to strip -- surface the original error.
+                None => return Err(anyhow!("OpenAI API error: {}", error_text)),
+            };
+
+            if res.status().is_client_error() {
+                let final_status = res.status();
+                let final_error = res.text().await?;
+                self.debug_log_error(label, final_status, &final_error);
+                return Err(anyhow!("OpenAI API error: {}", final_error));
+            }
+        }
+
+        self.debug_log_request_response(label, url, &payload, &res);
+
+        if !res.status().is_success() {
+            let error_status = res.status();
+            let error = res.text().await?;
+            self.debug_log_error(label, error_status, &error);
+            return Err(anyhow!("OpenAI API error: {}", error));
+        }
+
+        Ok(res)
+    }
+
+    #[cfg(feature = "dev_debug")]
+    fn debug_log_error(&self, label: &str, status: reqwest::StatusCode, error: &str) {
+        eprintln!(
+            "OpenAI Provider [{label}]: request failed ({status}): {error}"
+        );
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(DEBUG_LOG_PATH) {
+            let _ = writeln!(file, "[{label}] Request failed ({status}): {error}");
+        }
+    }
+
+    #[cfg(not(feature = "dev_debug"))]
+    fn debug_log_error(&self, _label: &str, _status: reqwest::StatusCode, _error: &str) {}
+
+    #[cfg(feature = "dev_debug")]
+    fn debug_log_retry(&self, label: &str, removed: &str, because: &str) {
+        eprintln!("OpenAI Provider [{label}]: retrying without {removed}...");
+        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(DEBUG_LOG_PATH) {
+            let _ = writeln!(
+                file,
+                "[{label}] Retrying without {removed} due to error: {because}"
+            );
+        }
+    }
+
+    #[cfg(not(feature = "dev_debug"))]
+    fn debug_log_retry(&self, _label: &str, _removed: &str, _because: &str) {}
+
+    /// Trace request metadata and response status/headers. The bearer token is
+    /// always redacted so credentials can never reach the log file.
+    #[cfg(feature = "dev_debug")]
+    fn debug_log_request_response(&self, label: &str, url: &str, payload: &Value, res: &Response) {
+        let Ok(mut file) = OpenOptions::new().create(true).append(true).open(DEBUG_LOG_PATH)
+        else {
+            return;
+        };
+        let _ = writeln!(file, "\n=== OpenAI [{label}] Request Debug ===");
+        let _ = writeln!(file, "Timestamp: {:?}", std::time::SystemTime::now());
+        let _ = writeln!(file, "URL: {url}");
+        let _ = writeln!(file, "Method: POST");
+        let _ = writeln!(file, "Headers:");
+        let _ = writeln!(
+            file,
+            "  Authorization: {}",
+            redact_auth(&format!("Bearer {}", self.api_key))
+        );
+        let _ = writeln!(file, "  Content-Type: application/json");
+        let _ = writeln!(
+            file,
+            "Payload: {}",
+            serde_json::to_string_pretty(payload)
+                .unwrap_or_else(|_| "Failed to serialize".to_string())
+        );
+        let _ = writeln!(file, "Response Status: {}", res.status());
+        let _ = writeln!(file, "Response Headers:");
+        for (key, value) in res.headers().iter() {
+            let _ = writeln!(file, "  {key}: {value:?}");
+        }
+        let _ = file.flush();
+    }
+
+    #[cfg(not(feature = "dev_debug"))]
+    fn debug_log_request_response(&self, _label: &str, _url: &str, _payload: &Value, _res: &Response) {
+    }
 }
 
 #[async_trait]
 impl LLMProvider for OpenAIProvider {
     async fn complete(&self, request: CompletionRequest) -> Result<Message> {
         let url = format!("{}/chat/completions", self.base_url);
+        let payload = self.build_payload(request, false);
+        let res = self.post_with_reasoning_fallback(&url, payload, "complete").await?;
 
-        let mut payload = json!({
-            "model": self.model,
-            "messages": request.messages,
-            "temperature": request.temperature.unwrap_or(0.7),
-            "stream": false
-        });
+        let json: Value = res.json().await?;
 
-        if let Some(obj) = payload.as_object_mut() {
-            if let Some(max_tokens) = request.max_tokens {
-                obj.insert("max_tokens".to_string(), json!(max_tokens));
-            }
-            if let Some(tools) = request.tools {
-                obj.insert("tools".to_string(), json!(tools));
-            }
-
-            // Add reasoning settings if mode is not Off
-            if request.reasoning.mode != common::llm::ReasoningMode::Off {
-                match request.reasoning.effort {
-                    common::llm::ReasoningEffort::Low => {
-                        obj.insert("reasoning_effort".to_string(), json!("low"));
-                    }
-                    common::llm::ReasoningEffort::Medium => {
-                        obj.insert("reasoning_effort".to_string(), json!("medium"));
-                    }
-                    common::llm::ReasoningEffort::High => {
-                        obj.insert("reasoning_effort".to_string(), json!("high"));
-                    }
-                }
-
-                obj.insert(
-                    "thinking".to_string(),
-                    json!({
-                        "type": "enabled"
-                    }),
-                );
-            }
-
-            // Apply request_overrides with reserved-key protection
-            if let Some(overrides) = request.request_overrides {
-                merge_with_reserved_protection(&mut payload, &overrides, RESERVED_REQUEST_KEYS);
-            }
-        }
-
-        let mut res = self
-            .client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .json(&payload)
-            .send()
-            .await?;
-
-        // Fallback mechanism: check for client errors and retry without reasoning if needed
-        if res.status().is_client_error() {
-            let status = res.status();
-            let error_text = res.text().await?;
-
-            #[cfg(feature = "dev_debug")]
-            eprintln!(
-                "OpenAI Provider: Request failed with status {}. Error: {}",
-                status, error_text
-            );
-
-            if status == reqwest::StatusCode::BAD_REQUEST
-                || status.as_u16() == 422
-                || error_text.contains("Param Incorrect")
+        #[cfg(feature = "dev_debug")]
+        {
+            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(DEBUG_LOG_PATH)
             {
-                let mut new_res = None;
-
-                // Attempt 1: Remove reasoning_effort first
-                if let Some(obj) = payload.as_object_mut() {
-                    if obj.remove("reasoning_effort").is_some() {
-                        #[cfg(feature = "dev_debug")]
-                        {
-                            eprintln!("OpenAI Provider: Retrying without reasoning_effort...");
-                            if let Ok(mut file) = OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open("openai_debug.log")
-                            {
-                                let _ = writeln!(
-                                    file,
-                                    "Retrying without reasoning_effort due to error: {}",
-                                    error_text
-                                );
-                            }
-                        }
-
-                        let r = self
-                            .client
-                            .post(&url)
-                            .header("Authorization", format!("Bearer {}", self.api_key))
-                            .json(&payload)
-                            .send()
-                            .await?;
-
-                        new_res = Some(r);
-                    }
-                }
-
-                // Check if we need Attempt 2
-                let need_attempt_2 = if let Some(ref r) = new_res {
-                    r.status().is_client_error()
-                } else {
-                    true
-                };
-
-                if need_attempt_2 {
-                    let mut can_retry_2 = false;
-                    if let Some(obj) = payload.as_object_mut() {
-                        if obj.remove("thinking").is_some() {
-                            can_retry_2 = true;
-                        }
-                    }
-
-                    if can_retry_2 {
-                        #[cfg(feature = "dev_debug")]
-                        {
-                            eprintln!("OpenAI Provider: Retrying without thinking...");
-                            if let Ok(mut file) = OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open("openai_debug.log")
-                            {
-                                let _ = writeln!(file, "Retrying without thinking due to error");
-                            }
-                        }
-
-                        let r = self
-                            .client
-                            .post(&url)
-                            .header("Authorization", format!("Bearer {}", self.api_key))
-                            .json(&payload)
-                            .send()
-                            .await?;
-
-                        new_res = Some(r);
-                    }
-                }
-
-                if let Some(r) = new_res {
-                    res = r;
-                } else {
-                    return Err(anyhow!("OpenAI API error: {}", error_text));
-                }
-
-                // If we retried, check final result
-                if res.status().is_client_error() {
-                    let final_error = res.text().await?;
-                    return Err(anyhow!("OpenAI API error: {}", final_error));
-                }
-            } else {
-                return Err(anyhow!("OpenAI API error: {}", error_text));
-            }
-        }
-
-        #[cfg(feature = "dev_debug")]
-        let mut debug_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("openai_debug.log");
-
-        #[cfg(feature = "dev_debug")]
-        if let Ok(ref mut file) = debug_file {
-            let _ = writeln!(file, "\n=== OpenAI Request Debug ===");
-            let _ = writeln!(file, "Timestamp: {:?}", std::time::SystemTime::now());
-            let _ = writeln!(file, "URL: {}", url);
-            let _ = writeln!(file, "Method: POST");
-            let _ = writeln!(file, "Headers:");
-            let _ = writeln!(file, "  Authorization: Bearer {}", self.api_key);
-            let _ = writeln!(file, "  Content-Type: application/json");
-            let _ = writeln!(
-                file,
-                "Payload: {}",
-                serde_json::to_string_pretty(&payload)
-                    .unwrap_or_else(|_| "Failed to serialize".to_string())
-            );
-            let _ = writeln!(file, "Response Status: {}", res.status());
-            let _ = writeln!(file, "Response Headers:");
-            for (key, value) in res.headers().iter() {
-                let _ = writeln!(file, "  {}: {:?}", key, value);
-            }
-        }
-
-        if !res.status().is_success() {
-            let error = res.text().await?;
-            #[cfg(feature = "dev_debug")]
-            if let Ok(ref mut file) = debug_file {
-                let _ = writeln!(file, "Error Response: {}", error);
+                let _ = writeln!(
+                    file,
+                    "Response Body: {}",
+                    serde_json::to_string_pretty(&json)
+                        .unwrap_or_else(|_| "Failed to serialize".to_string())
+                );
                 let _ = writeln!(file, "=== End Debug ===\n");
                 let _ = file.flush();
             }
-            return Err(anyhow!("OpenAI API error: {}", error));
         }
 
-        let json: Value = res.json().await?;
-        #[cfg(feature = "dev_debug")]
-        if let Ok(ref mut file) = debug_file {
-            let _ = writeln!(
-                file,
-                "Response Body: {}",
-                serde_json::to_string_pretty(&json)
-                    .unwrap_or_else(|_| "Failed to serialize".to_string())
-            );
-            let _ = writeln!(file, "=== End Debug ===\n");
-            let _ = file.flush();
-        }
         let choice = &json["choices"][0]["message"];
 
-        // Ensure content is never null - convert to empty string if needed
-        let content = Some(choice["content"].as_str().unwrap_or("").to_string());
+        // `content` is null on assistant messages that only carry tool calls;
+        // preserve that as `None` rather than coercing to an empty string.
+        let content = choice["content"].as_str().map(|s| s.to_string());
 
         let tool_calls = if let Some(calls) = choice["tool_calls"].as_array() {
             Some(serde_json::from_value(json!(calls))?)
@@ -294,215 +340,24 @@ impl LLMProvider for OpenAIProvider {
         })
     }
 
+    /// Stream assistant text deltas from the chat-completions endpoint.
+    ///
+    /// Note: this yields assistant *content* deltas only. Tool-call deltas and
+    /// reasoning deltas are intentionally not surfaced because the provider
+    /// stream trait returns `Stream<Item = Result<String>>`. Surfacing tool
+    /// calls through streaming requires a richer stream item type; until then,
+    /// callers that need tool calls should use [`LLMProvider::complete`].
     async fn stream(
         &self,
         request: CompletionRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<String>> + Send>>> {
         let url = format!("{}/chat/completions", self.base_url);
+        let payload = self.build_payload(request, true);
+        let res = self.post_with_reasoning_fallback(&url, payload, "stream").await?;
 
-        let mut payload = json!({
-            "model": self.model,
-            "messages": request.messages,
-            "temperature": request.temperature.unwrap_or(0.7),
-            "stream": true
-        });
+        let parser = crate::sse::SSEParser::new(res.bytes_stream());
 
-        if let Some(obj) = payload.as_object_mut() {
-            if let Some(max_tokens) = request.max_tokens {
-                obj.insert("max_tokens".to_string(), json!(max_tokens));
-            }
-            if let Some(tools) = request.tools {
-                obj.insert("tools".to_string(), json!(tools));
-            }
-
-            // Add reasoning settings if mode is not Off
-            if request.reasoning.mode != common::llm::ReasoningMode::Off {
-                match request.reasoning.effort {
-                    common::llm::ReasoningEffort::Low => {
-                        obj.insert("reasoning_effort".to_string(), json!("low"));
-                    }
-                    common::llm::ReasoningEffort::Medium => {
-                        obj.insert("reasoning_effort".to_string(), json!("medium"));
-                    }
-                    common::llm::ReasoningEffort::High => {
-                        obj.insert("reasoning_effort".to_string(), json!("high"));
-                    }
-                }
-
-                obj.insert(
-                    "thinking".to_string(),
-                    json!({
-                        "type": "enabled"
-                    }),
-                );
-            }
-
-            // Apply request_overrides with reserved-key protection
-            if let Some(overrides) = request.request_overrides {
-                merge_with_reserved_protection(&mut payload, &overrides, RESERVED_REQUEST_KEYS);
-            }
-        }
-
-        let mut res = self
-            .client
-            .post(&url)
-            .header("Authorization", format!("Bearer {}", self.api_key))
-            .json(&payload)
-            .send()
-            .await?;
-
-        // Fallback mechanism: check for client errors and retry without reasoning if needed
-        if res.status().is_client_error() {
-            let status = res.status();
-            let error_text = res.text().await?;
-
-            #[cfg(feature = "dev_debug")]
-            eprintln!(
-                "OpenAI Provider: Stream request failed with status {}. Error: {}",
-                status, error_text
-            );
-
-            if status == reqwest::StatusCode::BAD_REQUEST
-                || status.as_u16() == 422
-                || error_text.contains("Param Incorrect")
-            {
-                let mut new_res = None;
-
-                // Attempt 1: Remove reasoning_effort first
-                if let Some(obj) = payload.as_object_mut() {
-                    if obj.remove("reasoning_effort").is_some() {
-                        #[cfg(feature = "dev_debug")]
-                        {
-                            eprintln!(
-                                "OpenAI Provider: Retrying stream without reasoning_effort..."
-                            );
-                            if let Ok(mut file) = OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open("openai_debug.log")
-                            {
-                                let _ = writeln!(
-                                    file,
-                                    "Retrying stream without reasoning_effort due to error: {}",
-                                    error_text
-                                );
-                            }
-                        }
-
-                        let r = self
-                            .client
-                            .post(&url)
-                            .header("Authorization", format!("Bearer {}", self.api_key))
-                            .json(&payload)
-                            .send()
-                            .await?;
-
-                        new_res = Some(r);
-                    }
-                }
-
-                // Check if we need Attempt 2
-                let need_attempt_2 = if let Some(ref r) = new_res {
-                    r.status().is_client_error()
-                } else {
-                    true
-                };
-
-                if need_attempt_2 {
-                    let mut can_retry_2 = false;
-                    if let Some(obj) = payload.as_object_mut() {
-                        if obj.remove("thinking").is_some() {
-                            can_retry_2 = true;
-                        }
-                    }
-
-                    if can_retry_2 {
-                        #[cfg(feature = "dev_debug")]
-                        {
-                            eprintln!("OpenAI Provider: Retrying stream without thinking...");
-                            if let Ok(mut file) = OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open("openai_debug.log")
-                            {
-                                let _ =
-                                    writeln!(file, "Retrying stream without thinking due to error");
-                            }
-                        }
-
-                        let r = self
-                            .client
-                            .post(&url)
-                            .header("Authorization", format!("Bearer {}", self.api_key))
-                            .json(&payload)
-                            .send()
-                            .await?;
-
-                        new_res = Some(r);
-                    }
-                }
-
-                if let Some(r) = new_res {
-                    res = r;
-                } else {
-                    return Err(anyhow!("OpenAI API error: {}", error_text));
-                }
-
-                // If we retried, check final result
-                if res.status().is_client_error() {
-                    let final_error = res.text().await?;
-                    return Err(anyhow!("OpenAI API error: {}", final_error));
-                }
-            } else {
-                return Err(anyhow!("OpenAI API error: {}", error_text));
-            }
-        }
-
-        #[cfg(feature = "dev_debug")]
-        let mut debug_file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("openai_debug.log");
-
-        #[cfg(feature = "dev_debug")]
-        if let Ok(ref mut file) = debug_file {
-            let _ = writeln!(file, "\n=== OpenAI Stream Request Debug ===");
-            let _ = writeln!(file, "Timestamp: {:?}", std::time::SystemTime::now());
-            let _ = writeln!(file, "URL: {}", url);
-            let _ = writeln!(file, "Method: POST");
-            let _ = writeln!(file, "Headers:");
-            let _ = writeln!(file, "  Authorization: Bearer {}", self.api_key);
-            let _ = writeln!(file, "  Content-Type: application/json");
-            let _ = writeln!(
-                file,
-                "Payload: {}",
-                serde_json::to_string_pretty(&payload)
-                    .unwrap_or_else(|_| "Failed to serialize".to_string())
-            );
-            let _ = writeln!(file, "Response Status: {}", res.status());
-            let _ = writeln!(file, "Response Headers:");
-            for (key, value) in res.headers().iter() {
-                let _ = writeln!(file, "  {}: {:?}", key, value);
-            }
-            let _ = file.flush();
-        }
-
-        if !res.status().is_success() {
-            let error = res.text().await?;
-            #[cfg(feature = "dev_debug")]
-            if let Ok(ref mut file) = debug_file {
-                let _ = writeln!(file, "Error Response: {}", error);
-                let _ = writeln!(file, "=== End Debug ===\n");
-                let _ = file.flush();
-            }
-            return Err(anyhow!("OpenAI API error: {}", error));
-        }
-
-        let stream = res.bytes_stream();
-        let parser = crate::sse::SSEParser::new(stream);
-
-        let stream =
-            futures::stream::unfold((parser, false), |(mut parser, finished)| async move {
+        let stream = futures::stream::unfold((parser, false), |(mut parser, finished)| async move {
                 if finished {
                     return None;
                 }
@@ -540,6 +395,20 @@ mod tests {
     use common::llm::{CompletionRequest, ToolDefinition, ToolFunctionDefinition};
     use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
+
+    #[test]
+    fn redact_auth_never_leaks_the_secret() {
+        // The full bearer token must never appear in log output.
+        let redacted = super::redact_auth("Bearer sk-live-key-1234567890");
+        assert!(redacted.contains("***REDACTED***"));
+        assert!(!redacted.contains("sk-live-key"));
+    }
+
+    #[test]
+    fn redact_auth_handles_non_bearer_and_empty() {
+        assert_eq!(super::redact_auth("Basic xyz"), "***REDACTED***");
+        assert_eq!(super::redact_auth("Bearer "), "Bearer <empty>");
+    }
 
     #[tokio::test]
     async fn test_openai_model_method() {
