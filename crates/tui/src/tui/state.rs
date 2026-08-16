@@ -255,7 +255,7 @@ impl TuiState {
             spinner_frame: 0,
             toast: None,
             context_title: "Context".to_string(),
-            show_reasoning_summary: false,
+            show_reasoning_summary: true,
             current_working_directory: std::env::current_dir()
                 .map(|p| p.to_string_lossy().to_string())
                 .unwrap_or_else(|_| ".".to_string()),

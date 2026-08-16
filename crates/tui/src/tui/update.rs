@@ -742,4 +742,50 @@ mod tests {
         assert!(app.state.agent_selection.is_none());
         assert!(app.state.toast.is_some());
     }
+
+    // ---- Task 7.2: /think toggle behavior (TUI) ----
+
+    fn enter_key() -> Action {
+        Action::Key(crossterm::event::KeyEvent::new(
+            KeyCode::Enter,
+            KeyModifiers::empty(),
+        ))
+    }
+
+    #[test]
+    fn test_reasoning_summary_shown_by_default() {
+        let app = App::new("test-session".to_string());
+        assert!(
+            app.state.show_reasoning_summary,
+            "reasoning summaries must be shown by default (spec: cli-tui)"
+        );
+    }
+
+    #[test]
+    fn test_think_command_toggles_visibility() {
+        let mut app = App::new("test-session".to_string());
+        assert!(app.state.show_reasoning_summary, "default: shown");
+
+        // First /think: shown -> hidden
+        app.state.input_buffer = "/think".to_string();
+        let instruction = update(&mut app, enter_key());
+        assert!(!app.state.show_reasoning_summary, "toggle hides summaries");
+        match instruction {
+            TuiInstruction::DispatchCommand(cmd) => {
+                assert!(cmd.contains("disabled"), "status must reflect hidden state");
+            }
+            other => panic!("Expected DispatchCommand for /think, got {:?}", other),
+        }
+
+        // Second /think: hidden -> shown
+        app.state.input_buffer = "/think".to_string();
+        let instruction = update(&mut app, enter_key());
+        assert!(app.state.show_reasoning_summary, "toggle shows summaries");
+        match instruction {
+            TuiInstruction::DispatchCommand(cmd) => {
+                assert!(cmd.contains("enabled"), "status must reflect visible state");
+            }
+            other => panic!("Expected DispatchCommand for /think, got {:?}", other),
+        }
+    }
 }

@@ -7,6 +7,20 @@ use ratatui::{
     Frame,
 };
 
+/// Visibility rule for transcript items: reasoning summaries follow the
+/// `/think` toggle (shown by default), raw reasoning is gated behind debug mode.
+fn is_item_visible(
+    kind: &TranscriptItemKind,
+    show_reasoning_summary: bool,
+    debug_mode: bool,
+) -> bool {
+    match kind {
+        TranscriptItemKind::ReasoningSummary => show_reasoning_summary,
+        TranscriptItemKind::ReasoningRaw => debug_mode,
+        _ => true,
+    }
+}
+
 pub fn draw(f: &mut Frame, app: &App, area: Rect) {
     let transcript_block = Block::default();
     let inner_area = transcript_block.inner(area);
@@ -14,15 +28,11 @@ pub fn draw(f: &mut Frame, app: &App, area: Rect) {
 
     let mut lines = Vec::new();
     for (i, item) in app.state.transcript.items.iter().enumerate() {
-        // Filter reasoning_summary based on show_reasoning_summary toggle
-        if matches!(item.kind, TranscriptItemKind::ReasoningSummary)
-            && !app.state.show_reasoning_summary
-        {
-            continue;
-        }
-
-        // Filter reasoning_raw based on debug_mode
-        if matches!(item.kind, TranscriptItemKind::ReasoningRaw) && !app.state.debug_mode {
+        if !is_item_visible(
+            &item.kind,
+            app.state.show_reasoning_summary,
+            app.state.debug_mode,
+        ) {
             continue;
         }
 
@@ -128,5 +138,43 @@ mod tests {
     fn test_scroll_manual() {
         assert_eq!(calculate_scroll_offset(20, 10, false, 5), 5);
         assert_eq!(calculate_scroll_offset(5, 10, false, 2), 2);
+    }
+
+    // ---- Task 7.2: reasoning visibility rules (spec: cli-tui) ----
+
+    #[test]
+    fn test_summary_visible_by_default_and_hidden_when_toggled_off() {
+        assert!(
+            is_item_visible(&TranscriptItemKind::ReasoningSummary, true, false),
+            "summaries are shown by default (toggle on)"
+        );
+        assert!(
+            !is_item_visible(&TranscriptItemKind::ReasoningSummary, false, false),
+            "/think toggle off hides summaries"
+        );
+    }
+
+    #[test]
+    fn test_raw_reasoning_gated_by_debug_mode() {
+        assert!(
+            !is_item_visible(&TranscriptItemKind::ReasoningRaw, true, false),
+            "raw reasoning must NOT render when debug mode is disabled, even with summaries shown"
+        );
+        assert!(
+            is_item_visible(&TranscriptItemKind::ReasoningRaw, true, true),
+            "raw reasoning may render when debug mode is enabled"
+        );
+    }
+
+    #[test]
+    fn test_regular_items_always_visible() {
+        for kind in [
+            TranscriptItemKind::User,
+            TranscriptItemKind::Assistant,
+            TranscriptItemKind::System,
+            TranscriptItemKind::Error,
+        ] {
+            assert!(is_item_visible(&kind, false, false));
+        }
     }
 }

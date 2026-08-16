@@ -61,6 +61,24 @@ impl Repl {
         }
     }
 
+    /// Whether reasoning summary transcript entries are currently visible.
+    /// Summaries are shown by default.
+    pub fn reasoning_summary_visible(&self) -> bool {
+        *self.show_reasoning_summary.borrow()
+    }
+
+    /// Toggle reasoning summary visibility (`/think`). Returns the new status
+    /// string ("enabled"/"disabled") for display.
+    fn toggle_reasoning_summary(&self) -> &'static str {
+        let current = *self.show_reasoning_summary.borrow();
+        *self.show_reasoning_summary.borrow_mut() = !current;
+        if current {
+            "disabled"
+        } else {
+            "enabled"
+        }
+    }
+
     async fn handle_agents_list(&self) -> Result<()> {
         let session = self.client.get_session(&self.session_id).await?;
         let agents = self.client.list_agents().await?;
@@ -147,9 +165,7 @@ impl Repl {
                             match cmd.as_str() {
                                 "/exit" | "/quit" => break,
                                 "/think" => {
-                                    let current = *self.show_reasoning_summary.borrow();
-                                    *self.show_reasoning_summary.borrow_mut() = !current;
-                                    let status = if current { "disabled" } else { "enabled" };
+                                    let status = self.toggle_reasoning_summary();
                                     println!("Reasoning summary visibility: {}", status);
                                     continue;
                                 }
@@ -253,5 +269,36 @@ mod tests {
         assert_eq!(repl.session_id, "test-session-id");
 
         drop(tx);
+    }
+
+    fn make_repl() -> (Repl, tokio::sync::broadcast::Sender<()>) {
+        let (tx, rx) = broadcast::channel(1);
+        let url = url::Url::parse("http://localhost:3000").unwrap();
+        let client = Client::new(url);
+        (Repl::new(client, "test-session-id".to_string(), rx), tx)
+    }
+
+    // ---- Task 7.2: /think toggle behavior (REPL) ----
+
+    #[test]
+    fn test_reasoning_summary_visible_by_default() {
+        let (repl, _tx) = make_repl();
+        assert!(
+            repl.reasoning_summary_visible(),
+            "REPL must show reasoning summaries by default (spec: cli-tui)"
+        );
+    }
+
+    #[test]
+    fn test_think_toggle_flips_visibility_and_reports_status() {
+        let (repl, _tx) = make_repl();
+
+        // First toggle: shown -> hidden
+        assert_eq!(repl.toggle_reasoning_summary(), "disabled");
+        assert!(!repl.reasoning_summary_visible());
+
+        // Second toggle: hidden -> shown
+        assert_eq!(repl.toggle_reasoning_summary(), "enabled");
+        assert!(repl.reasoning_summary_visible());
     }
 }

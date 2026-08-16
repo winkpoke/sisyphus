@@ -15,7 +15,7 @@ use anyhow::{anyhow, Result};
 use common::bus::{EventBus, SystemEvent};
 use common::llm::{
     CompletionRequest, LLMProvider, Message, ReasoningConfig, ReasoningExposure, ReasoningMode,
-    Role, ToolCall, ToolDefinition, ToolFunctionDefinition,
+    ReasoningStorage, Role, ToolCall, ToolDefinition, ToolFunctionDefinition,
 };
 use common::tool::Tool;
 use rust_i18n::t;
@@ -115,6 +115,11 @@ impl Agent {
             self.register_tool(tool);
         }
         Ok(())
+    }
+
+    /// Replace the agent's reasoning configuration (mode/effort/exposure/storage).
+    pub fn set_reasoning_config(&mut self, config: ReasoningConfig) {
+        self.reasoning_config = config;
     }
 
     fn should_enable_reasoning(&self, session: &Session) -> ReasoningConfig {
@@ -515,12 +520,20 @@ impl Agent {
                 temperature: None,
                 max_tokens: None,
                 tools: self.get_tool_definitions(),
-                reasoning: self.should_enable_reasoning(&session),
+                reasoning: self.should_enable_reasoning(session),
                 request_overrides: None,
             };
 
             let response_msg = self.provider.complete(req).await?;
-            session.add_message(response_msg.clone())?;
+
+            // Raw reasoning is never persisted into the session context;
+            // summaries are only stored when explicitly configured.
+            let mut stored_msg = response_msg.clone();
+            stored_msg.reasoning_raw = None;
+            if self.reasoning_config.store != ReasoningStorage::Summary {
+                stored_msg.reasoning_summary = None;
+            }
+            session.add_message(stored_msg)?;
 
             if let Some(content) = &response_msg.content {
                 self.bus.publish(SystemEvent::MessageReceived {

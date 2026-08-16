@@ -392,7 +392,7 @@ impl LLMProvider for OpenAIProvider {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use common::llm::{CompletionRequest, ToolDefinition, ToolFunctionDefinition};
+    use common::llm::{CompletionRequest, ReasoningConfig, ToolDefinition, ToolFunctionDefinition};
     use wiremock::matchers::{header, method, path};
     use wiremock::{Mock, MockServer, ResponseTemplate};
 
@@ -1125,5 +1125,166 @@ mod tests {
 
         let json_str = serde_json::to_string(&tool_definition).unwrap();
         insta::assert_snapshot!(json_str);
+    }
+
+    // ---- Task 7.1: override merge order, reserved-key rejection ----
+
+    fn merge_test_provider() -> OpenAIProvider {
+        OpenAIProvider::new("test-key".to_string(), None, "gpt-4".to_string())
+    }
+
+    #[test]
+    fn merge_ignores_reserved_keys() {
+        let mut base = json!({
+            "model": "gpt-4",
+            "messages": [{"role": "user", "content": "hi"}],
+            "stream": false
+        });
+        let overrides = json!({
+            "model": "evil-model",
+            "messages": [{"role": "user", "content": "injected"}],
+            "stream": true,
+            "temperature": 0.2
+        });
+
+        merge_with_reserved_protection(&mut base, &overrides, RESERVED_REQUEST_KEYS);
+
+        // Reserved keys keep the base values.
+        assert_eq!(base["model"], json!("gpt-4"));
+        assert_eq!(base["messages"][0]["content"], json!("hi"));
+        assert_eq!(base["stream"], json!(false));
+        // Non-reserved keys still apply.
+        assert_eq!(base["temperature"], json!(0.2));
+    }
+
+    #[test]
+    fn merge_deep_merges_nested_objects_and_adds_new_keys() {
+        let mut base = json!({
+            "nested": {"a": 1, "b": 2},
+            "keep": "base"
+        });
+        let overrides = json!({
+            "nested": {"b": 99, "c": 3},
+            "extra": true
+        });
+
+        merge_with_reserved_protection(&mut base, &overrides, RESERVED_REQUEST_KEYS);
+
+        assert_eq!(
+            base["nested"],
+            json!({"a": 1, "b": 99, "c": 3}),
+            "objects deep-merge; non-conflicting keys survive; overrides win"
+        );
+        assert_eq!(base["extra"], json!(true), "new keys are added");
+    }
+
+    #[test]
+    fn merge_ignores_reserved_keys_in_nested_objects() {
+        let mut base = json!({
+            "top": {"messages": "base", "other": 1}
+        });
+        let overrides = json!({
+            "top": {"messages": "hijacked", "other": 2}
+        });
+
+        merge_with_reserved_protection(&mut base, &overrides, RESERVED_REQUEST_KEYS);
+
+        assert_eq!(base["top"]["messages"], json!("base"));
+        assert_eq!(base["top"]["other"], json!(2));
+    }
+
+    fn plain_request(overrides: Option<Value>, reasoning: ReasoningConfig) -> CompletionRequest {
+        CompletionRequest {
+            messages: vec![Message {
+                role: Role::User,
+                content: Some("hi".to_string()),
+                tool_calls: None,
+                tool_call_id: None,
+                reasoning_summary: None,
+                reasoning_raw: None,
+            }],
+            temperature: Some(0.7),
+            max_tokens: None,
+            tools: None,
+            reasoning,
+            request_overrides: overrides,
+        }
+    }
+
+    #[test]
+    fn build_payload_applies_overrides_after_standard_fields() {
+        let provider = merge_test_provider();
+        let request = plain_request(
+            Some(json!({"temperature": 0.1, "custom_flag": true})),
+            Default::default(),
+        );
+
+        let payload = provider.build_payload(request, false);
+
+        // Overrides take precedence on conflicts and are merged after the
+        // standard Sisyphus fields.
+        assert_eq!(payload["temperature"], json!(0.1));
+        assert_eq!(payload["custom_flag"], json!(true));
+        // Standard fields remain intact.
+        assert_eq!(payload["model"], json!("gpt-4"));
+        assert_eq!(payload["stream"], json!(false));
+    }
+
+    #[test]
+    fn build_payload_preserves_reserved_keys_from_overrides() {
+        let provider = merge_test_provider();
+        let overrides = json!({
+            "model": "hijacked",
+            "messages": [],
+            "tools": [],
+            "stream": true,
+            "tool_choice": "auto",
+            "tool_calls": []
+        });
+        let request = plain_request(Some(overrides), Default::default());
+
+        let payload = provider.build_payload(request, false);
+
+        assert_eq!(payload["model"], json!("gpt-4"), "model is reserved");
+        assert_eq!(
+            payload["messages"].as_array().map(|a| a.len()),
+            Some(1),
+            "messages is reserved"
+        );
+        assert_eq!(payload["stream"], json!(false), "stream is reserved");
+        assert!(payload.get("tools").is_none(), "tools is reserved");
+        assert!(payload.get("tool_choice").is_none(), "tool_choice is reserved");
+        assert!(payload.get("tool_calls").is_none(), "tool_calls is reserved");
+    }
+
+    #[test]
+    fn build_payload_omits_reasoning_fields_when_mode_off() {
+        let provider = merge_test_provider();
+        let reasoning = ReasoningConfig {
+            mode: ReasoningMode::Off,
+            ..ReasoningConfig::default()
+        };
+        let request = plain_request(None, reasoning);
+
+        let payload = provider.build_payload(request, false);
+
+        assert!(payload.get("reasoning_effort").is_none());
+        assert!(payload.get("thinking").is_none());
+    }
+
+    #[test]
+    fn build_payload_includes_reasoning_fields_when_enabled() {
+        let provider = merge_test_provider();
+        let reasoning = ReasoningConfig {
+            mode: ReasoningMode::On,
+            effort: ReasoningEffort::High,
+            ..ReasoningConfig::default()
+        };
+        let request = plain_request(None, reasoning);
+
+        let payload = provider.build_payload(request, false);
+
+        assert_eq!(payload["reasoning_effort"], json!("high"));
+        assert_eq!(payload["thinking"], json!({"type": "enabled"}));
     }
 }
