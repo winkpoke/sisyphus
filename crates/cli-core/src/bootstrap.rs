@@ -39,7 +39,13 @@ pub fn plan_agent_config() -> AgentConfig {
             skill: PermissionLevel::Allow,
             mode: sisyphus_core::agent::config::PermissionMode::Plan,
             overrides,
-            allow: Vec::new(),
+            // Plan mode prompts for unmatched tools; allow read-only tools
+            // explicitly so exploration stays frictionless.
+            allow: vec![
+                "read_file".to_string(),
+                "glob".to_string(),
+                "grep".to_string(),
+            ],
             ask: Vec::new(),
             deny: Vec::new(),
         },

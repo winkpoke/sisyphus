@@ -112,6 +112,8 @@ pub async fn start_event_logger(bus: &EventBus) {
             operation,
             tool_name,
             call_id,
+            matched_rule,
+            mode,
         } => {
             info!(
                 target: "bus",
@@ -120,7 +122,9 @@ pub async fn start_event_logger(bus: &EventBus) {
                 event = "permission_request",
                 operation = %operation,
                 tool = %tool_name,
-                call_id = %call_id
+                call_id = %call_id,
+                matched_rule = ?matched_rule,
+                mode = %mode
             );
         }
         SystemEvent::Error { message } => {

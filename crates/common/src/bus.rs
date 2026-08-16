@@ -36,6 +36,13 @@ pub enum SystemEvent {
         operation: String,
         tool_name: String,
         call_id: String,
+        /// The specific rule that triggered the Ask, if any (mode-fallback
+        /// asks carry `None`).
+        #[serde(default)]
+        matched_rule: Option<String>,
+        /// Name of the active [`crate::agent::config::PermissionMode`].
+        #[serde(default)]
+        mode: String,
     },
     Error {
         message: String,

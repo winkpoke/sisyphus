@@ -17,7 +17,7 @@ pub enum PermissionLevel {
     Ask,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Default)]
 pub enum PermissionMode {
     #[default]
     Default, // Standard permission checking with prompts

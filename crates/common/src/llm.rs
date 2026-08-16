@@ -68,55 +68,43 @@ pub struct ToolFunctionDefinition {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum ReasoningMode {
     Off,
     On,
+    #[default]
     Auto,
 }
 
-impl Default for ReasoningMode {
-    fn default() -> Self {
-        Self::Auto
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum ReasoningEffort {
     Low,
+    #[default]
     Medium,
     High,
 }
 
-impl Default for ReasoningEffort {
-    fn default() -> Self {
-        Self::Medium
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum ReasoningExposure {
     None,
+    #[default]
     Summary,
     Debug,
 }
 
-impl Default for ReasoningExposure {
-    fn default() -> Self {
-        Self::Summary
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[derive(Default)]
 pub enum ReasoningStorage {
+    #[default]
     None,
     Summary,
 }
 
-impl Default for ReasoningStorage {
-    fn default() -> Self {
-        Self::None
-    }
-}
 
 #[derive(Debug, Clone, Default)]
 pub struct ReasoningConfig {

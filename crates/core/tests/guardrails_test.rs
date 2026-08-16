@@ -168,6 +168,8 @@ async fn test_permission_enforcement_ask() {
                         operation,
                         tool_name,
                         call_id,
+                        matched_rule: _,
+                        mode: _,
                     } = event
                     {
                         assert_eq!(operation, "tool_execution");

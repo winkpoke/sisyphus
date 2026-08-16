@@ -124,6 +124,8 @@ fn handle_system_event(app: &mut App, event: SystemEvent) {
             operation,
             tool_name,
             call_id,
+            matched_rule,
+            mode,
         } => {
             app.state.mode = InputMode::Overlay;
             app.state.overlay.enqueue_approval(

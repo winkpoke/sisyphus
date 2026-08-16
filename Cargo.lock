@@ -2860,6 +2860,7 @@ dependencies = [
  "dashmap",
  "dirs",
  "futures",
+ "glob",
  "gray_matter",
  "insta",
  "minijinja",

@@ -1,8 +1,9 @@
 pub mod config;
+pub mod permission;
 pub mod prompt;
 pub mod registry;
 
-use self::config::{AgentConfig, PermissionLevel};
+use self::config::AgentConfig;
 use self::prompt::SystemPromptBuilder;
 use crate::command::builtins::{CdCommand, HelpCommand};
 use crate::command::loader::CommandLoader;
@@ -59,6 +60,8 @@ impl Agent {
             reasoning_config: ReasoningConfig::with_defaults(),
         };
         agent.register_builtins();
+        // Legacy edit/bash/skill fields are ignored when rules are present.
+        permission::warn_legacy_ignored(&agent.config.permissions);
         let cmd_path = agent.config.get_command_path();
         if let Ok(commands) = CommandLoader::load_from_dir(cmd_path) {
             for (name, config) in commands {
@@ -177,40 +180,32 @@ impl Agent {
         }
     }
 
-    fn get_permission_level(&self, tool_name: &str) -> PermissionLevel {
-        if let Some(level) = self.config.permissions.overrides.get(tool_name) {
-            return *level;
-        }
-
-        // Map each tool name to its permission category. These names MUST match
-        // the `name()` returned by the tool implementation (e.g. `CommandTool`
-        // returns "execute_command", not "run_command").
-        match tool_name {
-            "execute_command" => self.config.permissions.bash,
-            "write_file" | "replace_in_file" | "delete_file" => self.config.permissions.edit,
-            _ => self.config.permissions.skill,
-        }
-    }
-
     async fn execute_tool(&self, tool_name: &str, args_str: &str, call_id: &str) -> ToolExecResult {
-        let permission = self.get_permission_level(tool_name);
-        match permission {
-            PermissionLevel::Deny => {
-                return ToolExecResult::Ok(
-                    "Permission denied: tool execution is set to Deny.".to_string(),
-                );
+        let args: serde_json::Value =
+            serde_json::from_str(args_str).unwrap_or(serde_json::Value::Null);
+        let decision =
+            permission::resolve(&self.config.permissions, tool_name, &args);
+        match decision {
+            permission::PermissionDecision::Deny { reason, .. } => {
+                return ToolExecResult::Ok(reason);
             }
-            PermissionLevel::Ask => {
+            permission::PermissionDecision::Ask { matched_rule } => {
+                let mode = serde_json::to_value(self.config.permissions.mode)
+                    .ok()
+                    .and_then(|v| v.as_str().map(str::to_string))
+                    .unwrap_or_default();
                 self.bus.publish(SystemEvent::PermissionRequest {
                     operation: "tool_execution".to_string(),
                     tool_name: tool_name.to_string(),
                     call_id: call_id.to_string(),
+                    matched_rule,
+                    mode,
                 });
                 return ToolExecResult::PermissionRequired(
                     "Permission required: approve tool execution to continue.".to_string(),
                 );
             }
-            PermissionLevel::Allow => {}
+            permission::PermissionDecision::Allow => {}
         }
 
         if let Some(tool) = self.tools.get(tool_name) {
@@ -576,45 +571,14 @@ impl Agent {
 
 #[cfg(test)]
 mod tests {
-    use super::Agent;
-    use crate::agent::config::{AgentConfig, AgentPermissions, PermissionLevel};
-    use async_trait::async_trait;
-    use common::bus::EventBus;
-    use common::llm::{CompletionRequest, LLMProvider, Message};
-    use futures::Stream;
-    use std::path::PathBuf;
-    use std::pin::Pin;
-    use std::sync::Arc;
+    use crate::agent::config::{AgentPermissions, PermissionLevel};
+    use crate::agent::permission::{self, PermissionDecision};
 
-    // A no-op provider is sufficient: permission routing is pure and never
-    // invokes the provider.
-    struct StubProvider;
-    #[async_trait]
-    impl LLMProvider for StubProvider {
-        fn model(&self) -> String {
-            "stub".to_string()
-        }
-        async fn complete(&self, _req: CompletionRequest) -> anyhow::Result<Message> {
-            unreachable!("StubProvider::complete is not invoked by these tests")
-        }
-        async fn stream(
-            &self,
-            _req: CompletionRequest,
-        ) -> anyhow::Result<Pin<Box<dyn Stream<Item = anyhow::Result<String>> + Send>>> {
-            unreachable!("StubProvider::stream is not invoked by these tests")
-        }
-    }
-
-    fn build_agent(permissions: AgentPermissions) -> Agent {
-        Agent::new(
-            Box::new(StubProvider),
-            Arc::new(EventBus::new(16)),
-            AgentConfig {
-                permissions,
-                ..AgentConfig::default()
-            },
-            PathBuf::from("."),
-        )
+    fn legacy_resolve(
+        permissions: &AgentPermissions,
+        tool_name: &str,
+    ) -> PermissionDecision {
+        permission::resolve(permissions, tool_name, &serde_json::Value::Null)
     }
 
     #[test]
@@ -622,57 +586,62 @@ mod tests {
         // Regression: `CommandTool` reports its name as "execute_command", not
         // "run_command". Previously the `bash` level was never applied and the
         // command tool silently fell through to the `skill` level.
-        let agent = build_agent(AgentPermissions {
+        let perms = AgentPermissions {
             bash: PermissionLevel::Ask,
             edit: PermissionLevel::Deny,
             skill: PermissionLevel::Allow,
             ..AgentPermissions::default()
-        });
-        assert_eq!(
-            agent.get_permission_level("execute_command"),
-            PermissionLevel::Ask
-        );
+        };
+        assert!(matches!(
+            legacy_resolve(&perms, "execute_command"),
+            PermissionDecision::Ask { .. }
+        ));
     }
 
     #[test]
     fn edit_permission_gates_write_tools() {
-        let agent = build_agent(AgentPermissions {
+        let perms = AgentPermissions {
             edit: PermissionLevel::Deny,
             ..AgentPermissions::default()
-        });
-        assert_eq!(agent.get_permission_level("write_file"), PermissionLevel::Deny);
-        assert_eq!(
-            agent.get_permission_level("replace_in_file"),
-            PermissionLevel::Deny
-        );
-        assert_eq!(agent.get_permission_level("delete_file"), PermissionLevel::Deny);
+        };
+        assert!(matches!(
+            legacy_resolve(&perms, "write_file"),
+            PermissionDecision::Deny { .. }
+        ));
+        assert!(matches!(
+            legacy_resolve(&perms, "replace_in_file"),
+            PermissionDecision::Deny { .. }
+        ));
+        assert!(matches!(
+            legacy_resolve(&perms, "delete_file"),
+            PermissionDecision::Deny { .. }
+        ));
     }
 
     #[test]
     fn unknown_tools_fall_back_to_skill() {
-        let agent = build_agent(AgentPermissions {
+        let perms = AgentPermissions {
             skill: PermissionLevel::Deny,
             ..AgentPermissions::default()
-        });
-        assert_eq!(
-            agent.get_permission_level("some_skill_tool"),
-            PermissionLevel::Deny
-        );
+        };
+        assert!(matches!(
+            legacy_resolve(&perms, "some_skill_tool"),
+            PermissionDecision::Deny { .. }
+        ));
     }
 
     #[test]
     fn per_tool_overrides_take_precedence() {
-        use std::collections::HashMap;
-        let mut overrides = HashMap::new();
-        overrides.insert("execute_command".to_string(), PermissionLevel::Deny);
-        let agent = build_agent(AgentPermissions {
+        let perms = AgentPermissions {
             bash: PermissionLevel::Allow,
-            overrides,
+            overrides: [("execute_command".to_string(), PermissionLevel::Deny)]
+                .into_iter()
+                .collect(),
             ..AgentPermissions::default()
-        });
-        assert_eq!(
-            agent.get_permission_level("execute_command"),
-            PermissionLevel::Deny
-        );
+        };
+        assert!(matches!(
+            legacy_resolve(&perms, "execute_command"),
+            PermissionDecision::Deny { .. }
+        ));
     }
 }
