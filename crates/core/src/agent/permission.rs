@@ -17,7 +17,10 @@ pub enum PermissionDecision {
     /// Execute without prompting.
     Allow,
     /// Refuse execution; `reason` is returned to the model as the tool result.
-    Deny { reason: String, matched_rule: Option<String> },
+    Deny {
+        reason: String,
+        matched_rule: Option<String>,
+    },
     /// Pause the turn and emit a `PermissionRequest` event.
     Ask { matched_rule: Option<String> },
 }
@@ -126,9 +129,7 @@ pub fn rule_matches(rule: &str, tool_name: &str, args: &Value) -> bool {
                 return false;
             };
             match pattern.strip_suffix(":*") {
-                Some(prefix) => {
-                    command == prefix || command.starts_with(&format!("{prefix} "))
-                }
+                Some(prefix) => command == prefix || command.starts_with(&format!("{prefix} ")),
                 None => command == pattern,
             }
         }
@@ -195,7 +196,8 @@ fn mode_fallback(mode: PermissionMode, tool_name: &str) -> PermissionDecision {
                 matched_rule: None,
             },
             ToolCategory::Bash => PermissionDecision::Deny {
-                reason: "Permission denied: Plan mode does not allow command execution.".to_string(),
+                reason: "Permission denied: Plan mode does not allow command execution."
+                    .to_string(),
                 matched_rule: None,
             },
             _ => PermissionDecision::Ask { matched_rule: None },
@@ -205,9 +207,7 @@ fn mode_fallback(mode: PermissionMode, tool_name: &str) -> PermissionDecision {
 
 /// Whether any rule-based list is configured.
 fn has_rules(permissions: &AgentPermissions) -> bool {
-    !permissions.allow.is_empty()
-        || !permissions.ask.is_empty()
-        || !permissions.deny.is_empty()
+    !permissions.allow.is_empty() || !permissions.ask.is_empty() || !permissions.deny.is_empty()
 }
 
 /// Whether any legacy field deviates from its default (`Ask`).
@@ -228,7 +228,11 @@ fn has_non_default_legacy(permissions: &AgentPermissions) -> bool {
 /// 4. Allow rules.
 /// 5. Ask rules.
 /// 6. Permission-mode fallback.
-pub fn resolve(permissions: &AgentPermissions, tool_name: &str, args: &Value) -> PermissionDecision {
+pub fn resolve(
+    permissions: &AgentPermissions,
+    tool_name: &str,
+    args: &Value,
+) -> PermissionDecision {
     if !has_rules(permissions) && permissions.mode == PermissionMode::Default {
         return legacy_decision(legacy_level(permissions, tool_name));
     }
@@ -304,7 +308,10 @@ mod tests {
     fn parse_bare_tool_name() {
         assert_eq!(
             parse_rule("WebFetch"),
-            Some(ParsedRule { tool: "WebFetch".to_string(), pattern: None })
+            Some(ParsedRule {
+                tool: "WebFetch".to_string(),
+                pattern: None
+            })
         );
     }
 
@@ -312,11 +319,17 @@ mod tests {
     fn parse_tool_with_pattern_is_canonicalized() {
         assert_eq!(
             parse_rule("Bash(git:*)"),
-            Some(ParsedRule { tool: "execute_command".to_string(), pattern: Some("git:*".to_string()) })
+            Some(ParsedRule {
+                tool: "execute_command".to_string(),
+                pattern: Some("git:*".to_string())
+            })
         );
         assert_eq!(
             parse_rule("Read(./src/**/*.rs)"),
-            Some(ParsedRule { tool: "read_file".to_string(), pattern: Some("./src/**/*.rs".to_string()) })
+            Some(ParsedRule {
+                tool: "read_file".to_string(),
+                pattern: Some("./src/**/*.rs".to_string())
+            })
         );
     }
 
@@ -339,59 +352,147 @@ mod tests {
 
     #[test]
     fn bash_prefix_matching() {
-        assert!(rule_matches("Bash(git:*)", "execute_command", &args_command("git push origin main")));
-        assert!(rule_matches("Bash(git:*)", "execute_command", &args_command("git")));
-        assert!(!rule_matches("Bash(git:*)", "execute_command", &args_command("npm install")));
+        assert!(rule_matches(
+            "Bash(git:*)",
+            "execute_command",
+            &args_command("git push origin main")
+        ));
+        assert!(rule_matches(
+            "Bash(git:*)",
+            "execute_command",
+            &args_command("git")
+        ));
+        assert!(!rule_matches(
+            "Bash(git:*)",
+            "execute_command",
+            &args_command("npm install")
+        ));
         // Word boundary: git:* must not match "github ..."
-        assert!(!rule_matches("Bash(git:*)", "execute_command", &args_command("github clone")));
+        assert!(!rule_matches(
+            "Bash(git:*)",
+            "execute_command",
+            &args_command("github clone")
+        ));
         // Multi-word prefixes
-        assert!(rule_matches("Bash(npm install:*)", "execute_command", &args_command("npm install lodash")));
-        assert!(!rule_matches("Bash(npm install:*)", "execute_command", &args_command("npm run build")));
+        assert!(rule_matches(
+            "Bash(npm install:*)",
+            "execute_command",
+            &args_command("npm install lodash")
+        ));
+        assert!(!rule_matches(
+            "Bash(npm install:*)",
+            "execute_command",
+            &args_command("npm run build")
+        ));
     }
 
     #[test]
     fn bash_exact_match_without_wildcard() {
-        assert!(rule_matches("Bash(cargo build)", "execute_command", &args_command("cargo build")));
-        assert!(!rule_matches("Bash(cargo build)", "execute_command", &args_command("cargo build --release")));
+        assert!(rule_matches(
+            "Bash(cargo build)",
+            "execute_command",
+            &args_command("cargo build")
+        ));
+        assert!(!rule_matches(
+            "Bash(cargo build)",
+            "execute_command",
+            &args_command("cargo build --release")
+        ));
     }
 
     #[test]
     fn bash_wildcard_allows_any_command() {
-        assert!(rule_matches("Bash(*)", "execute_command", &args_command("rm -rf /")));
-        assert!(rule_matches("Bash()", "execute_command", &args_command("echo hi")));
-        assert!(rule_matches("execute_command", "execute_command", &args_command("anything")));
+        assert!(rule_matches(
+            "Bash(*)",
+            "execute_command",
+            &args_command("rm -rf /")
+        ));
+        assert!(rule_matches(
+            "Bash()",
+            "execute_command",
+            &args_command("echo hi")
+        ));
+        assert!(rule_matches(
+            "execute_command",
+            "execute_command",
+            &args_command("anything")
+        ));
     }
 
     // ---- File glob matching (task 2.2) ----
 
     #[test]
     fn file_glob_matching() {
-        assert!(rule_matches("Read(./src/**/*.rs)", "read_file", &args_path("./src/agent/config.rs")));
-        assert!(rule_matches("Read(src/**/*.rs)", "read_file", &args_path("./src/agent/config.rs")));
-        assert!(rule_matches("Read(**/*.env)", "read_file", &args_path(".env")));
-        assert!(!rule_matches("Read(./src/**)", "read_file", &args_path("./docs/README.md")));
-        assert!(rule_matches("Read(./.env)", "read_file", &args_path(".env")));
+        assert!(rule_matches(
+            "Read(./src/**/*.rs)",
+            "read_file",
+            &args_path("./src/agent/config.rs")
+        ));
+        assert!(rule_matches(
+            "Read(src/**/*.rs)",
+            "read_file",
+            &args_path("./src/agent/config.rs")
+        ));
+        assert!(rule_matches(
+            "Read(**/*.env)",
+            "read_file",
+            &args_path(".env")
+        ));
+        assert!(!rule_matches(
+            "Read(./src/**)",
+            "read_file",
+            &args_path("./docs/README.md")
+        ));
+        assert!(rule_matches(
+            "Read(./.env)",
+            "read_file",
+            &args_path(".env")
+        ));
     }
 
     #[test]
     fn write_glob_restricted_to_pattern() {
-        assert!(rule_matches("Write(./src/**)", "write_file", &args_path("./src/main.rs")));
-        assert!(!rule_matches("Write(./src/**)", "write_file", &args_path("./README.md")));
+        assert!(rule_matches(
+            "Write(./src/**)",
+            "write_file",
+            &args_path("./src/main.rs")
+        ));
+        assert!(!rule_matches(
+            "Write(./src/**)",
+            "write_file",
+            &args_path("./README.md")
+        ));
     }
 
     // ---- Non-file tools: exact name match only (spec) ----
 
     #[test]
     fn non_file_tools_match_by_name_only() {
-        assert!(rule_matches("WebFetch", "WebFetch", &serde_json::json!({ "url": "https://x" })));
-        assert!(rule_matches("grep", "grep", &serde_json::json!({ "pattern": "x" })));
+        assert!(rule_matches(
+            "WebFetch",
+            "WebFetch",
+            &serde_json::json!({ "url": "https://x" })
+        ));
+        assert!(rule_matches(
+            "grep",
+            "grep",
+            &serde_json::json!({ "pattern": "x" })
+        ));
         assert!(!rule_matches("WebFetch", "grep", &serde_json::json!({})));
     }
 
     #[test]
     fn rules_do_not_leak_across_tools() {
-        assert!(!rule_matches("Bash(git:*)", "write_file", &args_command("git push")));
-        assert!(!rule_matches("Read(**)", "execute_command", &args_command("git push")));
+        assert!(!rule_matches(
+            "Bash(git:*)",
+            "write_file",
+            &args_command("git push")
+        ));
+        assert!(!rule_matches(
+            "Read(**)",
+            "execute_command",
+            &args_command("git push")
+        ));
     }
 
     // ---- Resolution engine (tasks 3.1, 3.2) ----
@@ -424,8 +525,14 @@ mod tests {
         let mut p = perms();
         p.mode = PermissionMode::BypassPermissions;
         p.deny = vec!["Read(./.env)".to_string()];
-        assert_eq!(resolve(&p, "write_file", &args_path("src/main.rs")), PermissionDecision::Allow);
-        assert_eq!(resolve(&p, "execute_command", &args_command("rm -rf /")), PermissionDecision::Allow);
+        assert_eq!(
+            resolve(&p, "write_file", &args_path("src/main.rs")),
+            PermissionDecision::Allow
+        );
+        assert_eq!(
+            resolve(&p, "execute_command", &args_command("rm -rf /")),
+            PermissionDecision::Allow
+        );
     }
 
     #[test]
@@ -433,7 +540,10 @@ mod tests {
         let mut p = perms();
         p.mode = PermissionMode::Default;
         p.allow = vec!["Write(./src/**)".to_string()];
-        assert_eq!(resolve(&p, "write_file", &args_path("./src/main.rs")), PermissionDecision::Allow);
+        assert_eq!(
+            resolve(&p, "write_file", &args_path("./src/main.rs")),
+            PermissionDecision::Allow
+        );
     }
 
     #[test]
@@ -443,7 +553,9 @@ mod tests {
         p.ask = vec!["Bash(npm install:*)".to_string()];
         assert_eq!(
             resolve(&p, "execute_command", &args_command("npm install lodash")),
-            PermissionDecision::Ask { matched_rule: Some("Bash(npm install:*)".to_string()) }
+            PermissionDecision::Ask {
+                matched_rule: Some("Bash(npm install:*)".to_string())
+            }
         );
     }
 
@@ -451,7 +563,10 @@ mod tests {
     fn no_match_falls_back_to_mode() {
         let mut p = perms();
         p.mode = PermissionMode::AcceptEdits;
-        assert_eq!(resolve(&p, "write_file", &args_path("anywhere/x")), PermissionDecision::Allow);
+        assert_eq!(
+            resolve(&p, "write_file", &args_path("anywhere/x")),
+            PermissionDecision::Allow
+        );
         assert!(matches!(
             resolve(&p, "execute_command", &args_command("ls")),
             PermissionDecision::Ask { matched_rule: None }
@@ -472,11 +587,26 @@ mod tests {
     fn accept_edits_auto_approves_edit_tools_only() {
         let mut p = perms();
         p.mode = PermissionMode::AcceptEdits;
-        assert_eq!(resolve(&p, "write_file", &args_path("x")), PermissionDecision::Allow);
-        assert_eq!(resolve(&p, "replace_in_file", &args_path("x")), PermissionDecision::Allow);
-        assert_eq!(resolve(&p, "delete_file", &args_path("x")), PermissionDecision::Allow);
-        assert!(matches!(resolve(&p, "execute_command", &args_command("ls")), PermissionDecision::Ask { .. }));
-        assert!(matches!(resolve(&p, "read_file", &args_path("x")), PermissionDecision::Ask { .. }));
+        assert_eq!(
+            resolve(&p, "write_file", &args_path("x")),
+            PermissionDecision::Allow
+        );
+        assert_eq!(
+            resolve(&p, "replace_in_file", &args_path("x")),
+            PermissionDecision::Allow
+        );
+        assert_eq!(
+            resolve(&p, "delete_file", &args_path("x")),
+            PermissionDecision::Allow
+        );
+        assert!(matches!(
+            resolve(&p, "execute_command", &args_command("ls")),
+            PermissionDecision::Ask { .. }
+        ));
+        assert!(matches!(
+            resolve(&p, "read_file", &args_path("x")),
+            PermissionDecision::Ask { .. }
+        ));
     }
 
     #[test]
@@ -484,11 +614,15 @@ mod tests {
         let mut p = perms();
         p.mode = PermissionMode::DontAsk;
         p.allow = vec!["Bash(git:*)".to_string()];
-        assert_eq!(resolve(&p, "execute_command", &args_command("git diff")), PermissionDecision::Allow);
+        assert_eq!(
+            resolve(&p, "execute_command", &args_command("git diff")),
+            PermissionDecision::Allow
+        );
         assert_eq!(
             resolve(&p, "execute_command", &args_command("npm install")),
             PermissionDecision::Deny {
-                reason: "Permission denied: tool execution requires explicit allow rule.".to_string(),
+                reason: "Permission denied: tool execution requires explicit allow rule."
+                    .to_string(),
                 matched_rule: None,
             }
         );
@@ -523,9 +657,18 @@ mod tests {
         p.edit = PermissionLevel::Allow;
         p.bash = PermissionLevel::Ask;
         p.skill = PermissionLevel::Deny;
-        assert_eq!(resolve(&p, "write_file", &args_path("x")), PermissionDecision::Allow);
-        assert!(matches!(resolve(&p, "execute_command", &args_command("ls")), PermissionDecision::Ask { .. }));
-        assert!(matches!(resolve(&p, "read_file", &args_path("x")), PermissionDecision::Deny { .. }));
+        assert_eq!(
+            resolve(&p, "write_file", &args_path("x")),
+            PermissionDecision::Allow
+        );
+        assert!(matches!(
+            resolve(&p, "execute_command", &args_command("ls")),
+            PermissionDecision::Ask { .. }
+        ));
+        assert!(matches!(
+            resolve(&p, "read_file", &args_path("x")),
+            PermissionDecision::Deny { .. }
+        ));
         // Deny message matches the pre-refactor string exactly.
         assert_eq!(
             resolve(&p, "read_file", &args_path("x")),
@@ -539,8 +682,12 @@ mod tests {
     #[test]
     fn legacy_overrides_still_work_in_legacy_mode() {
         let mut p = perms();
-        p.overrides.insert("custom_tool".to_string(), PermissionLevel::Allow);
-        assert_eq!(resolve(&p, "custom_tool", &serde_json::json!({})), PermissionDecision::Allow);
+        p.overrides
+            .insert("custom_tool".to_string(), PermissionLevel::Allow);
+        assert_eq!(
+            resolve(&p, "custom_tool", &serde_json::json!({})),
+            PermissionDecision::Allow
+        );
     }
 
     #[test]
@@ -551,8 +698,14 @@ mod tests {
         p.allow = vec!["Bash(git:*)".to_string()];
         // No rule matches write_file → Default mode fallback asks,
         // even though legacy edit=Allow would have allowed it.
-        assert!(matches!(resolve(&p, "write_file", &args_path("x")), PermissionDecision::Ask { .. }));
-        assert_eq!(resolve(&p, "execute_command", &args_command("git status")), PermissionDecision::Allow);
+        assert!(matches!(
+            resolve(&p, "write_file", &args_path("x")),
+            PermissionDecision::Ask { .. }
+        ));
+        assert_eq!(
+            resolve(&p, "execute_command", &args_command("git status")),
+            PermissionDecision::Allow
+        );
         assert!(has_non_default_legacy(&p));
     }
 
@@ -562,17 +715,26 @@ mod tests {
         // (e.g. the built-in plan agent).
         let mut p = perms();
         p.mode = PermissionMode::Plan;
-        assert!(matches!(resolve(&p, "write_file", &args_path("x")), PermissionDecision::Deny { .. }));
+        assert!(matches!(
+            resolve(&p, "write_file", &args_path("x")),
+            PermissionDecision::Deny { .. }
+        ));
     }
 
     #[test]
     fn deprecation_warning_fires_only_when_needed() {
         let mut p = perms();
         p.allow = vec!["Bash(git:*)".to_string()];
-        assert!(!has_non_default_legacy(&p), "all-default legacy fields: no warning");
+        assert!(
+            !has_non_default_legacy(&p),
+            "all-default legacy fields: no warning"
+        );
 
         p.bash = PermissionLevel::Allow;
-        assert!(has_non_default_legacy(&p), "non-default legacy + rules: warn");
+        assert!(
+            has_non_default_legacy(&p),
+            "non-default legacy + rules: warn"
+        );
 
         let mut legacy_only = perms();
         legacy_only.bash = PermissionLevel::Allow;
