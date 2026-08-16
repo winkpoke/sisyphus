@@ -4,143 +4,20 @@
 Defines the standard set of tools available to agents, including file discovery and search capabilities.
 ## Requirements
 ### Requirement: Glob Tool
-The system SHALL provide a `glob` tool for discovering files under the workspace root.
+The system SHALL treat `glob` as a Parallel tool.
 
-The `glob` tool MUST accept a JSON object argument with the following fields:
-- `pattern` (string, required): Glob pattern evaluated against paths relative to `path`.
-- `path` (string, optional, default `"."`): Workspace-relative base directory to search under.
-- `include_ignored` (array of strings, optional, default `[]`): Glob patterns that selectively re-include otherwise ignored paths.
-- `exclude` (array of strings, optional, default `[]`): Additional glob patterns to exclude.
-- `max_results` (integer, optional, default 1000): Maximum number of file paths returned.
-
-The `glob` tool MUST:
-- Reject invalid glob syntax in `pattern`, `include_ignored`, or `exclude` with an error.
-- Return only regular files (not directories).
-- Treat `path` as workspace-relative and reject absolute paths and traversal.
-- Normalize returned paths to workspace-relative strings using `/` separators.
-- Produce deterministic results: eligible paths MUST be ordered by ascending normalized path string.
-- If `max_results` is reached, return the first `max_results` results in that deterministic order.
-
-The `glob` tool MUST return a UTF-8 string containing a JSON object with the following fields:
-- `paths` (array of strings): Workspace-relative, normalized file paths.
-- `truncated` (boolean): `true` if results were capped by `max_results`.
-
-#### Scenario: Find Rust files under crates
-- **GIVEN** a workspace containing `crates/tools/src/cmd.rs`
-- **WHEN** `glob` is called with `path="."` and `pattern="crates/**/*.rs"`
-- **THEN** the returned `paths` includes `crates/tools/src/cmd.rs`
-
-#### Scenario: Glob excludes directories
-- **GIVEN** a workspace containing a directory `crates/tools/src/`
-- **WHEN** `glob` is called with `path="."` and `pattern="crates/tools/src"`
-- **THEN** the returned `paths` does not include `crates/tools/src`
-
-#### Scenario: Glob output ordering is deterministic
-- **GIVEN** a workspace with multiple matching files
-- **WHEN** `glob` is called
-- **THEN** the returned `paths` is sorted by ascending normalized path string
-
-#### Scenario: Glob truncation is deterministic
-- **GIVEN** a workspace where more than 2 paths match a pattern
-- **WHEN** `glob` is called with `max_results=2`
-- **THEN** it returns exactly 2 paths
-- **AND** those 2 paths are the first 2 entries in the deterministic sort order
-- **AND** it sets `truncated=true`
-
-#### Scenario: Invalid include_ignored pattern
+#### Scenario: Glob executes under parallel mode
 - **GIVEN** `glob` is registered
-- **WHEN** `glob` is called with an invalid pattern in `include_ignored`
-- **THEN** the tool returns an error indicating the pattern is invalid
-
-#### Scenario: Invalid exclude pattern
-- **GIVEN** `glob` is registered
-- **WHEN** `glob` is called with an invalid pattern in `exclude`
-- **THEN** the tool returns an error indicating the pattern is invalid
+- **WHEN** the agent schedules multiple `glob` tool calls
+- **THEN** the runtime MAY execute those calls concurrently
 
 ### Requirement: Grep Tool
-The system SHALL provide a `grep` tool that searches file contents using a regular expression and returns bounded results.
+The system SHALL treat `grep` as a Parallel tool.
 
-The `grep` tool MUST accept a JSON object argument with the following fields:
-- `pattern` (string, required): Regular expression to search for.
-- `path` (string, optional, default `"."`): Workspace-relative base directory to search under.
-- `output_mode` (string, optional, default `"files_with_matches"`): One of `files_with_matches`, `content`, `count`.
-- `include_ignored` (array of strings, optional, default `[]`): Glob patterns that selectively re-include otherwise ignored paths.
-- `exclude` (array of strings, optional, default `[]`): Additional glob patterns to exclude.
-- `max_results` (integer, optional, default 100): Maximum number of result entries returned.
-- `max_file_bytes` (integer, optional, default 1000000): Maximum number of bytes read per file.
-- `max_line_length` (integer, optional, default 2000): Maximum line length included in `content` results.
-
-The `grep` tool MUST:
-- Interpret `pattern` using Rust `regex` crate syntax.
-- Reject invalid regular expressions in `pattern` with an error.
-- Reject invalid glob syntax in `include_ignored` or `exclude` with an error.
-- Treat `path` as workspace-relative and reject absolute paths and traversal.
-- Normalize returned paths to workspace-relative strings using `/` separators.
-- Enforce the configured caps and terminate early when `max_results` is reached.
-- Skip binary files deterministically.
-
-Binary files MUST be defined as files where any of the first `max_file_bytes` bytes either:
-- Contain at least one NUL byte (`0x00`), or
-- Are not valid UTF-8.
-
-The `grep` tool MUST return a UTF-8 string containing a JSON object with the following fields:
-- `output_mode` (string): Echo of the selected output mode.
-- `results` (array): Mode-dependent result entries.
-- `truncated` (boolean): `true` if results were capped by `max_results`.
-
-For `output_mode="files_with_matches"`, `results` MUST be an array of workspace-relative path strings.
-
-For `output_mode="count"`, `results` MUST be an array of objects with:
-- `path` (string): Workspace-relative, normalized path.
-- `count` (integer): Number of match occurrences in that file.
-
-For `output_mode="content"`, `results` MUST be an array of objects with:
-- `path` (string): Workspace-relative, normalized path.
-- `line` (integer): 1-based line number of the match.
-- `column` (integer): 1-based character index (Unicode scalar values) of the match start within `text`.
-- `text` (string): The matching line, truncated to `max_line_length`.
-
-For `output_mode="content"`:
-- Each match occurrence MUST produce a separate result entry.
-- `text` MUST be truncated from the start of the line to at most `max_line_length` characters.
-- Any match whose start column would be greater than `max_line_length` MUST NOT be returned.
-
-For all output modes, results MUST be ordered deterministically by ascending `path` and then by mode-specific stable keys (for `content`: `line`, then `column`).
-
-#### Scenario: Search for a symbol in the repository
-- **GIVEN** a workspace containing at least one file with the text `register_tool`
-- **WHEN** `grep` is called with `path="."`, `pattern="register_tool"`, and `output_mode="files_with_matches"`
-- **THEN** the returned `results` includes at least one matching file path
-
-#### Scenario: Grep content mode returns line metadata
-- **GIVEN** a workspace containing a file where a line includes the text `register_tool`
-- **WHEN** `grep` is called with `output_mode="content"` and `pattern="register_tool"`
-- **THEN** every entry in `results` includes `path`, `line`, `column`, and `text`
-
-#### Scenario: Non-ASCII column semantics
-- **GIVEN** a workspace containing a UTF-8 text file with non-ASCII characters
-- **WHEN** `grep` is called with `output_mode="content"`
-- **THEN** each `column` is the 1-based character index within the returned `text`
-
-#### Scenario: Invalid regex fails fast
+#### Scenario: Grep executes under parallel mode
 - **GIVEN** `grep` is registered
-- **WHEN** `grep` is called with an invalid regular expression in `pattern`
-- **THEN** the tool returns an error indicating the regex is invalid
-
-#### Scenario: Binary files are skipped
-- **GIVEN** a workspace containing a file with NUL bytes
-- **WHEN** `grep` is called with any `output_mode`
-- **THEN** the tool does not return results from that file
-
-#### Scenario: Invalid UTF-8 files are skipped
-- **GIVEN** a workspace containing a file where the scanned content is not valid UTF-8
-- **WHEN** `grep` is called with any `output_mode`
-- **THEN** the tool does not return results from that file
-
-#### Scenario: Content truncation contains the match
-- **GIVEN** a workspace containing a UTF-8 text file with a line longer than `max_line_length`
-- **WHEN** `grep` is called with `output_mode="content"` and a match that starts after `max_line_length`
-- **THEN** the tool does not return a `content` entry for that match
+- **WHEN** the agent schedules multiple `grep` tool calls
+- **THEN** the runtime MAY execute those calls concurrently
 
 ### Requirement: Replace In File Tool
 The system SHALL provide a `replace_in_file` tool for replacing exact text patterns in files.
@@ -373,4 +250,25 @@ The system SHALL provide timeout mechanism for all tool executions to prevent ha
 - **THEN** all temp files and directories are cleaned up
 - **AND** no test artifacts remain on disk
 - **AND** cleanup is verified in test teardown
+
+### Requirement: Tool execution modes
+The system SHALL assign each registered tool an execution mode: Parallel or Sequential.
+
+#### Scenario: Default execution mode is Sequential
+- **GIVEN** a tool is registered without an explicit execution mode
+- **WHEN** the tool is executed
+- **THEN** it is executed in Sequential mode
+
+### Requirement: Selective parallel execution
+The system SHALL allow concurrent execution of Parallel tools while ensuring Sequential tools execute exclusively.
+
+#### Scenario: Parallel tools can run concurrently
+- **GIVEN** two Parallel tool calls are scheduled
+- **WHEN** the system executes them
+- **THEN** they MAY execute at the same time
+
+#### Scenario: Sequential tool blocks all other tools
+- **GIVEN** a Sequential tool call is scheduled
+- **WHEN** the system begins executing it
+- **THEN** no other tool call executes until it completes
 

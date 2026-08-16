@@ -620,3 +620,12 @@ The system SHALL use `insta` for snapshot testing of generated system prompts to
 - **AND** template variables are interpolated correctly
 - **AND** conditional sections work as expected
 
+### Requirement: Tool execution runtime
+The system SHALL execute tool calls using a dedicated runtime that supports selective parallel execution.
+
+#### Scenario: Runtime enforces execution modes
+- **GIVEN** a completion response includes multiple tool calls
+- **WHEN** the agent executes those tool calls
+- **THEN** Parallel tools MAY execute concurrently
+- **AND** Sequential tools MUST execute exclusively
+
