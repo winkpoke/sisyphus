@@ -182,7 +182,7 @@ async fn deny_rule_short_circuits_execution() {
 /// End-to-end: ask rule (and no allow match) emits PermissionRequest with the
 /// matched rule and mode, and parks the call as a pending approval.
 #[tokio::test]
-async fn ask_rule_emits_permission_request_with_rule_and_mode() {
+async fn ask_rule_emits_permission_request_with_rule_and_mode() -> Result<()> {
     let bus = Arc::new(EventBus::new(16));
     let mut rx = bus.subscribe_raw();
     let config = AgentConfig {
@@ -220,8 +220,8 @@ async fn ask_rule_emits_permission_request_with_rule_and_mode() {
             request = Some((tool_name, call_id, matched_rule, mode));
         }
     }
-    let (tool_name, call_id, matched_rule, mode) =
-        request.expect("expected a PermissionRequest event");
+    let (tool_name, call_id, matched_rule, mode) = request
+        .ok_or_else(|| anyhow::anyhow!("expected a PermissionRequest event"))?;
     assert_eq!(tool_name, "execute_command");
     assert_eq!(call_id, "c1");
     assert_eq!(matched_rule.as_deref(), Some("Bash(npm install:*)"));
@@ -229,6 +229,7 @@ async fn ask_rule_emits_permission_request_with_rule_and_mode() {
 
     // The call is parked for approval, not executed.
     assert!(session.pending_approvals.contains_key("c1"));
+    Ok(())
 }
 
 /// Subagent isolation: an agent configured with Plan mode (the built-in plan

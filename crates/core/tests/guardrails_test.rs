@@ -74,7 +74,7 @@ impl LLMProvider for MockProvider {
 }
 
 #[tokio::test]
-async fn test_permission_enforcement_deny() {
+async fn test_permission_enforcement_deny() -> Result<()> {
     let bus = Arc::new(EventBus::new(10));
     let mut config = AgentConfig::default();
     config.permissions.edit = PermissionLevel::Deny;
@@ -109,11 +109,12 @@ async fn test_permission_enforcement_deny() {
     let tool_msg = history
         .iter()
         .find(|m| m.role == Role::Tool)
-        .expect("Tool message not found");
+        .ok_or_else(|| anyhow::anyhow!("Tool message not found"))?;
     assert_eq!(
         tool_msg.content.as_ref().unwrap(),
         "Permission denied: tool execution is set to Deny."
     );
+    Ok(())
 }
 
 #[tokio::test]

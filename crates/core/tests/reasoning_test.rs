@@ -254,7 +254,7 @@ async fn test_summary_not_emitted_when_exposure_none() {
 // ---------------------------------------------------------------------------
 
 #[tokio::test]
-async fn test_reasoning_not_stored_in_session_context() {
+async fn test_reasoning_not_stored_in_session_context() -> Result<()> {
     let response = reasoning_response(Some("Thought for 1s"), Some("raw chain of thought"));
 
     let (provider, _requests) = MockProvider::new(vec![response]);
@@ -268,7 +268,7 @@ async fn test_reasoning_not_stored_in_session_context() {
     );
     let mut session = Session::new(None);
 
-    let _ = agent.chat(&mut session, "Hello".to_string()).await.unwrap();
+    let _ = agent.chat(&mut session, "Hello".to_string()).await?;
 
     let history = session.history();
     let stored: Vec<&Message> = history
@@ -286,6 +286,7 @@ async fn test_reasoning_not_stored_in_session_context() {
             "with store=none (default) the summary must not be persisted either"
         );
     }
+    Ok(())
 }
 
 // ---------------------------------------------------------------------------

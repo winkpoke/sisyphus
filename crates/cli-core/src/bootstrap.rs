@@ -157,7 +157,7 @@ fn create_provider(config: &Config) -> anyhow::Result<Box<dyn LLMProvider>> {
                 .api_key
                 .clone()
                 .or_else(|| std::env::var("OPENAI_API_KEY").ok())
-                .expect("API Key must be set");
+                .ok_or_else(|| anyhow::anyhow!("API Key must be set"))?;
             Box::new(OpenAIProvider::new(
                 api_key,
                 config.llm.base_url.clone(),

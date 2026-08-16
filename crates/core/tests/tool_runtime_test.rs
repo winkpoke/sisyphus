@@ -170,16 +170,16 @@ fn bypass_config() -> AgentConfig {
     }
 }
 
-async fn chat_and_get_history(agent: &Agent, session: &mut Session) -> Vec<Message> {
-    let _ = agent.chat(session, "test".to_string()).await.unwrap();
-    session.history()
+async fn chat_and_get_history(agent: &Agent, session: &mut Session) -> Result<Vec<Message>> {
+    let _ = agent.chat(session, "test".to_string()).await?;
+    Ok(session.history())
 }
 
 /// Three Parallel tools in one batch overlap in time, and their results are
 /// appended to the transcript in the original tool_calls order even though
 /// they complete in a different order.
 #[tokio::test]
-async fn parallel_tools_overlap_and_transcript_is_ordered() {
+async fn parallel_tools_overlap_and_transcript_is_ordered() -> Result<()> {
     let tracker = Tracker::default();
     // First call sleeps longest → completes last; transcript must not care.
     let config = bypass_config();
@@ -198,7 +198,7 @@ async fn parallel_tools_overlap_and_transcript_is_ordered() {
     }
 
     let mut session = Session::new(None);
-    let history = chat_and_get_history(&agent, &mut session).await;
+    let history = chat_and_get_history(&agent, &mut session).await?;
 
     assert!(
         tracker.peak() >= 2,
@@ -216,12 +216,13 @@ async fn parallel_tools_overlap_and_transcript_is_ordered() {
         vec!["c1", "c2", "c3"],
         "tool results must appear in original tool_calls order"
     );
+    Ok(())
 }
 
 /// Sequential tools never overlap — even without any parallel tools in the
 /// batch, exclusivity is enforced (peak concurrency == 1).
 #[tokio::test]
-async fn sequential_tools_execute_exclusively() {
+async fn sequential_tools_execute_exclusively() -> Result<()> {
     let tracker = Tracker::default();
     let config = AgentConfig {
         permissions: AgentPermissions {
@@ -245,7 +246,7 @@ async fn sequential_tools_execute_exclusively() {
     }
 
     let mut session = Session::new(None);
-    let history = chat_and_get_history(&agent, &mut session).await;
+    let history = chat_and_get_history(&agent, &mut session).await?;
 
     assert_eq!(tracker.peak(), 1, "sequential tools must not overlap");
     let tool_ids: Vec<&str> = history
@@ -254,12 +255,13 @@ async fn sequential_tools_execute_exclusively() {
         .map(|m| m.tool_call_id.as_deref().unwrap_or_default())
         .collect();
     assert_eq!(tool_ids, vec!["c1", "c2", "c3"]);
+    Ok(())
 }
 
 /// A Sequential tool in a mixed batch blocks all other tools while it runs:
 /// the parallel pair may overlap each other, but nothing overlaps the writer.
 #[tokio::test]
-async fn sequential_tool_blocks_parallel_tools_in_mixed_batch() {
+async fn sequential_tool_blocks_parallel_tools_in_mixed_batch() -> Result<()> {
     let tracker = Tracker::default();
     let config = AgentConfig {
         permissions: AgentPermissions {
@@ -285,7 +287,7 @@ async fn sequential_tool_blocks_parallel_tools_in_mixed_batch() {
     }
 
     let mut session = Session::new(None);
-    let history = chat_and_get_history(&agent, &mut session).await;
+    let history = chat_and_get_history(&agent, &mut session).await?;
 
     // Peak may be 2 (the parallel pair) but never 3+: the writer runs alone.
     assert!(
@@ -303,6 +305,7 @@ async fn sequential_tool_blocks_parallel_tools_in_mixed_batch() {
         .map(|m| m.tool_call_id.as_deref().unwrap_or_default())
         .collect();
     assert_eq!(tool_ids, vec!["c1", "c2", "c3", "c4"]);
+    Ok(())
 }
 
 /// An Ask-gated call parks the batch: earlier allowed calls still execute,

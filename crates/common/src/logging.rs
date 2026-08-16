@@ -74,11 +74,12 @@ pub fn init(config: LogConfig) -> anyhow::Result<()> {
 
 /// Initialize logging with default info level to stderr (backward compatibility)
 pub fn init_with_defaults(default_level: &'static str) {
-    init(LogConfig {
+    if let Err(e) = init(LogConfig {
         default_level,
         output: LogOutput::Stderr,
-    })
-    .expect("Failed to initialize logging");
+    }) {
+        eprintln!("Logging initialization failed ({e}); falling back to default stderr output");
+    }
 }
 
 /// Initialize logging to info level (backward compatibility)

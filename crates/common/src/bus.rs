@@ -145,10 +145,8 @@ impl EventBus {
         let mut count = 0;
 
         let kind = envelope.event.kind();
-        if let Some(tx) = self.topic_txs.get(&kind) {
-            if let Ok(n) = tx.send(envelope.clone()) {
-                count += n;
-            }
+        if let Some(Ok(n)) = self.topic_txs.get(&kind).map(|tx| tx.send(envelope.clone())) {
+            count += n;
         }
 
         if let Ok(n) = self.global_tx.send(envelope) {
@@ -185,10 +183,12 @@ impl EventBus {
     where
         F: FnMut(SystemEventEnvelope) + Send + 'static,
     {
-        let tx = self
-            .topic_txs
-            .get(&kind)
-            .expect("EventBus initialized with all SystemEventKind variants");
+        let Some(tx) = self.topic_txs.get(&kind) else {
+            tracing::error!(?kind, "EventBus missing topic channel; subscription is a no-op");
+            return Subscription {
+                handle: tokio::spawn(async {}),
+            };
+        };
         let mut rx = tx.subscribe();
         let handle = tokio::spawn(async move {
             loop {
@@ -208,10 +208,12 @@ impl EventBus {
     where
         F: FnOnce(SystemEventEnvelope) + Send + 'static,
     {
-        let tx = self
-            .topic_txs
-            .get(&kind)
-            .expect("EventBus initialized with all SystemEventKind variants");
+        let Some(tx) = self.topic_txs.get(&kind) else {
+            tracing::error!(?kind, "EventBus missing topic channel; subscription is a no-op");
+            return Subscription {
+                handle: tokio::spawn(async {}),
+            };
+        };
         let mut rx = tx.subscribe();
         let mut callback_opt = Some(callback);
         let handle = tokio::spawn(async move {
