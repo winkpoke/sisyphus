@@ -13,6 +13,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 uuid = { workspace = true }
 glob = { workspace = true }
+futures = { workspace = true }
 rust-i18n = "3"
 chrono = { version = "0.4.42", features = ["serde"] }
 dashmap = "5.5"
@@ -21,7 +22,6 @@ minijinja = { version = "2.0", features = ["builtins"] }
 dirs = "6.0.0"
 
 [dev-dependencies]
-futures.workspace = true
 tempfile = "3.10"
 mockall.workspace = true
 insta = "1.34"

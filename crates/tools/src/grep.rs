@@ -2,7 +2,7 @@ use crate::utils::{validate_path, DENYLIST};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use common::path::SandboxedPath;
-use common::tool::Tool;
+use common::tool::{ExecutionMode, Tool};
 use ignore::overrides::OverrideBuilder;
 use ignore::WalkBuilder;
 use regex::RegexBuilder;
@@ -29,6 +29,11 @@ impl Tool for GrepTool {
 
     fn description(&self) -> &str {
         "Search file contents using a regular expression"
+    }
+
+    fn execution_mode(&self) -> ExecutionMode {
+        // Read-only content search; safe to run concurrently.
+        ExecutionMode::Parallel
     }
 
     fn schema(&self) -> Value {

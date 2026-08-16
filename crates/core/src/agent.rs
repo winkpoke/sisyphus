@@ -2,6 +2,7 @@ pub mod config;
 pub mod permission;
 pub mod prompt;
 pub mod registry;
+pub mod runtime;
 
 use self::config::AgentConfig;
 use self::prompt::SystemPromptBuilder;
@@ -19,6 +20,7 @@ use common::llm::{
     ReasoningStorage, Role, ToolCall, ToolDefinition, ToolFunctionDefinition,
 };
 use common::tool::Tool;
+use runtime::{ScheduledCall, ToolCallRuntime};
 use rust_i18n::t;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -35,11 +37,7 @@ pub struct Agent {
     workspace_root: PathBuf,
     prompt_builder: SystemPromptBuilder,
     reasoning_config: ReasoningConfig,
-}
-
-enum ToolExecResult {
-    Ok(String),
-    PermissionRequired(String),
+    tool_runtime: ToolCallRuntime,
 }
 
 impl Agent {
@@ -58,6 +56,7 @@ impl Agent {
             workspace_root: workspace_root.clone(),
             prompt_builder: SystemPromptBuilder::new(),
             reasoning_config: ReasoningConfig::with_defaults(),
+            tool_runtime: ToolCallRuntime::new(),
         };
         agent.register_builtins();
         // Legacy edit/bash/skill fields are ignored when rules are present.
@@ -180,44 +179,39 @@ impl Agent {
         }
     }
 
-    async fn execute_tool(&self, tool_name: &str, args_str: &str, call_id: &str) -> ToolExecResult {
-        let args: serde_json::Value =
-            serde_json::from_str(args_str).unwrap_or(serde_json::Value::Null);
-        let decision =
-            permission::resolve(&self.config.permissions, tool_name, &args);
-        match decision {
-            permission::PermissionDecision::Deny { reason, .. } => {
-                return ToolExecResult::Ok(reason);
-            }
-            permission::PermissionDecision::Ask { matched_rule } => {
-                let mode = serde_json::to_value(self.config.permissions.mode)
-                    .ok()
-                    .and_then(|v| v.as_str().map(str::to_string))
-                    .unwrap_or_default();
-                self.bus.publish(SystemEvent::PermissionRequest {
-                    operation: "tool_execution".to_string(),
-                    tool_name: tool_name.to_string(),
-                    call_id: call_id.to_string(),
-                    matched_rule,
-                    mode,
-                });
-                return ToolExecResult::PermissionRequired(
-                    "Permission required: approve tool execution to continue.".to_string(),
-                );
-            }
-            permission::PermissionDecision::Allow => {}
-        }
+    /// Publish the PermissionRequest event for an Ask-gated call.
+    fn emit_permission_request(
+        &self,
+        tool_name: &str,
+        call_id: &str,
+        matched_rule: Option<String>,
+    ) {
+        let mode = serde_json::to_value(self.config.permissions.mode)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_string))
+            .unwrap_or_default();
+        self.bus.publish(SystemEvent::PermissionRequest {
+            operation: "tool_execution".to_string(),
+            tool_name: tool_name.to_string(),
+            call_id: call_id.to_string(),
+            matched_rule,
+            mode,
+        });
+    }
 
+    /// Execute a permission-cleared tool call and map every failure mode to a
+    /// transcript-ready string.
+    async fn run_tool(&self, tool_name: &str, args_str: &str) -> String {
         if let Some(tool) = self.tools.get(tool_name) {
             match serde_json::from_str::<serde_json::Value>(args_str) {
                 Ok(args) => match tool.execute(args).await {
-                    Ok(output) => ToolExecResult::Ok(output),
-                    Err(e) => ToolExecResult::Ok(t!("tool_exec_error", err = e).to_string()),
+                    Ok(output) => output,
+                    Err(e) => t!("tool_exec_error", err = e).to_string(),
                 },
-                Err(e) => ToolExecResult::Ok(t!("tool_args_error", err = e).to_string()),
+                Err(e) => t!("tool_args_error", err = e).to_string(),
             }
         } else {
-            ToolExecResult::Ok(t!("tool_not_found", name = tool_name).to_string())
+            t!("tool_not_found", name = tool_name).to_string()
         }
     }
 
@@ -393,53 +387,123 @@ impl Agent {
         self.run_turn_loop(session, 0).await
     }
 
+    /// Process a batch of tool calls with selective parallelism and
+    /// deterministic ordering.
+    ///
+    /// Phase 1 (sequential, in order): resolve permissions. Deny results are
+    /// synthesized without execution; the first Ask parks the current call in
+    /// `pending_approvals`, the remaining calls in `pending_batch`, and stops
+    /// scheduling — later calls MUST NOT execute behind an unanswered Ask.
+    ///
+    /// Phase 2: the Allow-marked prefix executes via [`ToolCallRuntime`]
+    /// (Parallel tools concurrently, Sequential tools exclusively).
+    ///
+    /// Phase 3: results are appended to the session in the original
+    /// `tool_calls` order regardless of completion order.
     async fn process_tool_batch(
         &self,
         session: &mut Session,
         mut calls: Vec<ToolCall>,
     ) -> Result<Option<String>> {
-        let mut i = 0;
-        while i < calls.len() {
+        enum Slot {
+            Denied(String),
+            Allowed,
+        }
+
+        // Phase 1: permission checks in deterministic order.
+        let mut slots: Vec<Slot> = Vec::new();
+        let mut scheduled: Vec<ScheduledCall> = Vec::new();
+        let mut parked_at: Option<usize> = None;
+
+        for i in 0..calls.len() {
             let call = &calls[i];
             let tool_name = &call.function.name;
-            let args_str = &call.function.arguments;
+            let args: serde_json::Value =
+                serde_json::from_str(&call.function.arguments).unwrap_or(serde_json::Value::Null);
 
-            let execution = self.execute_tool(tool_name, args_str, &call.id).await;
-
-            match execution {
-                ToolExecResult::Ok(result) => {
-                    self.bus.publish(SystemEvent::ToolExecuted {
-                        tool: tool_name.clone(),
-                        result: result.clone(),
-                    });
-
-                    let tool_msg = Message {
-                        role: Role::Tool,
-                        content: Some(result),
-                        tool_calls: None,
-                        tool_call_id: Some(call.id.to_string()),
-                        reasoning_summary: None,
-                        reasoning_raw: None,
-                    };
-                    session.add_message(tool_msg)?;
+            match permission::resolve(&self.config.permissions, tool_name, &args) {
+                permission::PermissionDecision::Deny { reason, .. } => {
+                    slots.push(Slot::Denied(reason));
                 }
-                ToolExecResult::PermissionRequired(msg) => {
-                    session.pending_approvals.insert(
-                        call.id.clone(),
-                        PendingApproval {
-                            call_id: call.id.clone(),
-                            tool_name: tool_name.clone(),
-                            args: args_str.clone(),
-                        },
-                    );
-
-                    let remaining = calls.split_off(i + 1);
-                    session.pending_batch = remaining;
-
-                    return Ok(Some(msg));
+                permission::PermissionDecision::Ask { matched_rule } => {
+                    self.emit_permission_request(tool_name, &call.id, matched_rule);
+                    parked_at = Some(i);
+                    break;
+                }
+                permission::PermissionDecision::Allow => {
+                    scheduled.push(ScheduledCall {
+                        index: slots.len(),
+                        tool_name: tool_name.clone(),
+                        args: call.function.arguments.clone(),
+                    });
+                    slots.push(Slot::Allowed);
                 }
             }
-            i += 1;
+        }
+
+        // Phase 2: execute the allowed prefix via the runtime.
+        let outcomes: std::collections::HashMap<usize, String> = if scheduled.is_empty() {
+            Default::default()
+        } else {
+            self.tool_runtime
+                .execute(
+                    scheduled,
+                    |call| {
+                        self.tools
+                            .get(&call.tool_name)
+                            .map(|t| t.execution_mode())
+                            .unwrap_or(common::tool::ExecutionMode::Sequential)
+                    },
+                    |call| async move { self.run_tool(&call.tool_name, &call.args).await },
+                )
+                .await
+                .into_iter()
+                .map(|o| (o.index, o.result))
+                .collect()
+        };
+
+        // Phase 3: append results in original tool_calls order.
+        for (pos, slot) in slots.iter().enumerate() {
+            let (tool_name, result) = match slot {
+                Slot::Denied(reason) => (&calls[pos].function.name, reason.clone()),
+                Slot::Allowed => {
+                    let name = &calls[pos].function.name;
+                    (name, outcomes.get(&pos).cloned().unwrap_or_default())
+                }
+            };
+
+            self.bus.publish(SystemEvent::ToolExecuted {
+                tool: tool_name.clone(),
+                result: result.clone(),
+            });
+
+            let tool_msg = Message {
+                role: Role::Tool,
+                content: Some(result),
+                tool_calls: None,
+                tool_call_id: Some(calls[pos].id.clone()),
+                reasoning_summary: None,
+                reasoning_raw: None,
+            };
+            session.add_message(tool_msg)?;
+        }
+
+        // Park the Ask-gated call and everything after it.
+        if let Some(i) = parked_at {
+            let call = &calls[i];
+            session.pending_approvals.insert(
+                call.id.clone(),
+                PendingApproval {
+                    call_id: call.id.clone(),
+                    tool_name: call.function.name.clone(),
+                    args: call.function.arguments.clone(),
+                },
+            );
+            session.pending_batch = calls.split_off(i + 1);
+
+            return Ok(Some(
+                "Permission required: approve tool execution to continue.".to_string(),
+            ));
         }
         Ok(None)
     }

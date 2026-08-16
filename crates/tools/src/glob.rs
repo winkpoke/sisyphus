@@ -2,7 +2,7 @@ use crate::utils::{validate_path, DENYLIST};
 use anyhow::{anyhow, Result};
 use async_trait::async_trait;
 use common::path::SandboxedPath;
-use common::tool::Tool;
+use common::tool::{ExecutionMode, Tool};
 use globset::{Glob, GlobSetBuilder};
 use ignore::overrides::OverrideBuilder;
 use ignore::WalkBuilder;
@@ -27,6 +27,11 @@ impl Tool for GlobTool {
 
     fn description(&self) -> &str {
         "Discover files using glob patterns"
+    }
+
+    fn execution_mode(&self) -> ExecutionMode {
+        // Read-only filesystem search; safe to run concurrently.
+        ExecutionMode::Parallel
     }
 
     fn schema(&self) -> Value {
