@@ -264,14 +264,13 @@ impl TuiState {
 
     pub fn add_message(&mut self, kind: TranscriptItemKind, content: String) {
         // Optimize streaming: Merge consecutive Assistant messages
-        if matches!(kind, TranscriptItemKind::Assistant) {
-            if let Some(last) = self.transcript.items.last_mut() {
-                if matches!(last.kind, TranscriptItemKind::Assistant) {
-                    last.content.push_str(&content);
-                    last.is_streaming = true;
-                    return;
-                }
-            }
+        if let Some(last) = self.transcript.items.last_mut().filter(|last| {
+            matches!(&kind, TranscriptItemKind::Assistant)
+                && matches!(last.kind, TranscriptItemKind::Assistant)
+        }) {
+            last.content.push_str(&content);
+            last.is_streaming = true;
+            return;
         }
 
         // When adding a new distinct message, ensure the previous one is marked as done

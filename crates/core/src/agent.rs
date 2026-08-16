@@ -638,10 +638,7 @@ mod tests {
     use crate::agent::config::{AgentPermissions, PermissionLevel};
     use crate::agent::permission::{self, PermissionDecision};
 
-    fn legacy_resolve(
-        permissions: &AgentPermissions,
-        tool_name: &str,
-    ) -> PermissionDecision {
+    fn legacy_resolve(permissions: &AgentPermissions, tool_name: &str) -> PermissionDecision {
         permission::resolve(permissions, tool_name, &serde_json::Value::Null)
     }
 

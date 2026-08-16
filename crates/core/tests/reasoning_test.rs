@@ -331,7 +331,10 @@ async fn test_auto_mode_enables_after_tool_usage() {
     let mut session = Session::new(None);
     seed_tool_exchange(&mut session);
 
-    let _ = agent.chat(&mut session, "Continue".to_string()).await.unwrap();
+    let _ = agent
+        .chat(&mut session, "Continue".to_string())
+        .await
+        .unwrap();
 
     let requests = requests.lock().unwrap();
     assert!(!requests.is_empty());
@@ -363,7 +366,10 @@ async fn test_auto_mode_enables_with_pending_tool_batch() {
         kind: "function".to_string(),
     });
 
-    let _ = agent.chat(&mut session, "Continue".to_string()).await.unwrap();
+    let _ = agent
+        .chat(&mut session, "Continue".to_string())
+        .await
+        .unwrap();
 
     let requests = requests.lock().unwrap();
     assert!(!requests.is_empty());
@@ -395,7 +401,10 @@ async fn test_auto_mode_enables_with_pending_approval() {
         },
     );
 
-    let _ = agent.chat(&mut session, "Continue".to_string()).await.unwrap();
+    let _ = agent
+        .chat(&mut session, "Continue".to_string())
+        .await
+        .unwrap();
 
     let requests = requests.lock().unwrap();
     assert!(!requests.is_empty());
@@ -424,7 +433,10 @@ async fn test_explicit_off_mode_never_requests_reasoning() {
     let mut session = Session::new(None);
     seed_tool_exchange(&mut session);
 
-    let _ = agent.chat(&mut session, "Continue".to_string()).await.unwrap();
+    let _ = agent
+        .chat(&mut session, "Continue".to_string())
+        .await
+        .unwrap();
 
     let requests = requests.lock().unwrap();
     assert!(!requests.is_empty());

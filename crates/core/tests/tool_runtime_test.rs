@@ -7,10 +7,10 @@
 
 use anyhow::Result;
 use async_trait::async_trait;
+use common::bus::SystemEventEnvelope;
 use common::bus::{EventBus, SystemEvent};
 use common::llm::{CompletionRequest, FunctionCall, LLMProvider, Message, Role, ToolCall};
 use common::tool::{ExecutionMode, Tool};
-use common::bus::SystemEventEnvelope;
 use futures::Stream;
 use serde_json::{json, Value};
 use sisyphus_core::agent::config::{AgentConfig, AgentPermissions, PermissionMode};
@@ -34,12 +34,7 @@ struct TimedTool {
 }
 
 impl TimedTool {
-    fn new(
-        name: &str,
-        mode: ExecutionMode,
-        delay_ms: u64,
-        tracker: &Tracker,
-    ) -> Self {
+    fn new(name: &str, mode: ExecutionMode, delay_ms: u64, tracker: &Tracker) -> Self {
         Self {
             name: name.to_string(),
             mode,
@@ -188,11 +183,31 @@ async fn parallel_tools_overlap_and_transcript_is_ordered() -> Result<()> {
         ("c2", "p_mid"),
         ("c3", "p_fast"),
     ])]));
-    let mut agent = Agent::new(provider, Arc::new(EventBus::new(32)), config, PathBuf::from("."));
+    let mut agent = Agent::new(
+        provider,
+        Arc::new(EventBus::new(32)),
+        config,
+        PathBuf::from("."),
+    );
     for tool in [
-        Box::new(TimedTool::new("p_slow", ExecutionMode::Parallel, 120, &tracker)) as Box<dyn Tool>,
-        Box::new(TimedTool::new("p_mid", ExecutionMode::Parallel, 60, &tracker)),
-        Box::new(TimedTool::new("p_fast", ExecutionMode::Parallel, 10, &tracker)),
+        Box::new(TimedTool::new(
+            "p_slow",
+            ExecutionMode::Parallel,
+            120,
+            &tracker,
+        )) as Box<dyn Tool>,
+        Box::new(TimedTool::new(
+            "p_mid",
+            ExecutionMode::Parallel,
+            60,
+            &tracker,
+        )),
+        Box::new(TimedTool::new(
+            "p_fast",
+            ExecutionMode::Parallel,
+            10,
+            &tracker,
+        )),
     ] {
         agent.register_tool(tool);
     }
@@ -236,11 +251,31 @@ async fn sequential_tools_execute_exclusively() -> Result<()> {
         ("c2", "s2"),
         ("c3", "s3"),
     ])]));
-    let mut agent = Agent::new(provider, Arc::new(EventBus::new(32)), config, PathBuf::from("."));
+    let mut agent = Agent::new(
+        provider,
+        Arc::new(EventBus::new(32)),
+        config,
+        PathBuf::from("."),
+    );
     for tool in [
-        Box::new(TimedTool::new("s1", ExecutionMode::Sequential, 40, &tracker)) as Box<dyn Tool>,
-        Box::new(TimedTool::new("s2", ExecutionMode::Sequential, 40, &tracker)),
-        Box::new(TimedTool::new("s3", ExecutionMode::Sequential, 40, &tracker)),
+        Box::new(TimedTool::new(
+            "s1",
+            ExecutionMode::Sequential,
+            40,
+            &tracker,
+        )) as Box<dyn Tool>,
+        Box::new(TimedTool::new(
+            "s2",
+            ExecutionMode::Sequential,
+            40,
+            &tracker,
+        )),
+        Box::new(TimedTool::new(
+            "s3",
+            ExecutionMode::Sequential,
+            40,
+            &tracker,
+        )),
     ] {
         agent.register_tool(tool);
     }
@@ -276,11 +311,21 @@ async fn sequential_tool_blocks_parallel_tools_in_mixed_batch() -> Result<()> {
         ("c3", "writer"),
         ("c4", "p3"),
     ])]));
-    let mut agent = Agent::new(provider, Arc::new(EventBus::new(32)), config, PathBuf::from("."));
+    let mut agent = Agent::new(
+        provider,
+        Arc::new(EventBus::new(32)),
+        config,
+        PathBuf::from("."),
+    );
     for tool in [
         Box::new(TimedTool::new("p1", ExecutionMode::Parallel, 60, &tracker)) as Box<dyn Tool>,
         Box::new(TimedTool::new("p2", ExecutionMode::Parallel, 60, &tracker)),
-        Box::new(TimedTool::new("writer", ExecutionMode::Sequential, 60, &tracker)),
+        Box::new(TimedTool::new(
+            "writer",
+            ExecutionMode::Sequential,
+            60,
+            &tracker,
+        )),
         Box::new(TimedTool::new("p3", ExecutionMode::Parallel, 10, &tracker)),
     ] {
         agent.register_tool(tool);

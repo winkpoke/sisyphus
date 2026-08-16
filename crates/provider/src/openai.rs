@@ -159,8 +159,8 @@ impl OpenAIProvider {
             let error_text = res.text().await?;
             self.debug_log_error(label, status, &error_text);
 
-            let retryable = matches!(status.as_u16(), 400 | 422)
-                || error_text.contains("Param Incorrect");
+            let retryable =
+                matches!(status.as_u16(), 400 | 422) || error_text.contains("Param Incorrect");
             if !retryable {
                 return Err(anyhow!("OpenAI API error: {}", error_text));
             }
@@ -222,10 +222,12 @@ impl OpenAIProvider {
 
     #[cfg(feature = "dev_debug")]
     fn debug_log_error(&self, label: &str, status: reqwest::StatusCode, error: &str) {
-        eprintln!(
-            "OpenAI Provider [{label}]: request failed ({status}): {error}"
-        );
-        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(DEBUG_LOG_PATH) {
+        eprintln!("OpenAI Provider [{label}]: request failed ({status}): {error}");
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(DEBUG_LOG_PATH)
+        {
             let _ = writeln!(file, "[{label}] Request failed ({status}): {error}");
         }
     }
@@ -236,7 +238,11 @@ impl OpenAIProvider {
     #[cfg(feature = "dev_debug")]
     fn debug_log_retry(&self, label: &str, removed: &str, because: &str) {
         eprintln!("OpenAI Provider [{label}]: retrying without {removed}...");
-        if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(DEBUG_LOG_PATH) {
+        if let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(DEBUG_LOG_PATH)
+        {
             let _ = writeln!(
                 file,
                 "[{label}] Retrying without {removed} due to error: {because}"
@@ -251,7 +257,10 @@ impl OpenAIProvider {
     /// always redacted so credentials can never reach the log file.
     #[cfg(feature = "dev_debug")]
     fn debug_log_request_response(&self, label: &str, url: &str, payload: &Value, res: &Response) {
-        let Ok(mut file) = OpenOptions::new().create(true).append(true).open(DEBUG_LOG_PATH)
+        let Ok(mut file) = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(DEBUG_LOG_PATH)
         else {
             return;
         };
@@ -281,7 +290,13 @@ impl OpenAIProvider {
     }
 
     #[cfg(not(feature = "dev_debug"))]
-    fn debug_log_request_response(&self, _label: &str, _url: &str, _payload: &Value, _res: &Response) {
+    fn debug_log_request_response(
+        &self,
+        _label: &str,
+        _url: &str,
+        _payload: &Value,
+        _res: &Response,
+    ) {
     }
 }
 
@@ -290,13 +305,18 @@ impl LLMProvider for OpenAIProvider {
     async fn complete(&self, request: CompletionRequest) -> Result<Message> {
         let url = format!("{}/chat/completions", self.base_url);
         let payload = self.build_payload(request, false);
-        let res = self.post_with_reasoning_fallback(&url, payload, "complete").await?;
+        let res = self
+            .post_with_reasoning_fallback(&url, payload, "complete")
+            .await?;
 
         let json: Value = res.json().await?;
 
         #[cfg(feature = "dev_debug")]
         {
-            if let Ok(mut file) = OpenOptions::new().create(true).append(true).open(DEBUG_LOG_PATH)
+            if let Ok(mut file) = OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(DEBUG_LOG_PATH)
             {
                 let _ = writeln!(
                     file,
@@ -353,11 +373,14 @@ impl LLMProvider for OpenAIProvider {
     ) -> Result<Pin<Box<dyn Stream<Item = Result<String>> + Send>>> {
         let url = format!("{}/chat/completions", self.base_url);
         let payload = self.build_payload(request, true);
-        let res = self.post_with_reasoning_fallback(&url, payload, "stream").await?;
+        let res = self
+            .post_with_reasoning_fallback(&url, payload, "stream")
+            .await?;
 
         let parser = crate::sse::SSEParser::new(res.bytes_stream());
 
-        let stream = futures::stream::unfold((parser, false), |(mut parser, finished)| async move {
+        let stream =
+            futures::stream::unfold((parser, false), |(mut parser, finished)| async move {
                 if finished {
                     return None;
                 }
@@ -1253,8 +1276,14 @@ mod tests {
         );
         assert_eq!(payload["stream"], json!(false), "stream is reserved");
         assert!(payload.get("tools").is_none(), "tools is reserved");
-        assert!(payload.get("tool_choice").is_none(), "tool_choice is reserved");
-        assert!(payload.get("tool_calls").is_none(), "tool_calls is reserved");
+        assert!(
+            payload.get("tool_choice").is_none(),
+            "tool_choice is reserved"
+        );
+        assert!(
+            payload.get("tool_calls").is_none(),
+            "tool_calls is reserved"
+        );
     }
 
     #[test]

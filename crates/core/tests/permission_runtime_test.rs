@@ -220,8 +220,8 @@ async fn ask_rule_emits_permission_request_with_rule_and_mode() -> Result<()> {
             request = Some((tool_name, call_id, matched_rule, mode));
         }
     }
-    let (tool_name, call_id, matched_rule, mode) = request
-        .ok_or_else(|| anyhow::anyhow!("expected a PermissionRequest event"))?;
+    let (tool_name, call_id, matched_rule, mode) =
+        request.ok_or_else(|| anyhow::anyhow!("expected a PermissionRequest event"))?;
     assert_eq!(tool_name, "execute_command");
     assert_eq!(call_id, "c1");
     assert_eq!(matched_rule.as_deref(), Some("Bash(npm install:*)"));

@@ -1,0 +1,5 @@
+# Local-only, gitignored environment file holding real dev credentials.
+# Untracked and never committed (verified via git history scan); gitleaks'
+# --no-git working-directory scan still flags it, so the finding is
+# acknowledged here. Rotate the key periodically as routine hygiene.
+.env:generic-api-key:1

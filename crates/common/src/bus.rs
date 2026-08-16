@@ -145,7 +145,11 @@ impl EventBus {
         let mut count = 0;
 
         let kind = envelope.event.kind();
-        if let Some(Ok(n)) = self.topic_txs.get(&kind).map(|tx| tx.send(envelope.clone())) {
+        if let Some(Ok(n)) = self
+            .topic_txs
+            .get(&kind)
+            .map(|tx| tx.send(envelope.clone()))
+        {
             count += n;
         }
 
@@ -184,7 +188,10 @@ impl EventBus {
         F: FnMut(SystemEventEnvelope) + Send + 'static,
     {
         let Some(tx) = self.topic_txs.get(&kind) else {
-            tracing::error!(?kind, "EventBus missing topic channel; subscription is a no-op");
+            tracing::error!(
+                ?kind,
+                "EventBus missing topic channel; subscription is a no-op"
+            );
             return Subscription {
                 handle: tokio::spawn(async {}),
             };
@@ -209,7 +216,10 @@ impl EventBus {
         F: FnOnce(SystemEventEnvelope) + Send + 'static,
     {
         let Some(tx) = self.topic_txs.get(&kind) else {
-            tracing::error!(?kind, "EventBus missing topic channel; subscription is a no-op");
+            tracing::error!(
+                ?kind,
+                "EventBus missing topic channel; subscription is a no-op"
+            );
             return Subscription {
                 handle: tokio::spawn(async {}),
             };

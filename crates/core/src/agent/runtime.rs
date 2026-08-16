@@ -202,7 +202,12 @@ mod tests {
         ];
         runtime
             .execute(
-                vec![call(0, "glob"), call(1, "grep"), call(2, "write"), call(3, "glob")],
+                vec![
+                    call(0, "glob"),
+                    call(1, "grep"),
+                    call(2, "write"),
+                    call(3, "glob"),
+                ],
                 |c| modes[c.index],
                 move |c| {
                     let t = t.clone();
@@ -213,7 +218,11 @@ mod tests {
 
         // The write-lock holder runs while nothing else does; parallel calls
         // may overlap only with each other, never with the sequential one.
-        assert_eq!(tracker.peak(), 2, "peak should be the parallel pair, never 3+");
+        assert_eq!(
+            tracker.peak(),
+            2,
+            "peak should be the parallel pair, never 3+"
+        );
     }
 
     #[tokio::test]
@@ -238,10 +247,8 @@ mod tests {
             )
             .await;
 
-        let results: Vec<(usize, String)> = outcomes
-            .into_iter()
-            .map(|o| (o.index, o.result))
-            .collect();
+        let results: Vec<(usize, String)> =
+            outcomes.into_iter().map(|o| (o.index, o.result)).collect();
         assert_eq!(
             results,
             vec![
@@ -256,7 +263,11 @@ mod tests {
     async fn empty_batch_is_a_noop() {
         let runtime = ToolCallRuntime::new();
         let outcomes = runtime
-            .execute(vec![], |_| ExecutionMode::Sequential, |_| async { unreachable!() })
+            .execute(
+                vec![],
+                |_| ExecutionMode::Sequential,
+                |_| async { unreachable!() },
+            )
             .await;
         assert!(outcomes.is_empty());
     }

@@ -153,11 +153,13 @@ impl Tool for GlobTool {
                         if let Ok(rel) = path.strip_prefix(&root) {
                             let mut denylisted = false;
                             for comp in rel.components() {
-                                if let std::path::Component::Normal(c) = comp {
-                                    if DENYLIST.contains(&c.to_str().unwrap_or("")) {
-                                        denylisted = true;
-                                        break;
-                                    }
+                                if matches!(
+                                    comp,
+                                    std::path::Component::Normal(c)
+                                        if DENYLIST.contains(&c.to_str().unwrap_or(""))
+                                ) {
+                                    denylisted = true;
+                                    break;
                                 }
                             }
                             if denylisted {

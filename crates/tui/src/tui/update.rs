@@ -124,8 +124,8 @@ fn handle_system_event(app: &mut App, event: SystemEvent) {
             operation,
             tool_name,
             call_id,
-            matched_rule,
-            mode,
+            matched_rule: _,
+            mode: _,
         } => {
             app.state.mode = InputMode::Overlay;
             app.state.overlay.enqueue_approval(
@@ -282,10 +282,13 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
                 }
             }
             KeyCode::Enter => {
-                if let Some(selection) = &app.state.agent_selection {
-                    if let Some(agent) = selection.get_selected() {
-                        return TuiInstruction::SwitchAgent(agent.id.clone(), agent.name.clone());
-                    }
+                if let Some(agent) = app
+                    .state
+                    .agent_selection
+                    .as_ref()
+                    .and_then(|selection| selection.get_selected())
+                {
+                    return TuiInstruction::SwitchAgent(agent.id.clone(), agent.name.clone());
                 }
             }
             _ => {}
@@ -306,39 +309,45 @@ fn handle_key_event(app: &mut App, key: crossterm::event::KeyEvent) -> TuiInstru
                 }
             }
             KeyCode::Down => {
-                if let Some(idx) = app.state.selection.selected_message_index {
-                    if idx < app.state.transcript.items.len() - 1 {
-                        app.state.selection.selected_message_index = Some(idx + 1);
-                    }
+                if let Some(idx) = app
+                    .state
+                    .selection
+                    .selected_message_index
+                    .filter(|idx| idx + 1 < app.state.transcript.items.len())
+                {
+                    app.state.selection.selected_message_index = Some(idx + 1);
                 }
             }
             KeyCode::Char('c') | KeyCode::Enter => {
-                if let Some(idx) = app.state.selection.selected_message_index {
-                    if let Some(item) = app.state.transcript.items.get(idx) {
-                        if let Some(cb) = &mut app.clipboard {
-                            if cb.set_text(&item.content).is_err() {
-                                app.state.toast = Some(Toast::new(
-                                    "Copy Failed".to_string(),
-                                    ToastKind::Error,
-                                    Duration::from_secs(2),
-                                ));
-                            } else {
-                                app.state.toast = Some(Toast::new(
-                                    "✓ Copied to clipboard".to_string(),
-                                    ToastKind::Success,
-                                    Duration::from_secs(2),
-                                ));
-                            }
-                        } else {
+                if let Some(item) = app
+                    .state
+                    .selection
+                    .selected_message_index
+                    .and_then(|idx| app.state.transcript.items.get(idx))
+                {
+                    if let Some(cb) = &mut app.clipboard {
+                        if cb.set_text(&item.content).is_err() {
                             app.state.toast = Some(Toast::new(
-                                "Clipboard Unavailable".to_string(),
+                                "Copy Failed".to_string(),
                                 ToastKind::Error,
                                 Duration::from_secs(2),
                             ));
+                        } else {
+                            app.state.toast = Some(Toast::new(
+                                "✓ Copied to clipboard".to_string(),
+                                ToastKind::Success,
+                                Duration::from_secs(2),
+                            ));
                         }
-                        app.state.mode = InputMode::Normal;
-                        app.state.selection.selected_message_index = None;
+                    } else {
+                        app.state.toast = Some(Toast::new(
+                            "Clipboard Unavailable".to_string(),
+                            ToastKind::Error,
+                            Duration::from_secs(2),
+                        ));
                     }
+                    app.state.mode = InputMode::Normal;
+                    app.state.selection.selected_message_index = None;
                 }
             }
             _ => {}

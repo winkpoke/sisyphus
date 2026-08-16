@@ -67,8 +67,7 @@ pub struct ToolFunctionDefinition {
     pub parameters: serde_json::Value,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ReasoningMode {
     Off,
     On,
@@ -76,9 +75,7 @@ pub enum ReasoningMode {
     Auto,
 }
 
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ReasoningEffort {
     Low,
     #[default]
@@ -86,9 +83,7 @@ pub enum ReasoningEffort {
     High,
 }
 
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ReasoningExposure {
     None,
     #[default]
@@ -96,15 +91,12 @@ pub enum ReasoningExposure {
     Debug,
 }
 
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-#[derive(Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Default)]
 pub enum ReasoningStorage {
     #[default]
     None,
     Summary,
 }
-
 
 #[derive(Debug, Clone, Default)]
 pub struct ReasoningConfig {
